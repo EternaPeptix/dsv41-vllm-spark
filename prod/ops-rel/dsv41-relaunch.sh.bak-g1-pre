@@ -1,0 +1,168 @@
+#!/bin/bash
+# dsv41-relaunch.sh [options] [VAR=VAL ...] -- supervised (re)start of all 8 ranks. Run FROM THE MAC
+# (spark-one cannot ssh to six..eight), e.g.
+#   ssh spark-one cat ~/dsv41-opt-20261021/ops/rel/dsv41-relaunch.sh | bash -s -- --label x VAR=VAL
+# rel-2 (2026-10-25), round-2 #2 (f)+(g). Mac bash 3.2: no declare -A, no ${a[@]} under set -u.
+#  1. Pre-flight, before anything is stopped: launcher sha + site manifest identical on 8/8 (and equal
+#     to --expect-launcher if given), Engram check (ENGRAM_CHECK=0 skips; never on punched nodes).
+#  2. Stop: systemctl stop with a 30 s cap, then SIGKILL; reset-failed; stray vllm processes killed;
+#     the old rank log is kept as rank<i>.prev.log.
+#  3. Start: the same systemd-run as launch-conc.sh (-E VAR=VAL identical on all ranks), plus
+#     -p TimeoutStopSec=20 (hung ranks ignore SIGTERM; the default is 90 s).
+#  4. Watch every 5 s (rank0 log via relstatus.sh, unit states 8/8 every 15 s). A try fails on: an
+#     rdma_ar device timeout, the DSV41 capture watchdog (faulthandler "Timeout (h:mm:ss)!"), an
+#     EngineCore failure, an rdma_ar fingerprint mismatch, any unit not active, no DSpark progress
+#     ("capturing greedy draft graphs", the AV phase start or "Graph capturing finished") STALL s after
+#     the first "Capturing model for DSpark", or no /health 200 within BUDGET s.
+#  5. On failure: every rank log is saved as ~/dsv41-logs/relfail-<stamp>-t<try>-rank<i>.log, all
+#     ranks are SIGKILLed and the next try starts (TRIES in total). --first-only VAR=VAL (test
+#     faults) applies to try 1 only.
+# Options: --label L --tries N (2) --stall S (120) --budget S (900) --results FILE (TSV, appended)
+#          --first-only VAR=VAL (repeatable) --expect-launcher SHA8
+# Exit: 0 healthy, 1 failed after all tries, 2 pre-flight refused (nothing stopped).
+HOSTS=(spark-one spark-two spark-three spark-four spark-five spark-six spark-seven spark-eight)
+LABEL=relaunch; TRIES=2; STALL=120; BUDGET=900; RESULTS=""; EXPECT_LAUNCHER=""
+FIRST=(); ENVS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --label) LABEL=$2; shift 2 ;;
+    --tries) TRIES=$2; shift 2 ;;
+    --stall) STALL=$2; shift 2 ;;
+    --budget) BUDGET=$2; shift 2 ;;
+    --results) RESULTS=$2; shift 2 ;;
+    --first-only) FIRST+=("$2"); shift 2 ;;
+    --expect-launcher) EXPECT_LAUNCHER=$2; shift 2 ;;
+    --) shift ;;
+    *=*) ENVS+=("$1"); shift ;;
+    *) echo "dsv41-relaunch: unknown argument $1" >&2; exit 2 ;;
+  esac
+done
+LABEL=$(printf %s "$LABEL" | tr -c 'A-Za-z0-9._-' '_')
+SSH="ssh -n -o ConnectTimeout=10 -o BatchMode=yes"
+SITE=venvs/vllm032/lib/python3.12/site-packages/vllm
+MANIFEST="$SITE/v1/worker/gpu/model_runner.py $SITE/v1/worker/gpu/dsv41_rel.py \
+$SITE/distributed/device_communicators/rdma_all_reduce.py $SITE/distributed/device_communicators/dsv41_l2_prefetch.py \
+$SITE/distributed/device_communicators/cuda_communicator.py $SITE/models/deepseek_v41/nvidia/dspark.py \
+$SITE/v1/worker/gpu/spec_decode/adaptive_verification.py $SITE/v1/worker/gpu/spec_decode/dspark/speculator.py \
+rdma_ar_dsv41/build-k1pl/rdma_ar_ext.so dsv41-tp8.sh"
+log() { echo "$(date -u +%H:%M:%S) [$LABEL] $*"; }
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/dsv41rel.XXXXXX")
+trap 'rm -rf "$TMP"' EXIT
+
+preflight() {
+  local i rc=0 m0="" l0=""
+  for i in "${!HOSTS[@]}"; do
+    $SSH "${HOSTS[$i]}" "cd \$HOME && sha256sum $MANIFEST 2>&1 | sha256sum | cut -c1-12; sha256sum dsv41-tp8.sh | cut -c1-8" > "$TMP/pf$i" 2>&1 &
+  done; wait
+  for i in "${!HOSTS[@]}"; do
+    m=$(sed -n 1p "$TMP/pf$i"); l=$(sed -n 2p "$TMP/pf$i")
+    [ -z "$m0" ] && { m0=$m; l0=$l; }
+    if [ "$m" != "$m0" ] || [ "$l" != "$l0" ] || [ ${#m} != 12 ]; then
+      log "PREFLIGHT ${HOSTS[$i]}: manifest $m launcher $l differs from spark-one ($m0 / $l0)"; rc=1
+    fi
+  done
+  if [ -n "$EXPECT_LAUNCHER" ] && [ "$l0" != "$EXPECT_LAUNCHER" ]; then
+    log "PREFLIGHT launcher $l0 != expected $EXPECT_LAUNCHER"; rc=1
+  fi
+  [ $rc = 0 ] && log "preflight: site manifest $m0 and launcher $l0 identical on 8/8"
+  if [ "${ENGRAM_CHECK:-1}" != 0 ]; then
+    $SSH spark-one "cat ~/dsv41-opt-20261021/ops/engram-punch/check_all.sh" | bash > "$TMP/engram" 2>&1 || rc=1
+    tail -1 "$TMP/engram" | sed "s/^/$(date -u +%H:%M:%S) [$LABEL] /"
+  fi
+  return $rc
+}
+
+stop_all() {  # $1 = graceful | kill
+  local i
+  for i in "${!HOSTS[@]}"; do
+    $SSH "${HOSTS[$i]}" "
+      [ $1 = kill ] && { systemctl --user kill -s SIGKILL dsv41-rank 2>/dev/null; sleep 2; }
+      timeout 30 systemctl --user stop dsv41-rank 2>/dev/null || { systemctl --user kill -s SIGKILL dsv41-rank 2>/dev/null; sleep 3; systemctl --user stop dsv41-rank 2>/dev/null; }
+      systemctl --user reset-failed dsv41-rank 2>/dev/null
+      pkill -9 -u \$(id -u) -f '[v]llm serve' 2>/dev/null; pkill -9 -u \$(id -u) -f '[V]LLM::' 2>/dev/null
+      L=\$HOME/dsv41-logs/rank$i.log; [ -f \$L ] && mv -f \$L \$HOME/dsv41-logs/rank$i.prev.log; true" &
+  done; wait
+}
+
+save_logs() {  # $1 = tag
+  local i
+  for i in "${!HOSTS[@]}"; do
+    $SSH "${HOSTS[$i]}" "L=\$HOME/dsv41-logs/rank$i.log; [ -f \$L ] && cp \$L \$HOME/dsv41-logs/relfail-$1-rank$i.log; true" &
+  done; wait
+  log "rank logs saved as ~/dsv41-logs/relfail-$1-rank<i>.log on each host"
+}
+
+start_all() {  # args: VAR=VAL ...
+  local i kv EOPTS=""
+  for kv in "$@"; do EOPTS="$EOPTS -E $(printf %q "$kv")"; done
+  for i in "${!HOSTS[@]}"; do
+    $SSH "${HOSTS[$i]}" "systemd-run --user --unit dsv41-rank -p OOMScoreAdjust=500 -p TimeoutStopSec=20 --description 'dsv41-tp8 rank$i $LABEL' $EOPTS \$HOME/dsv41-tp8.sh $i >/dev/null || echo '${HOSTS[$i]} rank $i: systemd-run FAILED'" &
+  done; wait
+}
+
+kv() { echo "$ST" | tr ' ' '\n' | sed -n "s/^$1=//p" | head -1; }
+num() { local x; x=$(kv "$1"); case "$x" in ''|*[!0-9]*) echo 0 ;; *) echo "$x" ;; esac; }
+
+watch_try() {  # $1 = t0 (epoch s). Sets REASON / T_HEALTHY. 0 = healthy.
+  local t0=$1 now el tds="" lastu=0 i bad
+  REASON=""; T_HEALTHY=""
+  while :; do
+    sleep 5
+    now=$(date +%s); el=$((now - t0))
+    ST=$($SSH spark-one "bash \$HOME/dsv41-opt-20261021/ops/rel/relstatus.sh" 2>/dev/null)
+    if [ "$(num f_rdma)" -gt 0 ]; then REASON=rdma_timeout; return 1; fi
+    if [ "$(num f_wd)" -gt 0 ]; then REASON=capture_watchdog; return 1; fi
+    if [ "$(num f_fp)" -gt 0 ]; then REASON=fingerprint_mismatch; return 1; fi
+    if [ "$(num f_eng)" -gt 0 ]; then REASON=engine_failed; return 1; fi
+    if [ "$(num dspark)" -gt 0 ] && [ -z "$tds" ]; then tds=$now; log "DSpark capture started at +${el}s"; fi
+    if [ -n "$tds" ] && [ $(( $(num greedy) + $(num avstart) + $(num capfin) )) = 0 ] && [ $((now - tds)) -gt "$STALL" ]; then
+      REASON=dspark_stall_${STALL}s; return 1
+    fi
+    if [ "$(kv health)" = 200 ] && [ "$(num start)" -gt 0 ]; then T_HEALTHY=$el; return 0; fi
+    if [ $el -gt "$BUDGET" ]; then REASON=budget_${BUDGET}s; return 1; fi
+    if [ $((now - lastu)) -ge 15 ]; then
+      lastu=$now
+      for i in "${!HOSTS[@]}"; do
+        $SSH "${HOSTS[$i]}" "systemctl --user is-active dsv41-rank" > "$TMP/u$i" 2>/dev/null &
+      done; wait
+      bad=""
+      for i in "${!HOSTS[@]}"; do
+        u=$(head -1 "$TMP/u$i")
+        case "$u" in
+          active|activating|deactivating) ;;
+          '') log "warning: ${HOSTS[$i]} unit state unreadable (ssh); not counted" ;;
+          *) bad="$bad ${HOSTS[$i]}:$u" ;;
+        esac
+      done
+      if [ -n "$bad" ]; then REASON="unit_not_active:$(echo $bad | tr ' ' ',')"; return 1; fi
+    fi
+  done
+}
+
+preflight || { log "REFUSING to launch (nothing stopped)"; exit 2; }
+try=1
+while [ $try -le "$TRIES" ]; do
+  STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+  if [ $try = 1 ]; then ARGS=("${ENVS[@]}" "${FIRST[@]}"); else ARGS=("${ENVS[@]}"); fi
+  ts=$(date +%s)
+  log "try $try/$TRIES: stopping all ranks"
+  stop_all graceful
+  sleep 5
+  t0=$(date +%s)
+  log "try $try/$TRIES: starting 8 ranks (stop took $((t0 - ts)) s) env: ${ARGS[*]}"
+  start_all "${ARGS[@]}"
+  if watch_try "$t0"; then
+    down=$(( $(date +%s) - ts ))
+    log "HEALTHY: /health 200 + startup complete at +${T_HEALTHY}s after systemd-run (downtime ${down}s)"
+    [ -n "$RESULTS" ] && printf '%s\t%s\t%s\t%s\thealthy\t%s\t%s\t%s\n' "$STAMP" "$LABEL" "$try" "$TRIES" "$T_HEALTHY" "$down" "${ARGS[*]}" >> "$RESULTS"
+    exit 0
+  fi
+  el=$(( $(date +%s) - t0 ))
+  log "FAILED try $try: $REASON at +${el}s; status: $ST"
+  [ -n "$RESULTS" ] && printf '%s\t%s\t%s\t%s\tfail:%s\t%s\t-\t%s\n' "$STAMP" "$LABEL" "$try" "$TRIES" "$REASON" "$el" "${ARGS[*]}" >> "$RESULTS"
+  save_logs "$STAMP-t$try"
+  stop_all kill
+  try=$((try + 1))
+done
+log "giving up after $TRIES tries (all ranks stopped)"
+exit 1

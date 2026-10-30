@@ -1,0 +1,25 @@
+{
+ "segments": {
+  "header": [
+   0,
+   672,
+   "ffc9da89096525ea191d967531f8063db66327b0880a9d2f4d7d73a42d641f28"
+  ],
+  "weight_rows": [
+   672,
+   12288375200,
+   "a6c622e0b2c16cd89887983c48281b8f00a93abd777ee516744af489684f301d"
+  ],
+  "scale_rows": [
+   98308271264,
+   98692282968,
+   "0d8395dd48409cc7de544434d64fc8a1fdc1983c71d52ffbc2a022129166a54e"
+  ],
+  "tail": [
+   101380404720,
+   101537926640,
+   "b6fcc9068ed26fee588c24d2dd4ae0ac63531b96afdf76c9a71c19f4ada98bea"
+  ]
+ },
+ "full_sha256": "9dc51433e195bc78b5ad846b68643cc0351d3b174e5e4309222d3b7402c83afd"
+}

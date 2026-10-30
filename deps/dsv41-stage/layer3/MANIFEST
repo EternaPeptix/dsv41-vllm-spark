@@ -1,0 +1,3 @@
+# relpath (under site-packages)  deployed-sha256  patched-sha256   vLLM 0.32.0 (venvs/vllm032)
+vllm/parser/deepseek_v4.py 709f328fe3b0711c98cc76f572bee14c6342efaaf2160f010517d3fd54794cee 3334c1fa88c30f1b1c8fadb445332f264d8415641c44afc8f6478ee7bd4f83db
+vllm/parser/engine/parser_engine.py 62b741a0557beff5e2d7ed630e907c0203102ab8fda26b06190ded0563f0e120 6e3eeaba2a38b3ec9d9e42437d43246f77ae9d21c7b9d2540a7c08a5b461171e

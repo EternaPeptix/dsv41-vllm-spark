@@ -1,0 +1,6 @@
+{"arms": {"off": {"enable": 0}, "p2k": {"long_cap": 2048, "hold": 1}, "sk": {"long_cap": 0, "hold": 1},
+          "sk_h2": {"long_cap": 0, "hold": 2}, "p2k_h2": {"long_cap": 2048, "hold": 2}},
+ "seq": [["off","starve128","--runs","2"],["sk","starve128","--runs","2"],["sk_h2","starve128","--runs","2"],["p2k_h2","starve128","--runs","2"],["p2k","starve128","--runs","2"],
+         ["p2k","starve128","--runs","2"],["p2k_h2","starve128","--runs","2"],["sk_h2","starve128","--runs","2"],["sk","starve128","--runs","2"],["off","starve128","--runs","2"],
+         ["off","solo128"],["sk","solo128"],["sk_h2","solo128"],["sk_h2","solo128"],["sk","solo128"],["off","solo128"],
+         ["off","solo128"],["sk","solo128"],["sk_h2","solo128"],["sk_h2","solo128"],["sk","solo128"],["off","solo128"]]}

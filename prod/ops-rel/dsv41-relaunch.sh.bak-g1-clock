@@ -1,0 +1,233 @@
+#!/bin/bash
+# dsv41-relaunch.sh [options] [VAR=VAL ...] -- supervised (re)start of all 8 ranks. Run FROM THE MAC
+# (spark-one cannot ssh to six..eight), e.g.
+#   ssh spark-one cat ~/dsv41-opt-20261021/ops/rel/dsv41-relaunch.sh | bash -s -- --label x VAR=VAL
+# rel-2 (2026-10-25), round-2 #2 (f)+(g). Mac bash 3.2: no declare -A, no ${a[@]} under set -u.
+#  1. Pre-flight, before anything is stopped: launcher sha + site manifest identical on 8/8 (and equal
+#     to --expect-launcher if given), Engram check (ENGRAM_CHECK=0 skips; never on punched nodes).
+#  2. Stop: systemctl stop with a 30 s cap, then SIGKILL; reset-failed; stray vllm processes killed;
+#     the old rank log is kept as rank<i>.prev.log.
+#  3. Start: the same systemd-run as launch-conc.sh (-E VAR=VAL identical on all ranks), plus
+#     -p TimeoutStopSec=20 (hung ranks ignore SIGTERM; the default is 90 s).
+#  4. Watch every 5 s (rank0 log via relstatus.sh, unit states 8/8 every 15 s). A try fails on: an
+#     rdma_ar device timeout, the DSV41 capture watchdog (faulthandler "Timeout (h:mm:ss)!"), an
+#     EngineCore failure, an rdma_ar fingerprint mismatch, any unit not active, no DSpark progress
+#     ("capturing greedy draft graphs", the AV phase start or "Graph capturing finished") STALL s after
+#     the first "Capturing model for DSpark", or no /health 200 within BUDGET s.
+#  5. On failure: every rank log is saved as ~/dsv41-logs/relfail-<stamp>-t<try>-rank<i>.log, all
+#     ranks are SIGKILLed and the next try starts (TRIES in total). --first-only VAR=VAL (test
+#     faults) applies to try 1 only.
+# Options: --label L --tries N (2) --stall S (120) --budget S (900) --results FILE (TSV, appended)
+#          --first-only VAR=VAL (repeatable) --expect-launcher SHA8
+# Exit: 0 healthy, 1 failed after all tries, 2 pre-flight refused (nothing stopped).
+# G1 step (2026-10-26): optional pre-launch steps between the stop and the start of EVERY try, on 8/8, as root
+# inside throwaway privileged containers (docker run --rm --privileged --pid=host ... nsenter -t 1 -m), logged per
+# node in ~/dsv41-logs/prelaunch-<stamp>-t<try>.log with a one-line summary per node here. Supervisor flags, given
+# like VAR=VAL but consumed here (NOT passed to the ranks):
+#   DSV41_PRELAUNCH_COMPACT=1|snap|0  1 = wait until no GPU process is left, sync, echo 3 > drop_caches,
+#                                     echo 1 > compact_memory, /proc/buddyinfo + vmstat before/after;
+#                                     snap = the before-snapshot only; 0 = skip.        Default: PRE_COMPACT_DEFAULT
+#   DSV41_GPU_CLOCK_MHZ=<MHz>|off     nvidia-smi -lgc 0,<MHz> on all 8 (2000 = the site-layer boot policy of
+#                                     dgx-spark-gpu-clock.service; a reboot restores 2000 whatever was set);
+#                                     off = leave the clocks as they are.                Default: PRE_CLOCK_DEFAULT
+#   Both only change machine state, never numerics. A failed pre-step is logged as a WARNING and the launch goes on.
+PRE_COMPACT_DEFAULT=0
+PRE_CLOCK_DEFAULT=off
+HOSTS=(spark-one spark-two spark-three spark-four spark-five spark-six spark-seven spark-eight)
+LABEL=relaunch; TRIES=2; STALL=120; BUDGET=900; RESULTS=""; EXPECT_LAUNCHER=""
+FIRST=(); ENVS=()
+PRE_COMPACT=$PRE_COMPACT_DEFAULT; PRE_CLOCK=$PRE_CLOCK_DEFAULT
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --label) LABEL=$2; shift 2 ;;
+    --tries) TRIES=$2; shift 2 ;;
+    --stall) STALL=$2; shift 2 ;;
+    --budget) BUDGET=$2; shift 2 ;;
+    --results) RESULTS=$2; shift 2 ;;
+    --first-only) FIRST+=("$2"); shift 2 ;;
+    --expect-launcher) EXPECT_LAUNCHER=$2; shift 2 ;;
+    --) shift ;;
+    DSV41_PRELAUNCH_COMPACT=*) PRE_COMPACT=${1#*=}; shift ;;
+    DSV41_GPU_CLOCK_MHZ=*) PRE_CLOCK=${1#*=}; shift ;;
+    *=*) ENVS+=("$1"); shift ;;
+    *) echo "dsv41-relaunch: unknown argument $1" >&2; exit 2 ;;
+  esac
+done
+case "$PRE_COMPACT" in 0|1|snap) ;; *) echo "dsv41-relaunch: DSV41_PRELAUNCH_COMPACT must be 1, snap or 0" >&2; exit 2 ;; esac
+case "$PRE_CLOCK" in off) ;; *[!0-9]*|'') echo "dsv41-relaunch: DSV41_GPU_CLOCK_MHZ must be MHz or off" >&2; exit 2 ;;
+  *) if [ "$PRE_CLOCK" -lt 1000 ] || [ "$PRE_CLOCK" -gt 3003 ]; then echo "dsv41-relaunch: DSV41_GPU_CLOCK_MHZ $PRE_CLOCK out of 1000..3003" >&2; exit 2; fi ;;
+esac
+LABEL=$(printf %s "$LABEL" | tr -c 'A-Za-z0-9._-' '_')
+SSH="ssh -n -o ConnectTimeout=10 -o BatchMode=yes"
+SITE=venvs/vllm032/lib/python3.12/site-packages/vllm
+MANIFEST="$SITE/v1/worker/gpu/model_runner.py $SITE/v1/worker/gpu/dsv41_rel.py \
+$SITE/distributed/device_communicators/rdma_all_reduce.py $SITE/distributed/device_communicators/dsv41_l2_prefetch.py \
+$SITE/distributed/device_communicators/cuda_communicator.py $SITE/models/deepseek_v41/nvidia/dspark.py \
+$SITE/v1/worker/gpu/spec_decode/adaptive_verification.py $SITE/v1/worker/gpu/spec_decode/dspark/speculator.py \
+rdma_ar_dsv41/build-k1pl/rdma_ar_ext.so dsv41-tp8.sh"
+log() { echo "$(date -u +%H:%M:%S) [$LABEL] $*"; }
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/dsv41rel.XXXXXX")
+trap 'rm -rf "$TMP"' EXIT
+
+preflight() {
+  local i rc=0 m0="" l0=""
+  for i in "${!HOSTS[@]}"; do
+    $SSH "${HOSTS[$i]}" "cd \$HOME && sha256sum $MANIFEST 2>&1 | sha256sum | cut -c1-12; sha256sum dsv41-tp8.sh | cut -c1-8" > "$TMP/pf$i" 2>&1 &
+  done; wait
+  for i in "${!HOSTS[@]}"; do
+    m=$(sed -n 1p "$TMP/pf$i"); l=$(sed -n 2p "$TMP/pf$i")
+    [ -z "$m0" ] && { m0=$m; l0=$l; }
+    if [ "$m" != "$m0" ] || [ "$l" != "$l0" ] || [ ${#m} != 12 ]; then
+      log "PREFLIGHT ${HOSTS[$i]}: manifest $m launcher $l differs from spark-one ($m0 / $l0)"; rc=1
+    fi
+  done
+  if [ -n "$EXPECT_LAUNCHER" ] && [ "$l0" != "$EXPECT_LAUNCHER" ]; then
+    log "PREFLIGHT launcher $l0 != expected $EXPECT_LAUNCHER"; rc=1
+  fi
+  [ $rc = 0 ] && log "preflight: site manifest $m0 and launcher $l0 identical on 8/8"
+  if [ "${ENGRAM_CHECK:-1}" != 0 ]; then
+    $SSH spark-one "cat ~/dsv41-opt-20261021/ops/engram-punch/check_all.sh" | bash > "$TMP/engram" 2>&1 || rc=1
+    tail -1 "$TMP/engram" | sed "s/^/$(date -u +%H:%M:%S) [$LABEL] /"
+  fi
+  return $rc
+}
+
+stop_all() {  # $1 = graceful | kill
+  local i
+  for i in "${!HOSTS[@]}"; do
+    $SSH "${HOSTS[$i]}" "
+      [ $1 = kill ] && { systemctl --user kill -s SIGKILL dsv41-rank 2>/dev/null; sleep 2; }
+      timeout 30 systemctl --user stop dsv41-rank 2>/dev/null || { systemctl --user kill -s SIGKILL dsv41-rank 2>/dev/null; sleep 3; systemctl --user stop dsv41-rank 2>/dev/null; }
+      systemctl --user reset-failed dsv41-rank 2>/dev/null
+      pkill -9 -u \$(id -u) -f '[v]llm serve' 2>/dev/null; pkill -9 -u \$(id -u) -f '[V]LLM::' 2>/dev/null
+      L=\$HOME/dsv41-logs/rank$i.log; [ -f \$L ] && mv -f \$L \$HOME/dsv41-logs/rank$i.prev.log; true" &
+  done; wait
+}
+
+save_logs() {  # $1 = tag
+  local i
+  for i in "${!HOSTS[@]}"; do
+    $SSH "${HOSTS[$i]}" "L=\$HOME/dsv41-logs/rank$i.log; [ -f \$L ] && cp \$L \$HOME/dsv41-logs/relfail-$1-rank$i.log; true" &
+  done; wait
+  log "rank logs saved as ~/dsv41-logs/relfail-$1-rank<i>.log on each host"
+}
+
+prelaunch() {  # $1 = tag (stamp-try). DSV41_PRELAUNCH_COMPACT / DSV41_GPU_CLOCK_MHZ pre-steps on 8/8.
+  local i n=0 w=0 l
+  [ "$PRE_COMPACT" = 0 ] && [ "$PRE_CLOCK" = off ] && return 0
+  cat > "$TMP/pre.sh" <<'PREEOF'
+set -u
+COMPACT=$1; CLOCK=$2; TAG=$3
+mkdir -p "$HOME/dsv41-logs"; LOG=$HOME/dsv41-logs/prelaunch-$TAG.log
+ROOT="docker run --rm --privileged --pid=host --network none --pull never --entrypoint /usr/bin/nsenter kindling-spark-os:0.9.5 -t 1 -m --"
+ge() { awk '/Normal/{for(i=5;i<=NF;i++){o=i-5;p=$i*2^o;t+=p;if(o>=9)b+=p;if(o>=10)c+=p}} END{printf "free=%.1fG ge2M=%.1fG ge4M=%.1fG", t/262144, b/262144, c/262144}' /proc/buddyinfo; }
+snap() { echo "$1 $(ge)"; grep Normal /proc/buddyinfo
+  grep -E '^(MemFree|MemAvailable|Cached|AnonHugePages):' /proc/meminfo | tr -s ' ' | tr '\n' ' '; echo
+  grep -E '^(compact_(stall|fail|success)|pgmigrate_(success|fail)|drop_(pagecache|slab)|thp_fault_fallback) ' /proc/vmstat | tr '\n' ' '; echo; }
+{
+  echo "## $(date -u +%FT%TZ) $(hostname) prelaunch compact=$COMPACT clock=$CLOCK"
+  for k in $(seq 30); do [ -z "$(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null)" ] && break; sleep 1; done
+  echo "gpu_apps_after_wait=$(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null | grep -c .) waited_s=$k"
+  [ "$COMPACT" != 0 ] && snap before
+  if [ "$COMPACT" = 1 ]; then
+    if pgrep -f '[V]LLM::' >/dev/null || pgrep -f '[v]llm serve' >/dev/null; then echo "WARNING compact refused: vllm still running"
+    else
+      t0=$(date +%s%N)
+      $ROOT /bin/sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches; echo 1 > /proc/sys/vm/compact_memory'; rc=$?
+      echo "compact rc=$rc ms=$(( ($(date +%s%N) - t0) / 1000000 ))"
+      snap after
+    fi
+  fi
+  if [ "$CLOCK" != off ]; then
+    out=$($ROOT /usr/bin/nvidia-smi -lgc 0,$CLOCK 2>&1 | tr '\n' ' ')
+    case "$out" in *"All done"*) echo "clock -lgc 0,$CLOCK OK" ;; *) echo "WARNING clock -lgc 0,$CLOCK failed: $out" ;; esac
+  fi
+} >> "$LOG" 2>&1
+echo "$(hostname): $(grep -E '^(before|after|compact rc|clock|WARNING|gpu_apps)' "$LOG" | tail -n 6 | tr '\n' ' ')"
+PREEOF
+  for i in "${!HOSTS[@]}"; do
+    ssh -o ConnectTimeout=10 -o BatchMode=yes "${HOSTS[$i]}" "bash -s -- $PRE_COMPACT $PRE_CLOCK $1" < "$TMP/pre.sh" > "$TMP/pre$i" 2>&1 &
+  done; wait
+  for i in "${!HOSTS[@]}"; do
+    l=$(tail -n 1 "$TMP/pre$i"); log "prelaunch $l"
+    case "$l" in *WARNING*|'') w=$((w + 1)) ;; *) n=$((n + 1)) ;; esac
+  done
+  log "prelaunch (compact=$PRE_COMPACT clock=$PRE_CLOCK): ok on $n/8, warnings on $w; per-node log ~/dsv41-logs/prelaunch-$1.log"
+}
+
+start_all() {  # args: VAR=VAL ...
+  local i kv EOPTS=""
+  for kv in "$@"; do EOPTS="$EOPTS -E $(printf %q "$kv")"; done
+  for i in "${!HOSTS[@]}"; do
+    $SSH "${HOSTS[$i]}" "systemd-run --user --unit dsv41-rank -p OOMScoreAdjust=500 -p TimeoutStopSec=20 --description 'dsv41-tp8 rank$i $LABEL' $EOPTS \$HOME/dsv41-tp8.sh $i >/dev/null || echo '${HOSTS[$i]} rank $i: systemd-run FAILED'" &
+  done; wait
+}
+
+kv() { echo "$ST" | tr ' ' '\n' | sed -n "s/^$1=//p" | head -1; }
+num() { local x; x=$(kv "$1"); case "$x" in ''|*[!0-9]*) echo 0 ;; *) echo "$x" ;; esac; }
+
+watch_try() {  # $1 = t0 (epoch s). Sets REASON / T_HEALTHY. 0 = healthy.
+  local t0=$1 now el tds="" lastu=0 i bad
+  REASON=""; T_HEALTHY=""
+  while :; do
+    sleep 5
+    now=$(date +%s); el=$((now - t0))
+    ST=$($SSH spark-one "bash \$HOME/dsv41-opt-20261021/ops/rel/relstatus.sh" 2>/dev/null)
+    if [ "$(num f_rdma)" -gt 0 ]; then REASON=rdma_timeout; return 1; fi
+    if [ "$(num f_wd)" -gt 0 ]; then REASON=capture_watchdog; return 1; fi
+    if [ "$(num f_fp)" -gt 0 ]; then REASON=fingerprint_mismatch; return 1; fi
+    if [ "$(num f_eng)" -gt 0 ]; then REASON=engine_failed; return 1; fi
+    if [ "$(num dspark)" -gt 0 ] && [ -z "$tds" ]; then tds=$now; log "DSpark capture started at +${el}s"; fi
+    if [ -n "$tds" ] && [ $(( $(num greedy) + $(num avstart) + $(num capfin) )) = 0 ] && [ $((now - tds)) -gt "$STALL" ]; then
+      REASON=dspark_stall_${STALL}s; return 1
+    fi
+    if [ "$(kv health)" = 200 ] && [ "$(num start)" -gt 0 ]; then T_HEALTHY=$el; return 0; fi
+    if [ $el -gt "$BUDGET" ]; then REASON=budget_${BUDGET}s; return 1; fi
+    if [ $((now - lastu)) -ge 15 ]; then
+      lastu=$now
+      for i in "${!HOSTS[@]}"; do
+        $SSH "${HOSTS[$i]}" "systemctl --user is-active dsv41-rank" > "$TMP/u$i" 2>/dev/null &
+      done; wait
+      bad=""
+      for i in "${!HOSTS[@]}"; do
+        u=$(head -1 "$TMP/u$i")
+        case "$u" in
+          active|activating|deactivating) ;;
+          '') log "warning: ${HOSTS[$i]} unit state unreadable (ssh); not counted" ;;
+          *) bad="$bad ${HOSTS[$i]}:$u" ;;
+        esac
+      done
+      if [ -n "$bad" ]; then REASON="unit_not_active:$(echo $bad | tr ' ' ',')"; return 1; fi
+    fi
+  done
+}
+
+preflight || { log "REFUSING to launch (nothing stopped)"; exit 2; }
+try=1
+while [ $try -le "$TRIES" ]; do
+  STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+  if [ $try = 1 ]; then ARGS=("${ENVS[@]}" "${FIRST[@]}"); else ARGS=("${ENVS[@]}"); fi
+  ts=$(date +%s)
+  log "try $try/$TRIES: stopping all ranks"
+  stop_all graceful
+  sleep 5
+  tp=$(date +%s)
+  prelaunch "$STAMP-t$try"
+  t0=$(date +%s)
+  log "try $try/$TRIES: starting 8 ranks (stop took $((tp - ts)) s, pre-steps $((t0 - tp)) s) env: ${ARGS[*]} [pre: compact=$PRE_COMPACT clock=$PRE_CLOCK]"
+  start_all "${ARGS[@]}"
+  if watch_try "$t0"; then
+    down=$(( $(date +%s) - ts ))
+    log "HEALTHY: /health 200 + startup complete at +${T_HEALTHY}s after systemd-run (downtime ${down}s)"
+    [ -n "$RESULTS" ] && printf '%s\t%s\t%s\t%s\thealthy\t%s\t%s\t%s\n' "$STAMP" "$LABEL" "$try" "$TRIES" "$T_HEALTHY" "$down" "${ARGS[*]} [pre: compact=$PRE_COMPACT clock=$PRE_CLOCK]" >> "$RESULTS"
+    exit 0
+  fi
+  el=$(( $(date +%s) - t0 ))
+  log "FAILED try $try: $REASON at +${el}s; status: $ST"
+  [ -n "$RESULTS" ] && printf '%s\t%s\t%s\t%s\tfail:%s\t%s\t-\t%s\n' "$STAMP" "$LABEL" "$try" "$TRIES" "$REASON" "$el" "${ARGS[*]} [pre: compact=$PRE_COMPACT clock=$PRE_CLOCK]" >> "$RESULTS"
+  save_logs "$STAMP-t$try"
+  stop_all kill
+  try=$((try + 1))
+done
+log "giving up after $TRIES tries (all ranks stopped)"
+exit 1

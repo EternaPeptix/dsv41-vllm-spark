@@ -1,0 +1,65 @@
+#!/usr/bin/env python3
+"""lanproxy.py — expose the DSv4.1 API (vLLM on 127.0.0.1:8000, rank 0) on spark-one's LAN address.
+
+Plain TCP forwarder (stdlib asyncio), so streaming/SSE and every endpoint pass through unchanged and
+vLLM itself is not restarted or reconfigured. Binds the current IPv4 of LAN_IFACE (default wlP9s9) on
+LISTEN_PORT (default 8000); exits when that address changes so systemd restarts it on the new one.
+User request 2026-10-26: "going forward, let's expose the API to the LAN".
+"""
+import asyncio, os, socket, subprocess, sys
+
+IFACE = os.environ.get("LAN_IFACE", "wlP9s9")
+PORT = int(os.environ.get("LISTEN_PORT", "8000"))
+UPSTREAM = ("127.0.0.1", int(os.environ.get("UPSTREAM_PORT", "8000")))
+
+
+def lan_ip():
+    out = subprocess.run(["ip", "-4", "-o", "addr", "show", "dev", IFACE], capture_output=True, text=True).stdout
+    for tok in out.split():
+        if "/" in tok and tok[0].isdigit():
+            return tok.split("/")[0]
+    return None
+
+
+async def pipe(reader, writer):
+    try:
+        while data := await reader.read(65536):
+            writer.write(data)
+            await writer.drain()
+    except (ConnectionError, OSError):
+        pass
+    finally:
+        try:
+            writer.close()
+        except Exception:
+            pass
+
+
+async def handle(creader, cwriter):
+    try:
+        ureader, uwriter = await asyncio.open_connection(*UPSTREAM)
+    except OSError:
+        cwriter.close()          # vLLM restarting: refuse quickly, the client retries
+        return
+    for w in (cwriter, uwriter):
+        s = w.get_extra_info("socket")
+        if s is not None:
+            s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    await asyncio.gather(pipe(creader, uwriter), pipe(ureader, cwriter))
+
+
+async def main():
+    ip = lan_ip()
+    if not ip:
+        print(f"lanproxy: no IPv4 on {IFACE}", file=sys.stderr)
+        sys.exit(1)
+    server = await asyncio.start_server(handle, ip, PORT, reuse_address=True, backlog=1024)
+    print(f"lanproxy: {ip}:{PORT} -> {UPSTREAM[0]}:{UPSTREAM[1]}", flush=True)
+    async with server:
+        while True:
+            await asyncio.sleep(30)
+            if lan_ip() != ip:   # DHCP moved us: let systemd restart on the new address
+                print(f"lanproxy: {IFACE} address changed from {ip}; exiting for restart", flush=True)
+                sys.exit(3)
+
+asyncio.run(main())

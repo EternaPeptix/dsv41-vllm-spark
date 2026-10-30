@@ -1,0 +1,12 @@
+[Unit]
+Description=Expose the DSv4.1 API (127.0.0.1:8000) on the LAN address (TCP forwarder)
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 -I %h/dsv41-lanproxy/lanproxy.py
+Restart=always
+RestartSec=10
+Nice=-0
+
+[Install]
+WantedBy=default.target

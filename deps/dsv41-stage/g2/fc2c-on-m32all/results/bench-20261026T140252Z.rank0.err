@@ -1,0 +1,13 @@
+FlashInfer kernels are disabled: flashinfer-cubin is not installed and nvcc (CUDA_HOME, CUDA_PATH, PATH or /usr/local/cuda) or ninja (PATH) is missing. Set CUDA_HOME to a CUDA toolkit and put ninja on PATH, or run `vllm download-kernels`.
+USDT:2026-10-26 14:04:02 3750895:3750895 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-26 14:04:02 3750895:3750895 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-26 14:04:02 3750895:3750895 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-26 14:04:02 3750895:3750895 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-26 14:04:02 3750895:3750895 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-26 14:04:02 3750895:3750895 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-26 14:04:13 3750895:3750895 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-26 14:04:13 3750895:3750895 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-26 14:04:13 3750895:3750895 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-26 14:04:13 3750895:3750895 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-26 14:04:13 3750895:3750895 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-26 14:04:13 3750895:3750895 SyncActivityProfilerHandler.cpp:59] profiler_stop

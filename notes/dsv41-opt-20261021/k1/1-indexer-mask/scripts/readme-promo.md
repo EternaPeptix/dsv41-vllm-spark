@@ -1,0 +1,9 @@
+- **LENAWARE: PROMOTED.**
+  - Exact: exact.py stays a8c3394af9d2.
+  - C1 coding improved in every pair (+2.12 / +1.30 / +1.29%, bar 0.8%), and conc16/conc32 improved by +3.1 to +7.9% in every pair (bar 2%). Nothing got worse.
+  - Launcher `~/dsv41-tp8.sh` f4e4e214 -> **cfb97923** on 8/8. It adds one line after the TOPK_CANON export: `export DSV41_CAND_LENAWARE=${DSV41_CAND_LENAWARE:-1}`. Backup: `~/dsv41-tp8.sh.bak-k1-1-indexer-mask` = f4e4e214 on 8/8. Tool: `scripts/promote-launcher.py 1 0`, run on each rank; it refuses unless the launcher is f4e4e214.
+  - Site file `candidate_blocks.py` a5816163 on 8/8 (backup 45f1eaa3).
+- **LENSELECT: NOT promoted.** It passed every gate it has: exact.py a8c3394af9d2 x3, GSM8K-50 50/50, bench-single AL unchanged, longctx PASS and 500K needle PASS. But its gain over LENAWARE alone is within noise in every pair (coding -0.31 / +0.66 / +0.09%, conc16 +0.10 / -0.03 / -0.44%), so it misses the per-flag bar. It is also greedy-eq, not bitwise, above 16K context. It stays installed and off (default 0). Enable it with `DSV41_CAND_LENSELECT=1` via launch-conc.sh if the 0.5-2.9 ms/step it saves at 48-192 rows (Phase C) is wanted for high-concurrency traffic.
+- **Final live relaunch** (@@FINAL_TIME@@ UTC, `ops/dsv41-launch-all.sh`, launcher cfb97923 defaults, no env; instance `ab/i10-LIVE`):
+  - Up in 407 s on the first attempt. Armed line on 8/8: `LENAWARE=1 LENSELECT=0 CTAS=384`. /v1/models max_model_len 1048576.
+  - @@FINAL_LINE@@

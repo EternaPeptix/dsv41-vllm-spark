@@ -1,0 +1,6 @@
+ptxas info    : 10 bytes gmem
+ptxas info    : Compiling entry function '_ZN9deep_gemm28sm120_fp8_fp4_gemm_1d1d_implILj0ELj5120ELj384ELj128ELj32ELj384ELj32ELj64ELj128ELj128ELj128ELj128ELj7ELj128ELj256ELj48ELNS_8GemmTypeE1ELb0EN7cutlass10bfloat16_tENS_8epilogue9transform16EpilogueIdentityELb0ELb1ELb0ELb1ELb0ELj32ELj1ELj128ELb1ELj256EEEvPT17_PKS7_P13__nv_fp8_e4m3SC_PiP14CUtensorMap_stPfjjjjjjjT18_jSE_SE_SE_SE_SE_' for 'sm_120f'
+ptxas info    : Function properties for _ZN9deep_gemm28sm120_fp8_fp4_gemm_1d1d_implILj0ELj5120ELj384ELj128ELj32ELj384ELj32ELj64ELj128ELj128ELj128ELj128ELj7ELj128ELj256ELj48ELNS_8GemmTypeE1ELb0EN7cutlass10bfloat16_tENS_8epilogue9transform16EpilogueIdentityELb0ELb1ELb0ELb1ELb0ELj32ELj1ELj128ELb1ELj256EEEvPT17_PKS7_P13__nv_fp8_e4m3SC_PiP14CUtensorMap_stPfjjjjjjjT18_jSE_SE_SE_SE_SE_
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 168 registers, used 1 barriers
+ptxas info    : Compile time = 38.722 ms

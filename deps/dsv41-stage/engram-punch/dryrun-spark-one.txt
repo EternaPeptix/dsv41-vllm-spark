@@ -1,0 +1,13 @@
+host spark-one  rank 0/8  fs block 4096
+  model-00047-of-00048.safetensors layer 1: keep rows [0, 48,000,217) = 48,000,217 of 384,006,168; kept 11.95 GiB; release 82.61 GiB (2 ranges); holes now 0 B; allocated 94.56 GiB
+      punch [12,288,057,344, 98,305,576,960)  80.110 GiB
+      punch [98,689,585,152, 101,377,626,112)  2.503 GiB
+  model-00048-of-00048.safetensors layer 14: keep rows [0, 48,001,463) = 48,001,463 of 384,016,682; kept 11.95 GiB; release 82.62 GiB (2 ranges); holes now 0 B; allocated 94.56 GiB
+      punch [12,288,376,832, 98,308,268,032)  80.112 GiB
+      punch [98,692,284,416, 101,380,403,200)  2.504 GiB
+  total release 165.23 GiB (177,413,570,560 B); free now 31.6 GiB -> expected 196.8 GiB
+  host map rank 0  log rows [(0, 48000217), (0, 48001463)]  log matches True
+rc=0
+engram check OK: spark-one holds every row rank 0/8 reads (whole)
+checkrc=0
+secs dry=.116352889 check=.155622478

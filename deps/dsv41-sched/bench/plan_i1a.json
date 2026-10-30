@@ -1,0 +1,8 @@
+{"arms": {"off": {"enable": 0}, "emu8k": {"emu_threshold": 8192}, "emu4k": {"emu_threshold": 4096},
+          "p2k": {"long_cap": 2048}, "p4k": {"long_cap": 4096}, "p8k": {"long_cap": 8192},
+          "p2k_nh": {"long_cap": 2048, "hold": 0}, "p2k_dc8k": {"long_cap": 2048, "decode_cap": 8192}},
+ "seq": [["off","starve128","--runs","2"],["p2k","starve128","--runs","2"],["emu8k","starve128","--runs","2"],["p4k","starve128","--runs","2"],
+         ["p2k_nh","starve128","--runs","2"],["p8k","starve128","--runs","2"],["emu4k","starve128","--runs","2"],["p2k_dc8k","starve128","--runs","2"],
+         ["p2k_dc8k","starve128","--runs","2"],["emu4k","starve128","--runs","2"],["p8k","starve128","--runs","2"],["p2k_nh","starve128","--runs","2"],
+         ["p4k","starve128","--runs","2"],["emu8k","starve128","--runs","2"],["p2k","starve128","--runs","2"],["off","starve128","--runs","2"],
+         ["off","solo128"],["p2k","solo128"],["p2k","solo128"],["off","solo128"],["off","solo128"],["p2k","solo128"],["p2k","solo128"],["off","solo128"],["off","solo128"],["p2k","solo128"]]}

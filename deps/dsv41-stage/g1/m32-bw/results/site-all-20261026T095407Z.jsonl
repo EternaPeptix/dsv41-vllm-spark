@@ -1,0 +1,30 @@
+{"ok": true, "variant": "all", "check": "g1_variant"}
+{"ok": true, "variant": "all", "check": "kernel"}
+{"ok": true, "variant": "all", "check": "base tree", "path": "/home/jeweled/dsv41-stage/g1/m32-bw/trees/all-base/_C.cpython-312-aarch64-linux-gnu.so"}
+{"ok": true, "variant": "all", "check": "d05 tree", "path": "/home/jeweled/dsv41-stage/g1/m32-bw/trees/all-d05/_C.cpython-312-aarch64-linux-gnu.so"}
+{"ok": true, "variant": "all", "m": 1, "route": "valid"}
+{"ok": true, "variant": "all", "m": 1, "route": "spec"}
+{"ok": true, "variant": "all", "m": 1, "route": "half"}
+{"ok": true, "variant": "all", "m": 1, "route": "hot"}
+{"ok": true, "variant": "all", "m": 1, "route": "skew"}
+{"ok": true, "variant": "all", "m": 1, "route": "one"}
+{"ok": true, "variant": "all", "m": 6, "route": "valid"}
+{"ok": true, "variant": "all", "m": 6, "route": "spec"}
+{"ok": true, "variant": "all", "m": 6, "route": "half"}
+{"ok": true, "variant": "all", "m": 6, "route": "hot"}
+{"ok": true, "variant": "all", "m": 6, "route": "skew"}
+{"ok": true, "variant": "all", "m": 6, "route": "one"}
+{"ok": true, "variant": "all", "m": 24, "route": "valid"}
+{"ok": true, "variant": "all", "m": 24, "route": "spec"}
+{"ok": true, "variant": "all", "m": 24, "route": "half"}
+{"ok": true, "variant": "all", "m": 24, "route": "hot"}
+{"ok": true, "variant": "all", "m": 24, "route": "skew"}
+{"ok": true, "variant": "all", "m": 24, "route": "one"}
+{"ok": true, "variant": "all", "m": 96, "route": "valid"}
+{"ok": true, "variant": "all", "m": 96, "route": "spec"}
+{"ok": true, "variant": "all", "m": 96, "route": "half"}
+{"ok": true, "variant": "all", "m": 96, "route": "hot"}
+{"ok": true, "variant": "all", "m": 96, "route": "skew"}
+{"ok": true, "variant": "all", "m": 96, "route": "one"}
+{"ok": true, "variant": "all", "check": "flag off -> live path"}
+{"event": "summary", "variant": "all", "status": "PASS", "cases": 29, "failures": 0}

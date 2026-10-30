@@ -1,0 +1,93 @@
+ok   provenance: g1_variant == db659d80
+ok   provenance: pdl_early_b == db659d80
+ok   provenance: d05_mode == db659d80
+ok   provenance: d05_eligible == db659d80
+ok   provenance: _verify_tree == db659d80
+ok   provenance: load_d05_native == db659d80
+ok   provenance: TargetM32Kernel.alignment_scope == db659d80
+ok   provenance: _D05Verifier.check == db659d80
+ok   provenance: fc2c_mode == 9e250455
+ok   provenance: fc2c_min_rows == 9e250455
+ok   provenance: make_fc2c_tail == 9e250455
+ok   provenance: fc2c_tail_from_bytes == 9e250455
+ok   provenance: FC2Compact == 9e250455
+ok   provenance: _D05Verifier.__init__ == 9e250455
+ok   provenance: _D05Verifier._start_reporter == 9e250455
+ok   provenance: _D05Verifier.check_compact == 9e250455
+ok   constant _MANIFEST_SHA256 == db659d80
+ok   constant _NATIVE_SHA256 == db659d80
+ok   constant _D05_MANIFEST_SHA256 == db659d80
+ok   constant _D05_NATIVE_SHA256 == db659d80
+ok   constant _G1_MANIFESTS == db659d80
+ok   constant _G1_VARIANTS == db659d80
+ok   constant _G1_HAS_D05 == db659d80
+ok   constant _G1_HAS_LA == db659d80
+ok   constant _PDL_BASE_MANIFEST_SHA256 == db659d80
+ok   constant _PDL_D05_MANIFEST_SHA256 == db659d80
+ok   constant _D05_MAX_ROWS == db659d80
+ok   constant _FC2_E == db659d80
+ok   constant _FC2_N == db659d80
+ok   constant _FC2_KP == db659d80
+ok   constant _FC2_KB == db659d80
+ok   constant _FC2C_MANIFEST_SHA256 == 9e250455
+ok   constant _FC2C_NATIVE_SHA256 == 9e250455
+ok   constant _FC2C_TOPK == 9e250455
+ok   constant _FC2C_ALIGN == 9e250455
+ok   constant _FC2C_KREAL_B == 9e250455
+ok   load_fc2c_native == 9e250455 except tree selection (7 lines out, 4 in)
+ok   TargetM32Kernel.gemm == 9e250455 + g1-la guard (db659d80) + verify poison (g2)
+ok   FC2C unset, D05=0, g1_la=False: staged issues exactly the live calls (7)
+ok   FC2C unset, D05=0, g1_la=True: staged issues exactly the live calls (7)
+ok   FC2C unset, D05=1, g1_la=False: staged issues exactly the live calls (7)
+ok   FC2C unset, D05=1, g1_la=True: staged issues exactly the live calls (7)
+ok   FC2C unset, D05=verify, g1_la=False: staged issues exactly the live calls (11)
+ok   FC2C unset, D05=verify, g1_la=True: staged issues exactly the live calls (11)
+ok   g1-la guard passes an aligned contiguous A
+ok   g1-la guard rejects a misaligned A
+ok   fc2c mode '' -> 0
+ok   fc2c mode '0' -> 0
+ok   fc2c mode 'off' -> 0
+ok   fc2c mode '1' -> 1
+ok   fc2c mode 'on' -> 1
+ok   fc2c mode 'verify' -> verify
+ok   bogus fc2c mode rejected
+ok   fc2c_min_rows(t) == M_sum(t), t=1..120
+ok   default gate 2 tokens = 384 rows
+ok   gate monotonic: M>=2
+ok   DSV41_MOE_FC2C_MIN_TOKENS=1 -> 192 rows (compact at M=1)
+ok   FC2C=1: M_sum 192 -> d05
+ok   FC2C=1: M_sum 384 -> fc2c
+ok   FC2C=1: M_sum 1152 -> fc2c
+ok   FC2C=1: M_sum 9216 -> fc2c
+ok   FC2C=1: M_sum 12480 -> fc2c
+ok   one tail per FC2 weight, reused
+ok   second FC2 weight gets its own tail
+ok   FC2C=1: FC1 stays on the base native
+ok   FC2C=1: other K stays on the base native
+ok   FC2C=1: other E stays on the base native
+ok   FC2C=1: rows > cap stays on the base native
+ok   FC2C=1: extra kwarg stays on the base native
+ok   FC2C=1: weight without tail during capture -> D05 fallback
+ok   FC2C without D05 rejected
+ok   FC2C=verify poison_served=False: order ['d05', 'verify_compact']
+ok   FC2C=verify poison_served=False: M=1 serves D05 only
+ok   FC2C=verify poison_served=True: order ['poison', 'd05', 'verify_compact']
+ok   FC2C=verify poison_served=True: M=1 serves D05 only
+ok   G1=all -> g2 tree, g2 jit-cache, g2 pin
+ok   env overrides honoured, pin unchanged
+ok   G1 off -> g1 fc2c-d05 tree (9e250455 behaviour)
+ok   G1=pair: refused
+ok   G1=pf: refused
+ok   G1=la: refused
+ok   G1=ds: refused
+ok   G1=all with D05=0 refused
+ok   FC2C with PDL_EARLY_B refused
+ok   staged pin == tree/manifest.json
+ok   tree verifies (888 files, native 33d4eb19)
+ok   tree header == make_fc2c_tree.fc2c_on_all(live all-d05 header)
+ok   hunks reproduce the qualified g1 header from the D05 header
+ok   tail shape [E*N, 32] uint8
+ok   every data byte of the last k-block equals the padded kernel's (all rows)
+ok   tail pad bytes are zero
+ok   non-zero K padding rejected
+SUMMARY PASS

@@ -1,0 +1,3 @@
+{"arms": {"off": {"enable": 0}, "sk": {"long_cap": 0, "hold": 1}, "sk_h2": {"long_cap": 0, "hold": 2}},
+ "seq": [["off","solo500"],["sk_h2","solo500"],["sk","solo500"],["sk","solo500"],["sk_h2","solo500"],["off","solo500"],
+         ["off","solo500"],["sk_h2","solo500"],["sk","solo500"],["sk","solo500"],["sk_h2","solo500"],["off","solo500"]]}

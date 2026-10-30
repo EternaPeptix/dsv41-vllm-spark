@@ -1,0 +1,114 @@
+{
+ "host": "spark-one",
+ "rank": 0,
+ "world": 8,
+ "fs_block": 4096,
+ "files": {
+  "model-00047-of-00048.safetensors": {
+   "layer": 1,
+   "rows": [
+    0,
+    48000217
+   ],
+   "n_rows": 48000217,
+   "table_rows": 384006168,
+   "kept_segments": {
+    "header": [
+     0,
+     664
+    ],
+    "weight_rows": [
+     664,
+     12288056216
+    ],
+    "scale_rows": [
+     98305579672,
+     98689581408
+    ],
+    "tail": [
+     101377629016,
+     101535150936
+    ]
+   },
+   "kept_bytes": 12829579872,
+   "punch": [
+    [
+     12288057344,
+     98305576960
+    ],
+    [
+     98689585152,
+     101377626112
+    ]
+   ],
+   "punch_bytes": 88705560576,
+   "to_release": 88705560576,
+   "holes": [],
+   "hole_bytes": 0,
+   "holes_in_kept": {},
+   "size": 101535150936,
+   "allocated": 101535178752,
+   "xattr": null
+  },
+  "model-00048-of-00048.safetensors": {
+   "layer": 14,
+   "rows": [
+    0,
+    48001463
+   ],
+   "n_rows": 48001463,
+   "table_rows": 384016682,
+   "kept_segments": {
+    "header": [
+     0,
+     672
+    ],
+    "weight_rows": [
+     672,
+     12288375200
+    ],
+    "scale_rows": [
+     98308271264,
+     98692282968
+    ],
+    "tail": [
+     101380404720,
+     101537926640
+    ]
+   },
+   "kept_bytes": 12829908824,
+   "punch": [
+    [
+     12288376832,
+     98308268032
+    ],
+    [
+     98692284416,
+     101380403200
+    ]
+   ],
+   "punch_bytes": 88708009984,
+   "to_release": 88708009984,
+   "holes": [],
+   "hole_bytes": 0,
+   "holes_in_kept": {},
+   "size": 101537926640,
+   "allocated": 101537943552,
+   "xattr": null
+  }
+ },
+ "log_rows": [
+  [
+   0,
+   48000217
+  ],
+  [
+   0,
+   48001463
+  ]
+ ],
+ "log_matches": true,
+ "host_rank": 0,
+ "free_now": 33879900160,
+ "free_expected_after": 211293470720
+}

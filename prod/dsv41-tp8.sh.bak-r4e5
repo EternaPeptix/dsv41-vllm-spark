@@ -1,0 +1,91 @@
+#!/bin/bash
+# dsv41-tp8.sh <rank> — one vLLM 0.32.0 rank of DeepSeek-V4.1-Flash (uncensored-fp8) TP8 across the 8 Sparks.
+# rank 0 = spark-one (API on 127.0.0.1:8000); ranks 1-7 headless. Run under systemd-run --user (unit dsv41-rank).
+# Extra vllm args can be appended via DSV41_EXTRA (e.g. "--moe-backend marlin").
+set -u
+R=$1
+MODEL=$HOME/models/dsv41/uncensored-fp8
+LOGDIR=$HOME/dsv41-logs; mkdir -p "$LOGDIR"
+
+# /etc/environment on spark-three..five carries stale NCCL_* (GID 3, enP7s7 is down); clear them so all ranks match.
+for v in $(env | grep -oE '^(NCCL|GLOO)_[A-Z_]+'); do unset "$v"; done
+# Fabric settings proven by the MiMo TP8 launcher (~/mimo-tp8.sh).
+export NCCL_SOCKET_IFNAME=enp1s0f0np0 GLOO_SOCKET_IFNAME=enp1s0f0np0
+export NCCL_IB_HCA=rocep1s0f0,rocep1s0f1,roceP2p1s0f0,roceP2p1s0f1 NCCL_IB_GID_INDEX=5 NCCL_DEBUG=WARN
+export VLLM_HOST_IP=$(ip -4 -br addr show enp1s0f0np0 | awk '{print $3}' | cut -d/ -f1)
+export DSV41_SM121_VARLEN_INDEXER=1
+export DSV41_SM121_TARGET_M64=1
+export DSV41_SM121_TARGET_M32=${DSV41_SM121_TARGET_M32:-1}  # m32: 32-row target-MoE tiles (M<=48); needs fused_moe m32 site files; 0 = M64 path
+export DSV41_TARGET_M32_MAX_M=${DSV41_TARGET_M32_MAX_M:-96}  # r3-e3: M32 target-MoE tiles up to 96 rows (16 seqs x 6); 48 = round-2 limit
+export DSV41_TARGET_M32_NATIVE_DIR=${DSV41_TARGET_M32_NATIVE_DIR:-$HOME/dsv41-stage/m32/target-m32-native-v1}
+export DSV41_RDMA_AR=${DSV41_RDMA_AR:-1}  # rdma-ar: custom ibverbs all-reduce/all-gather for <=512 KiB decode collectives (needs cuda_communicator.py rdma patch + ~/rdma_ar_dsv41); 0 = PyNccl only
+export DSV41_WARM_SPEC_KERNELS=${DSV41_WARM_SPEC_KERNELS:-1}  # conc: extra warmup for greedy/temp-only sampler kernels + odd mixed prefill (needs warmup.py warmspec patch); 0 = stock warmup
+export DSV41_MEMORY_DIAGNOSTICS=1
+export DSV41_TRIM_STARTUP_CACHE=1
+export DSV41_LOCK_ENGRAM_HOST=1
+export DSV41_MOE_COMPACT=${DSV41_MOE_COMPACT:-1}  # exp1 moe-compact: unpadded target FC1 (N 768->576, -7.5 GiB/rank); needs moe-compact site files; 0 = padded layout
+export DSV41_AV_VERIFY_SCALE=${DSV41_AV_VERIFY_SCALE:-0.6}  # exp5 av-calib: scale profiled verify-cost slope (needs adaptive_verification.py avcal patch); DSV41_AV_VERIFY_SCALE=1 DSV41_AV_FIXED_MS=0 = stock trimmer
+export DSV41_AV_FIXED_MS=${DSV41_AV_FIXED_MS:-3.4}  # exp5 av-calib: outside-graph ms added to draft cost (r3-e1: 2.0 -> 3.4 with sharded Markov drafter)
+export DSV41_DSPARK_SHARDED_MARKOV=${DSV41_DSPARK_SHARDED_MARKOV:-1}  # r3-e1: vocab-sharded Markov bias in DSpark drafter (needs dspark/speculator.py 774b34c2 patch); 0 = full-vocab Markov
+export DSV41_AV_SCALE_N0=${DSV41_AV_SCALE_N0:-96}  # exp5 av-calib: full scale up to verify width N0 (= M32 max M; r3-e3 48 -> 96)
+export DSV41_AV_SCALE_N1=${DSV41_AV_SCALE_N1:-104}  # exp5 av-calib: back to profiled cost by width N1 (r3-e3 56 -> 104)
+export RDMA_AR_MAX_REDUCE_BYTES=${RDMA_AR_MAX_REDUCE_BYTES:-2097152}  # r3-e3: RDMA two-shot all-reduce up to 2 MiB (= RDMA_AR_MAX_BYTES slot, 204 rows) for conc17-32; 1048576 = round-2, 524288 = round-1
+export DSV41_QKV_A_SHARD=${DSV41_QKV_A_SHARD:-1}  # r3-e4: column-shard replicated qkv_a (1792 -> 224 rows/rank) + rdma all-gather for M<=8 (needs r3dense site files: attention.py f2f48198, dsv41_r3_dense.py 993023f2); 0 = replicated GEMM
+export DSV41_IDX_WPROJ=${DSV41_IDX_WPROJ:-bmm32}  # r3-e4: indexer weights_proj as 32-way split-K bmm (33 -> 8.5 us at M 2-8); empty = stock F.linear
+export DSV41_FP8_LMHEAD=${DSV41_FP8_LMHEAD:-draft}  # r3-e4: MXFP8 copy of lm_head for DSpark draft logits only (lossless; target verifies; needs logits_processor.py caf6d216 + dspark.py fa56d07d); empty = bf16
+export DSV41_SONAR_OPROJ=${DSV41_SONAR_OPROJ:-fp8}  # r3-e4: split-K W8A16 wo_a on exact MXFP8 re-encode (needs deepseek_v4 ops/o_proj.py 34b9e1a4 + sonar_bf16_bmm.py 9f6f3f84); empty = torch.bmm
+export DSV41_SONAR_OPROJ_SPLITS=${DSV41_SONAR_OPROJ_SPLITS:-32}  # r3-e4: 32 splits fastest at every M (23-24 us vs bmm 40-55)
+export DSV41_SONAR_OPROJ_MAX_M=${DSV41_SONAR_OPROJ_MAX_M:-32}  # r3-e4: above 32 rows fp8 kernel loses to torch.bmm
+export DSV41_BLOCK_VERIFY_FRESH_U=${DSV41_BLOCK_VERIFY_FRESH_U:-1}  # r3-e5: fresh block-verify uniform per step/row (needs rejection_sampler_utils.py 09522889); 0 = stock (lossy with block)
+export DSV41_DRAFT_FRESH_NOISE=${DSV41_DRAFT_FRESH_NOISE:-1}  # r3-e5: drafter Gumbel noise keyed by step+draft index (needs dspark/speculator.py 00cc6e2b); 0 = stock (lossy with block)
+export DSV41_L2_PREFETCH=${DSV41_L2_PREFETCH:-1}  # r4-e1: L2 prefetch of next GEMM weights during collectives (needs rdma_all_reduce.py 99102ff1 + dsv41_l2_prefetch.py 7d2acdc8); 0 = off
+export DSV41_R4_MAINPROJ_SPLIT=${DSV41_R4_MAINPROJ_SPLIT:-1}  # r4-e1: DSpark main_proj column split, bitwise self-checked per M (needs nvidia/model.py e7264781 + dsv41_r4_small.py 02f94f29)
+export DSV41_R4_CERT_HEAD=${DSV41_R4_CERT_HEAD:-1}  # r4-e1: screened target lm-head, argmax-identical, armed only on all-greedy steps; 0 = stock
+export DSV41_R4_CERT_HEAD_M=${DSV41_R4_CERT_HEAD_M:-2-96}  # r4-e1: gpu_test_r4 qualified row counts (M=1 not bitwise in full mode)
+export DSV41_EAGER_GLUE=${DSV41_EAGER_GLUE:-all}  # r4-e1: fused SWA metadata + 1024-wide dflash pad (needs sparse_swa.py 38b16c51 + dflash/speculator.py 17ddccf1); empty = stock
+export DSV41_DSPARK_GREEDY_SHARDED=${DSV41_DSPARK_GREEDY_SHARDED:-1}  # r4-e2: all-greedy steps replay a 2nd set of DSpark draft graphs on the vocab-sharded Markov path (needs dspark/speculator.py bbcee9e3); 0 = stock probabilistic drafter on every step
+export DSV41_ROUTE_LIVE=${DSV41_ROUTE_LIVE:-skip}  # r4-e4: dead/padding verify rows read no experts (router ids -1; needs dsv4_topk.py 45c5fc4f + fused_topk_bias_router.py ea6720bc); 0 = stock. NEVER with b12x MoE
+export DSV41_VERIFY_CAP=${DSV41_VERIFY_CAP:-auto}  # r4-e4: DSpark-confidence cap on drafts per step, tau from AV calibration (needs adaptive_verification.py 7e30eebc + model_runner.py 9fecbda4); 0 = off
+export CUDA_HOME=/usr/local/cuda TRITON_PTXAS_PATH=/usr/local/cuda/bin/ptxas VLLM_USE_DEEP_GEMM=1
+export PATH=/usr/local/cuda/bin:$PATH
+# SM12x needs 64-token KV blocks: DeepGEMM's indexer takes block_kv (block // ratio) <= 64.
+# Local patches (originals kept as *.orig): vllm deepseek_v41/attention.py (SWA page 64),
+# nvidia/flashinfer_sparse.py + v1/attention/backends/mla/indexer.py (allow 64-token blocks),
+# flashinfer data/csrc/sparse_mla_sm120_prefill.cu (dual prefill for 32-row compressed pages).
+source "$HOME/venvs/vllm032/bin/activate"
+
+# Page cache of the checkpoint competes with weights in unified memory: evict it before loading.
+python3 - "$MODEL" <<'EOF'
+import os, sys
+for f in os.listdir(sys.argv[1]):
+    p = os.path.join(sys.argv[1], f)
+    if os.path.isfile(p):
+        fd = os.open(p, os.O_RDONLY); os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED); os.close(fd)
+EOF
+pkill -f "^python3 $HOME/balloon.py" >/dev/null 2>&1 || true
+
+ARGS=(serve "$MODEL" --served-model-name dsv41
+  --tensor-parallel-size 8 --nnodes 8 --node-rank "$R" --master-addr 10.77.0.11 --master-port 29501
+  --kv-cache-dtype fp8_ds_mla --block-size 64
+  --max-model-len 262144 --max-num-batched-tokens 16384 --max-num-seqs ${DSV41_MAX_NUM_SEQS:-32}
+  --kv-cache-memory-bytes ${DSV41_KV_BYTES:-16G}  # r3-e3: 8G -> 16G (3.26M tokens) with max-num-seqs 16 -> 32
+  --limit-mm-per-prompt '{"image":0}'
+  --engram-config '{"cpu_offload": true, "use_thp": true}'
+  --reasoning-parser deepseek_v41 --tool-call-parser deepseek_v41 --enable-auto-tool-choice)
+# DSpark speculative decoding from the checkpoint's mtp.{0,1,2} weights; DSV41_SPEC=0 disables.
+SPEC=${DSV41_SPEC:-5}
+if [ -n "${DSV41_SPEC_JSON:-}" ]; then
+  # Full override of the speculative config (JSON), e.g. adaptive verification off.
+  ARGS+=(--speculative-config "$DSV41_SPEC_JSON")
+elif [ "$SPEC" != 0 ]; then
+  # r3-e5: probabilistic drafting + block verification (pb5) for sampled requests; greedy rows unchanged.
+  # DSV41_SPEC_SAMPLED=0 -> round-2 greedy-draft config (and the sharded Markov drafter becomes active again).
+  if [ "${DSV41_SPEC_SAMPLED:-1}" = 1 ]; then
+    ARGS+=(--speculative-config "{\"method\": \"dspark\", \"num_speculative_tokens\": $SPEC, \"enable_adaptive_verification\": true, \"draft_sample_method\": \"probabilistic\", \"rejection_sample_method\": \"block\"}")
+  else
+    ARGS+=(--speculative-config "{\"method\": \"dspark\", \"num_speculative_tokens\": $SPEC, \"enable_adaptive_verification\": true}")
+  fi
+fi
+if [ "$R" = 0 ]; then ARGS+=(--host 127.0.0.1 --port 8000); else ARGS+=(--headless); fi
+# shellcheck disable=SC2086
+exec vllm "${ARGS[@]}" ${DSV41_EXTRA:-} > "$LOGDIR/rank$R.log" 2>&1

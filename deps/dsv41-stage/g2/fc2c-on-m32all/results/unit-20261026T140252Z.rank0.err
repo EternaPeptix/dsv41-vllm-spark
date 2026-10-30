@@ -1,0 +1,6 @@
+FlashInfer kernels are disabled: flashinfer-cubin is not installed and nvcc (CUDA_HOME, CUDA_PATH, PATH or /usr/local/cuda) or ninja (PATH) is missing. Set CUDA_HOME to a CUDA toolkit and put ninja on PATH, or run `vllm download-kernels`.
+DSV41_MOE_FC2C: FC2 weight 0xf0a2e0000000 first seen during CUDA-graph capture; that graph uses the D05 kernel (exact, no compact gain)
+DSV41_MOE_FC2C: FC2 weight 0xf0a2a0000000 first seen during CUDA-graph capture; that graph uses the D05 kernel (exact, no compact gain)
+DSV41_MOE_FC2C: FC2 weight 0xf0a1e0000000 first seen during CUDA-graph capture; that graph uses the D05 kernel (exact, no compact gain)
+DSV41_MOE_FC2C: FC2 weight 0xf0a160000000 first seen during CUDA-graph capture; that graph uses the D05 kernel (exact, no compact gain)
+DSV41_MOE_FC2C: FC2 weight 0xf0a2c9800000 first seen during CUDA-graph capture; that graph uses the D05 kernel (exact, no compact gain)

@@ -1,0 +1,5 @@
+{"arms": {"off": {"enable": 0}, "sk": {"enable": 1, "long_cap": 0, "hold": 1}},
+ "seq": [["sk","starve128","--runs","2"],["off","starve128","--runs","2"],["off","starve128","--runs","1"],["sk","starve128","--runs","1"],
+         ["sk","starve1m","--runs","1"],
+         ["sk","solo1m"],["off","solo1m"],["off","solo1m"],["sk","solo1m"],
+         ["sk","solo128"],["off","solo128"],["off","solo128"],["sk","solo128"]]}

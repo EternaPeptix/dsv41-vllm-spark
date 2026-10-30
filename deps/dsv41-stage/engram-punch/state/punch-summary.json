@@ -1,0 +1,29 @@
+{
+ "host": "spark-one",
+ "rank": 0,
+ "world": 8,
+ "free_before": 33846038528,
+ "files": {
+  "model-00047-of-00048.safetensors": {
+   "released": 88705568768,
+   "punch_not_hole_bytes": 0,
+   "kept_verified": [
+    "header",
+    "weight_rows",
+    "scale_rows",
+    "tail"
+   ]
+  },
+  "model-00048-of-00048.safetensors": {
+   "released": 88708014080,
+   "punch_not_hole_bytes": 0,
+   "kept_verified": [
+    "header",
+    "weight_rows",
+    "scale_rows",
+    "tail"
+   ]
+  }
+ },
+ "free_after": 211259514880
+}

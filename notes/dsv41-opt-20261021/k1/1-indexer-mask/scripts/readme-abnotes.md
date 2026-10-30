@@ -1,0 +1,6 @@
+- **Matches the kernel model.** Phase C predicts (a)+(b) saves 0.37 ms/step at 4 rows and 0.56 at 6 rows (C1 coding verifies about 6 rows). Measured A vs C coding savings: 0.74 / 0.45 / 0.45 ms. The 1M width tax is essentially gone at short context:
+  - conc16 is 328.9, against 330.9 for the round-4 262K reference and 311.8 at 1M before.
+  - conc32 is 480.9, against 479.0 at 262K and 456.9 at 1M before.
+  - C1 coding is 34.09 ms, against 33.75 at 262K and 34.4-34.6 at 1M before.
+- **The AL dip in rounds 1-2 is AV re-calibration, not the kernels.** exact.py and bench-single trajectories are identical across arms. bench-single AL: code 2.54-2.58, math 3.53-3.58 and prose 1.75-1.82, the same discrete values recurring in every arm. VERIFY_CAP=auto derives tau from the startup cost profile, and that profile is cheaper per verify row once the width-scaled mask is gone. Round 3 pins the same profile on all arms. A then shows equal-or-higher matched AL than C (coding 5.18 vs 5.15, prose 2.70 vs 2.64) and still saves 0.45 / 0.57 ms/step.
+- **LENSELECT's increment over LENAWARE is within noise end-to-end** (means: coding -0.05 ms, prose -0.09 ms, conc16 -0.1%, conc32 +0.6%). That matches Phase C (0.08 ms/step at 4-6 rows, about 0.5 ms at 48 rows), which is below the run-to-run spread.

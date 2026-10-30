@@ -1,0 +1,208 @@
+--- a/vllm/parser/deepseek_v4.py
++++ b/vllm/parser/deepseek_v4.py
+@@ -21,6 +21,7 @@
+ import contextlib
+ import functools
+ import json
++import os
+ from typing import TYPE_CHECKING
+ 
+ import regex as re
+@@ -75,7 +76,17 @@
+ 
+ _PARAM_RE, _PARTIAL_PARAM_RE = _param_patterns(DSML_PARAM_START, DSML_PARAM_CLOSE)
+ 
++# dsh-sptc layer 3 (flag-gated, read once at import): DSV41_TOOL_STREAM_NEWLINE=1 also
++# flushes streamed tool-call argument text at every newline, so a long string parameter
++# (a run_code program) reaches the client line by line instead of in a few bursts at `>`.
++# The open string is then streamed incrementally (see parser_engine.py). Unset: unchanged.
++_ARG_STRUCTURAL_CHARS = (
++    frozenset(">\n")
++    if os.environ.get("DSV41_TOOL_STREAM_NEWLINE", "") == "1"
++    else frozenset(">")
++)
+ 
++
+ def _dsml_arg_converter(
+     raw_args: str,
+     partial: bool,
+@@ -237,7 +248,7 @@
+             ParserState.TOOL_ARGS: EventType.ARG_VALUE_CHUNK,
+         },
+         arg_converter=_dsml_arg_converter,
+-        arg_structural_chars=frozenset(">"),
++        arg_structural_chars=_ARG_STRUCTURAL_CHARS,
+         strip_content_whitespace_with_tools=False,
+         tool_args_json=False,
+     )
+--- a/vllm/parser/engine/parser_engine.py
++++ b/vllm/parser/engine/parser_engine.py
+@@ -7,6 +7,7 @@
+ from __future__ import annotations
+ 
+ import json
++import os
+ from collections.abc import Sequence
+ from functools import cached_property
+ from typing import TYPE_CHECKING, NamedTuple
+@@ -44,7 +45,23 @@
+ 
+ logger = init_logger(__name__)
+ 
++# dsh-sptc layer 3 (flag-gated, read once at import). With DSV41_TOOL_STREAM_NEWLINE=1,
++# DeepSeek V4/V4.1 argument text is flushed at every newline (deepseek_v4.py), and a string
++# parameter that is still open is streamed incrementally: each flush JSON-escapes only the
++# text added since the previous one, instead of converting the whole argument again (which
++# is quadratic in its length). Unset, nothing below changes behaviour.
++#   DSV41_TOOL_STREAM_INCREMENTAL=0           keep newline flushes, disable the incremental path
++#   DSV41_TOOL_STREAM_NEWLINE_MAX_CHARS=8192  outside an open string, newline-only flushes
++#                                             re-convert the whole argument: only below this size
++_L3_NEWLINE = os.environ.get("DSV41_TOOL_STREAM_NEWLINE", "") == "1"
++_L3_INCREMENTAL = _L3_NEWLINE and os.environ.get("DSV41_TOOL_STREAM_INCREMENTAL", "1") != "0"
++try:
++    _L3_MAX_FULL_CHARS = int(os.environ.get("DSV41_TOOL_STREAM_NEWLINE_MAX_CHARS", "8192"))
++except ValueError:
++    _L3_MAX_FULL_CHARS = 8192
++_L3_DSML_MARK = "\uff5cDSML\uff5c"
+ 
++
+ class ReasoningEnd(NamedTuple):
+     """Where reasoning ends in a token sequence."""
+ 
+@@ -61,6 +78,9 @@
+         "name_sent",
+         "string_keys",
+         "streamed_json",
++        "l3_open",
++        "l3_pending",
++        "l3_len",
+     )
+ 
+     def __init__(self) -> None:
+@@ -71,6 +91,11 @@
+         self.name_sent: bool = False
+         self.string_keys: set[str] | None = None
+         self.streamed_json: str = ""
++        # Layer 3: the streamed JSON ends inside this call's open string parameter, and
++        # the raw text added since the last emitted delta (escaped at the next flush).
++        self.l3_open: bool = False
++        self.l3_pending: list[str] = []
++        self.l3_len: int = 0
+ 
+     @property
+     def args(self) -> str:
+@@ -81,6 +106,7 @@
+     def append_args(self, value: str) -> None:
+         self._args_parts.append(value)
+         self._args_joined = None
++        self.l3_len += len(value)
+ 
+ 
+ class ParserEngine(Parser):
+@@ -133,6 +159,18 @@
+ 
+         self._arg_converter = parser_engine_config.arg_converter
+         self._arg_structural_chars = parser_engine_config.arg_structural_chars
++        # Layer 3 applies to the DeepSeek V4/V4.1 DSML formats only.
++        self._l3 = _L3_NEWLINE and parser_engine_config.name.startswith("deepseek_v4")
++        self._l3_param_start = parser_engine_config.terminal_literal("PARAM_START") or ""
++        self._l3_param_close = parser_engine_config.terminal_literal("PARAM_CLOSE") or ""
++        self._l3_head_re = (
++            re.compile(
++                rf'{re.escape(self._l3_param_start)}\s+name="([^"]+)"'
++                rf'(?:\s+string="([^"]*)")?\s*>'
++            )
++            if self._l3 and self._l3_param_start and self._l3_param_close
++            else None
++        )
+         self._stream_arg_deltas = parser_engine_config.stream_arg_deltas
+         self._strip_trailing_reasoning_ws = (
+             parser_engine_config.strip_trailing_reasoning_whitespace
+@@ -1023,10 +1061,38 @@
+             return None
+ 
+         structural = self._arg_structural_chars
++        slot = self._tool_slots[idx]
++        if self._l3:
++            if slot.l3_open:
++                if _L3_DSML_MARK in raw_delta:
++                    # A DSML tag (or something like one) may end the parameter:
++                    # back to the full conversion below.
++                    slot.l3_open = False
++                    slot.l3_pending.clear()
++                else:
++                    # Inside the open string: the JSON grows by exactly the escaped text.
++                    slot.l3_pending.append(raw_delta)
++                    if structural is not None and structural.isdisjoint(raw_delta):
++                        return None
++                    text = "".join(slot.l3_pending)
++                    slot.l3_pending.clear()
++                    diff = json.dumps(text, ensure_ascii=False)[1:-1]
++                    if not diff:
++                        return None
++                    slot.streamed_json += diff
++                    return diff
++            elif (
++                ">" not in raw_delta
++                and "\n" in raw_delta
++                and slot.l3_len > _L3_MAX_FULL_CHARS
++            ):
++                # A newline-only flush outside an open string re-converts the whole
++                # argument; keep that bounded.
++                return None
++
+         if structural is not None and structural.isdisjoint(raw_delta):
+             return None
+ 
+-        slot = self._tool_slots[idx]
+         try:
+             current_json = converter(slot.args, True)
+         except (json.JSONDecodeError, ValueError, TypeError):
+@@ -1054,9 +1120,47 @@
+ 
+         if diff:
+             slot.streamed_json = safe_json
++            if self._l3:
++                slot.l3_pending.clear()
++                slot.l3_open = _L3_INCREMENTAL and self._l3_open_string(
++                    slot, current_json, safe_json
++                )
+             return diff
+         return None
+ 
++    def _l3_open_string(
++        self, slot: ToolCallSlot, current_json: str, safe_json: str
++    ) -> bool:
++        """After a full flush: does the streamed JSON end inside the string value of the
++        parameter that is still open in the raw DSML text, holding exactly its raw value?
++
++        Then the JSON's prefix grows by ``json.dumps(new_text)[1:-1]`` for every later
++        piece of the value (escaping is per character), which is what the full
++        conversion would emit, until a DSML tag arrives.
++        """
++        if self._l3_head_re is None:
++            return False
++        if not current_json.endswith('"}') or safe_json != current_json[:-2]:
++            return False
++        args = slot.args
++        start = args.rfind(self._l3_param_start)
++        if start < 0 or args.find(self._l3_param_close, start) >= 0:
++            return False
++        head = self._l3_head_re.match(args, start)
++        if head is None or head.group(2) != "true":
++            return False
++        value = args[head.end() :]
++        if _L3_DSML_MARK in value:
++            return False
++        try:
++            parsed = json.loads(current_json)
++        except (json.JSONDecodeError, ValueError):
++            return False
++        if not isinstance(parsed, dict) or not parsed:
++            return False
++        last_key = next(reversed(parsed))
++        return last_key == head.group(1) and parsed[last_key] == value
++
+     def _flush_arg_converter(self, idx: int) -> str | None:
+         converter = self._arg_converter
+         if converter is None:

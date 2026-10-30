@@ -1,0 +1,201 @@
+{
+ "host": "spark-four",
+ "world": 8,
+ "time": 1792740457.028034,
+ "files": {
+  "model-00047-of-00048.safetensors": {
+   "segments": {
+    "r0.weight_rows": [
+     664,
+     12288056216,
+     "a239e34daf777d5301e1ea8050a23f468e92962f7775f48353c28c0bb1b95a7b"
+    ],
+    "r0.scale_rows": [
+     98305579672,
+     98689581408,
+     "cac0a7bccf9acac1056b6925119b31ac1176527861d9e288d6443ac6cf927261"
+    ],
+    "header": [
+     0,
+     664,
+     "9055d06658af74f431f6675f6880f187b24a3f648b3f70ae949edc328b7702fc"
+    ],
+    "tail": [
+     101377629016,
+     101535150936,
+     "70d58cdf8282d7aefb39b3a519e87b8b5f0ddef2c47cfb4a3e03226ef0ce430a"
+    ],
+    "r1.weight_rows": [
+     12288056216,
+     24576145048,
+     "3a1e87d27e86b87c21491b499ccb9e8fa43110a3ffd7c1779dedd6f16b173152"
+    ],
+    "r1.scale_rows": [
+     98689581408,
+     99073584184,
+     "987eefd9e17e2a80b44c80ec5489b4eafb4b62f4600609b627d183cec2ab93cf"
+    ],
+    "r2.weight_rows": [
+     24576145048,
+     36864274328,
+     "bbd2acdb4d7818fb4b811ce88ce9ba1218cab1271d944048d07b28d6ea465cf8"
+    ],
+    "r2.scale_rows": [
+     99073584184,
+     99457588224,
+     "242bfe10412d3602aab005491bee2566e3e7b104b17bce2846d7df7976315575"
+    ],
+    "r3.weight_rows": [
+     36864274328,
+     49152446104,
+     "a9914644ab6c20a85f82a34305ccb9e678f923e132f001029d963d33572303ed"
+    ],
+    "r3.scale_rows": [
+     99457588224,
+     99841593592,
+     "449939503b6ebb2b16702721542cea0bfad816a58e5601763ccf09385579536e"
+    ],
+    "r4.weight_rows": [
+     49152446104,
+     61440669592,
+     "77a90ed2c85ec2706cc09661cdf2c98a4f1dbf3016ae8150610af1d853a8279d"
+    ],
+    "r4.scale_rows": [
+     99841593592,
+     100225600576,
+     "eb25dc77405c78264b61064494c3abf066b44bd79126ecf08be444342935b436"
+    ],
+    "r5.weight_rows": [
+     61440669592,
+     73728936088,
+     "53b60910e14fa83ec7beaab5ec337434c6786bdf13d178dd08644382191075a2"
+    ],
+    "r5.scale_rows": [
+     100225600576,
+     100609608904,
+     "583312f580887dfce1978ef08dd67567ec49dc9889338941f059f43c1c442039"
+    ],
+    "r6.weight_rows": [
+     73728936088,
+     86017242008,
+     "1650219bea32f36f2594e0b9a75a5670163b77f054af4af9fd4cba8ffe7117f8"
+    ],
+    "r6.scale_rows": [
+     100609608904,
+     100993618464,
+     "6570ca17a53e9d56d36050d02f7bccbb7fd1ed7b03678645e87408a7c6f64382"
+    ],
+    "r7.weight_rows": [
+     86017242008,
+     98305579672,
+     "88f3412ec6e295b41768dc74d3e8491d369b18cb7362a69f973735e9f4010c72"
+    ],
+    "r7.scale_rows": [
+     100993618464,
+     101377629016,
+     "1f707d0ee00ed5d2515d4e42833aa31d2067e5adebf6824e6e15c41d368f0a68"
+    ]
+   },
+   "full_sha256": "76a05106ece259be83d1bfea0dcb54f23377864ee60fd321690f35e6698a2af5",
+   "published_sha256": "76a05106ece259be83d1bfea0dcb54f23377864ee60fd321690f35e6698a2af5",
+   "full_matches_published": true
+  },
+  "model-00048-of-00048.safetensors": {
+   "segments": {
+    "r0.weight_rows": [
+     672,
+     12288375200,
+     "a6c622e0b2c16cd89887983c48281b8f00a93abd777ee516744af489684f301d"
+    ],
+    "r0.scale_rows": [
+     98308271264,
+     98692282968,
+     "0d8395dd48409cc7de544434d64fc8a1fdc1983c71d52ffbc2a022129166a54e"
+    ],
+    "header": [
+     0,
+     672,
+     "ffc9da89096525ea191d967531f8063db66327b0880a9d2f4d7d73a42d641f28"
+    ],
+    "tail": [
+     101380404720,
+     101537926640,
+     "b6fcc9068ed26fee588c24d2dd4ae0ac63531b96afdf76c9a71c19f4ada98bea"
+    ],
+    "r1.weight_rows": [
+     12288375200,
+     24576782496,
+     "48e492a10c8015058193d6cbfb5b909e11ebbb0c05893402bda9338da72f7da3"
+    ],
+    "r1.scale_rows": [
+     98692282968,
+     99076295696,
+     "3e14e6b183263af2294d8c95ff4785a88abaf6b02cd1ccbaf67a61a68eb423e7"
+    ],
+    "r2.weight_rows": [
+     24576782496,
+     36865269664,
+     "dd46365e6c568db6c608fc661d38930ce8e5b84a1be16a392e5deed6a1317a2e"
+    ],
+    "r2.scale_rows": [
+     99076295696,
+     99460310920,
+     "8a95f2e73e64a90b03591d44992c4547463791a8ed1d4f8a1bbe6bf65be37280"
+    ],
+    "r3.weight_rows": [
+     36865269664,
+     49153796768,
+     "af3bf90f137e37d43142d7acf82b353721e3b65ff672a874c26740b0b62f56e1"
+    ],
+    "r3.scale_rows": [
+     99460310920,
+     99844327392,
+     "d49de18c34e6681d44dd50d6c5470ae90857cb4e48bee5013b8e659e1d3641a6"
+    ],
+    "r4.weight_rows": [
+     49153796768,
+     61442359712,
+     "771cf2738c79bf6003fb2f20284cce34eb7c33a3a72d0793aeea6dbb4b873b9c"
+    ],
+    "r4.scale_rows": [
+     99844327392,
+     100228344984,
+     "88b2809011ba660b903fc42ef30b8fb91aaec26e6aa9f87a820f5cdb87901b1b"
+    ],
+    "r5.weight_rows": [
+     61442359712,
+     73730961056,
+     "4cbfecc90aa5869137e7714721022e62042115e26911dca01af25baf06398597"
+    ],
+    "r5.scale_rows": [
+     100228344984,
+     100612363776,
+     "19876da32a09ccad181ec23d2e59a69d3e98810cd8f3abf5b45c3529e3b63c6d"
+    ],
+    "r6.weight_rows": [
+     73730961056,
+     86019594144,
+     "f4b79568a5d8212d580d29509aa27e85df82a28f1fcfbc47346fa97ab943a7f8"
+    ],
+    "r6.scale_rows": [
+     100612363776,
+     100996383560,
+     "38cf7272fb28f35ab4c7bbe23513f0ad94a147e811545f636c067ff68feba3d9"
+    ],
+    "r7.weight_rows": [
+     86019594144,
+     98308271264,
+     "c7376e75894cc6f3a1202b190171a0264a6514b1b18c9b171637bb36e1bc568c"
+    ],
+    "r7.scale_rows": [
+     100996383560,
+     101380404720,
+     "d43ae973c0e78ef52e0fdeb6a9dc87c7aa9b9a659dfc6c7fc471e7f49c1a10b2"
+    ]
+   },
+   "full_sha256": "9dc51433e195bc78b5ad846b68643cc0351d3b174e5e4309222d3b7402c83afd",
+   "published_sha256": "9dc51433e195bc78b5ad846b68643cc0351d3b174e5e4309222d3b7402c83afd",
+   "full_matches_published": true
+  }
+ }
+}

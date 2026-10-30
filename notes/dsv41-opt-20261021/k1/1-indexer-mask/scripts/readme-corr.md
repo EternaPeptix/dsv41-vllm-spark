@@ -1,0 +1,4 @@
+- exact.py = **a8c3394af9d2 in all 9 instances**: 3 control, 3 LENAWARE, 3 LENAWARE+LENSELECT, both AV modes. Final live instance: @@FINAL_EXACT@@.
+- i5 (A): GSM8K-50 conc8 **50/50** (244.8 tok/s); longctx default gate **PASS** (needles 60/60, copy 1.000); 500K needle **PASS** (7/7, copy exact, 497,263 tokens, TTFT 88.3 s).
+- i6 (B): GSM8K-50 **50/50** (246.8 tok/s); longctx **PASS** (60/60, copy 1.000); 500K needle **PASS** (7/7, copy exact, TTFT 87.2 s). At 497K context the select's persistent_topk runs its multi-CTA path (62K valid blocks, above 32,768) inside the decode graphs, with no hang.
+- Startup: 9/9 instances came up on the first attempt in 383-409 s, the same as before. There were no rdma_ar capture hangs and no engine-init failures in this window.

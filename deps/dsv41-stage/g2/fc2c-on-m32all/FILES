@@ -1,0 +1,2 @@
+# g2 fc2c-on-m32all site files: <path relative to site-packages> <accepted-before sha256s> <staged sha256>
+vllm/model_executor/layers/fused_moe/experts/sm121_target_m32.py db659d809cbcc3949f94dd810d9f00359f1770af082aadd8f7037816371f02da ea4a8814986c3618d26d7acb748561d75e50e839cbea225d9f06154febb290e5

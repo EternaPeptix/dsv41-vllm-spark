@@ -1,0 +1,246 @@
+"""Isolated, opt-in TP8 forty-layer packed-FC2 trial. Not production ready.
+
+Uses the native path for unsupported metadata, and a per-step all-rank status
+barrier for forty selected layers. No output or quality checks are performed.
+A worker error or failed barrier requires terminating the entire isolated
+engine and discarding request/KV state. No installed files are modified.
+"""
+from __future__ import annotations
+import ast
+import importlib.util
+import inspect
+import os
+from pathlib import Path
+import textwrap
+
+_STATE = {'status': None, 'module': None, 'markers': None, 'barrier': None, 'packed_count': 0, 'steps': 0, 'counts': {}}
+_INSTALLED = False
+# g130 2026-11-02: DSV41_FC2_BARRIER_EVERY. 1 (default) = the per-step barrier as Athena built it.
+# N>=2 = run the barrier on every Nth scheduled step only: no status reset in the forward (the kernel
+# ORs into status, so errors stay sticky until the next check; the gated gather stays closed meanwhile)
+# and no per-layer marker fills. 0 = never check (measurement only, never for serving).
+_BARRIER_EVERY = int(os.environ.get('DSV41_FC2_BARRIER_EVERY', '1') or '1')
+if _BARRIER_EVERY < 0:
+    raise RuntimeError('DSV41_FC2_BARRIER_EVERY must be >= 0')
+# Test only: with DSV41_FC2_FAULT_TEST=1, touching /tmp/dsv41_fc2_fault on one node sets a status bit there.
+_FAULT_TEST = os.environ.get('DSV41_FC2_FAULT_TEST') == '1'
+
+
+def _load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f'cannot load {name}')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _once(source, old, new, label):
+    if source.count(old) != 1:
+        raise RuntimeError(f'{label}: expected one source anchor, got {source.count(old)}')
+    return source.replace(old, new, 1)
+
+
+def transform_apply(source):
+    source = textwrap.dedent(source)
+    source = _once(source,
+        '    assert a1q_scale is not None\n',
+        '    athena_fc2_begin(self)\n    athena_fc2_used = False\n    assert a1q_scale is not None\n',
+        'begin')
+    old = '''        grouped_gemm(
+            (a2q, a2q_scale),
+            (w2.view(torch.int8), self.w2_scale),
+            mm2_out,
+            expert_ids,
+            recipe_a=(1, self._ACT_BLOCK_K),
+            recipe_b=(1, self._WEIGHT_BLOCK_K),
+        )
+'''
+    new = '''        athena_fc2_used = athena_fc2_try_launch(
+            self, a2q, a2q_scale, expert_ids, mm2_out, expert_map, compact_fc1, align_used)
+        if not athena_fc2_used:
+            grouped_gemm(
+                (a2q, a2q_scale),
+                (w2.view(torch.int8), self.w2_scale),
+                mm2_out,
+                expert_ids,
+                recipe_a=(1, self._ACT_BLOCK_K),
+                recipe_b=(1, self._WEIGHT_BLOCK_K),
+            )
+'''
+    source = _once(source, old, new, 'FC2 call')
+    old = '''    deepgemm_unpermute_and_reduce(
+        a=mm2_out,
+        topk_ids=topk_ids,
+        topk_weights=topk_weights,
+        inv_perm=inv_perm,
+        expert_map=expert_map,
+        output=output,
+    )
+'''
+    new = '''    if athena_fc2_used:
+        athena_fc2_gather(self, mm2_out, topk_ids, topk_weights, inv_perm, expert_map, output)
+    else:
+        deepgemm_unpermute_and_reduce(
+            a=mm2_out,
+            topk_ids=topk_ids,
+            topk_weights=topk_weights,
+            inv_perm=inv_perm,
+            expert_map=expert_map,
+            output=output,
+        )
+'''
+    source = _once(source, old, new, 'gather call')
+    ast.parse(source)
+    return source
+
+
+def install():
+    global _INSTALLED
+    if os.environ.get('ATHENA_FC2_SERVING_TRIAL') != '1':
+        raise RuntimeError('explicit isolated serving-trial opt-in required')
+    if _INSTALLED:
+        raise RuntimeError('serving trial already installed')
+    selected = tuple(x for x in os.environ.get('ATHENA_FC2_PACK_PREFIXES', '').split(',') if x)
+    if len(selected) != 40 or len(set(selected)) != 40 or os.environ.get('ATHENA_FC2_PACK_ONE_LAYER') != '1':
+        raise RuntimeError('explicit forty-layer packing and forty distinct exact prefixes required')
+    root = (Path.home() / 'dsv41-fc2').resolve()
+    binary = Path(os.environ.get('ATHENA_FC2_GRAPH_SO', ''))
+    if not binary.is_absolute() or not binary.is_file() or not binary.resolve().is_relative_to(root):
+        raise RuntimeError('graph extension must be inside Athena')
+    here = Path(__file__).resolve().parent
+    pack = _load('athena_fc2_one_layer', here / 'athena_fc2_forty_layer_pack.py')
+    gather = _load('athena_fc2_gated_gather', here / 'fc2_status_gated_gather_trial.py')
+    from vllm.models.deepseek_v41.quant_config import DeepseekV4FP8Config
+    from vllm.model_executor.layers.quantization.mxfp4 import Mxfp4MoEMethod
+    from vllm.model_executor.layers.fused_moe.experts import deep_gemm_moe as engine
+    from vllm.v1.worker.gpu_worker import Worker
+    from vllm.distributed import get_tp_group
+    import torch
+    import torch.distributed as dist
+
+    get_original = DeepseekV4FP8Config.get_quant_method
+    post_original = Mxfp4MoEMethod.process_weights_after_loading
+    worker_original = Worker.execute_model
+
+    def get_with_tag(self, layer, prefix):
+        method = get_original(self, layer, prefix)
+        if prefix in selected:
+            if not isinstance(method, Mxfp4MoEMethod) or getattr(layer, '_athena_fc2_prefix', None) is not None:
+                raise RuntimeError('unexpected or duplicate selected expert layer')
+            layer._athena_fc2_prefix = prefix
+            print(f'ATHENA_FC2_TRIAL_SELECTED {prefix!r}', flush=True)
+        return method
+
+    def post_with_pack(self, layer):
+        result = post_original(self, layer)
+        prefix = getattr(layer, '_athena_fc2_prefix', None)
+        if prefix is not None:
+            expert = getattr(getattr(self, 'moe_kernel', None), 'fused_experts', None)
+            if expert is None or getattr(expert, '_athena_fc2_packed', None) is not None:
+                raise RuntimeError('selected expert backend missing or duplicate')
+            packed = pack.prepare(expert, layer, prefix)
+            if _STATE['module'] is None:
+                module = _load('athena_tp8_fc2_packed_graph_sm121', binary)
+                if not callable(getattr(module, 'launch', None)):
+                    raise RuntimeError('graph extension lacks launch')
+                _STATE['module'] = module
+            if _STATE['status'] is None:
+                _STATE['status'] = torch.zeros((1,), dtype=torch.int32, device=packed.device)
+                _STATE['markers'] = torch.zeros((40,), dtype=torch.int32, device=packed.device)
+                _STATE['barrier'] = torch.empty((41,), dtype=torch.int32, device=packed.device)
+            index = selected.index(prefix)
+            expert._athena_fc2_packed = packed
+            expert._athena_fc2_status = _STATE['status']
+            expert._athena_fc2_marker = _STATE['markers'][index:index + 1]
+            expert._athena_fc2_reset = index == 0
+            _STATE['packed_count'] += 1
+            print(f'ATHENA_FC2_TRIAL_PACK_READY index={index}', flush=True)
+        return result
+
+    def begin(expert):
+        status = getattr(expert, '_athena_fc2_status', None)
+        if _BARRIER_EVERY == 1 and status is not None and getattr(expert, '_athena_fc2_reset', False):
+            status.zero_()
+            _STATE['markers'].zero_()
+
+    def try_launch(expert, aq, scale, groups, output, expert_map, compact, align):
+        packed = getattr(expert, '_athena_fc2_packed', None)
+        status = getattr(expert, '_athena_fc2_status', None)
+        if packed is None:
+            return False
+        m = aq.shape[0]
+        ok = (status is not None and _STATE['module'] is not None and compact and expert_map is None
+              and align == 32 and aq.ndim == 2 and aq.shape[1] == 384 and aq.is_contiguous()
+              and aq.dtype == torch.float8_e4m3fn and 0 < m <= 8192 and m % 32 == 0
+              and scale is not None and scale.dtype == torch.int32 and tuple(scale.shape) == (m, 1)
+              and scale.stride(0) == 1 and scale.stride(1) >= m and scale.stride(1) % 4 == 0
+              and groups.dtype == torch.int32 and tuple(groups.shape) == (m,) and groups.is_contiguous()
+              and output.dtype == torch.bfloat16 and tuple(output.shape) == (m, 5120) and output.is_contiguous()
+              and expert.w2_scale is not None and tuple(expert.w2_scale.shape) == (384, 5120, 3)
+              and expert.w2_scale.dtype == torch.int32 and expert.w2_scale.stride() == (15360, 1, 5120))
+        if not ok:
+            return False
+        # Each stable marker view belongs to a distinct layer.
+        if _BARRIER_EVERY == 1:
+            expert._athena_fc2_marker.fill_(1)
+        _STATE['module'].launch(aq, scale, groups, packed, expert.w2_scale, output, status)
+        return True
+
+    def gated(expert, inp, ids, weights, inv, expert_map, output):
+        return gather.gated_gather(inp, ids, weights, inv, expert_map, output,
+                                  expert._athena_fc2_status, experimental=True)
+
+    def execute_with_barrier(self, scheduler_output):
+        if self.vllm_config.parallel_config.use_ubatching:
+            raise RuntimeError('FC2 trial does not support overlapping microbatches')
+        result = worker_original(self, scheduler_output)
+        if scheduler_output.total_num_scheduled_tokens > 0:
+            status = _STATE['status']
+            group = get_tp_group()
+            if status is None or _STATE['packed_count'] != 40 or group.world_size != 8:
+                raise RuntimeError('FC2 trial requires forty packed layers on each TP8 worker')
+            if _BARRIER_EVERY != 1:
+                _STATE['seen'] = _STATE.get('seen', 0) + 1
+                if _FAULT_TEST and os.path.exists('/tmp/dsv41_fc2_fault'):
+                    os.unlink('/tmp/dsv41_fc2_fault')
+                    status.fill_(1)
+                    print(f"DSV41_FC2_FAULT_INJECTED t={__import__('time').time():.3f} seen={_STATE['seen']}", flush=True)
+                # Also check on the first step after a request finished, so a closed gather cannot outlive a request by much.
+                finished = bool(getattr(scheduler_output, 'finished_req_ids', None))
+                if not finished and (_BARRIER_EVERY == 0 or _STATE['seen'] % _BARRIER_EVERY):
+                    return result
+            # Wait for all local streams before every rank participates in the
+            # same reduction. A failure requires whole-engine teardown.
+            torch.cuda.synchronize(status.device)
+            local = int(status.item())
+            local_error = (local & 11) | (2 if local & ~11 else 0)
+            barrier = _STATE['barrier']
+            barrier[0].fill_(local_error)
+            barrier[1:].copy_(_STATE['markers'])
+            dist.all_reduce(barrier, op=dist.ReduceOp.SUM, group=group.device_group)
+            reduced = barrier.cpu().tolist()
+            errors, markers = reduced[0], reduced[1:]
+            if errors or any(value not in (0, 8) for value in markers):
+                # g130 fail-stop: a raised exception is swallowed by the worker RPC loop and tokens keep flowing, so
+                # every rank (they all see the same reduction) exits here. The engine goes down instead of serving garbage.
+                print(f"DSV41_FC2_FAIL_STOP t={__import__('time').time():.3f} errors={errors} markers={markers}", flush=True)
+                __import__('sys').stderr.flush()
+                os._exit(70)
+            active = sum(value == 8 for value in markers)
+            _STATE['steps'] += 1
+            _STATE['counts'][active] = _STATE['counts'].get(active, 0) + 1
+            if _STATE['steps'] % 128 == 0:
+                print(f"ATHENA_FC2_TRIAL_COUNTS steps={_STATE['steps']} active_layers={_STATE['counts']}", flush=True)
+        return result
+
+    source = transform_apply(inspect.getsource(engine.DeepGemmFP4Experts.apply))
+    namespace = dict(engine.__dict__)
+    namespace.update(athena_fc2_begin=begin, athena_fc2_try_launch=try_launch, athena_fc2_gather=gated)
+    exec(compile(source, '<athena-isolated-fc2-apply>', 'exec'), namespace)
+    engine.DeepGemmFP4Experts.apply = namespace['apply']
+    DeepseekV4FP8Config.get_quant_method = get_with_tag
+    Mxfp4MoEMethod.process_weights_after_loading = post_with_pack
+    Worker.execute_model = execute_with_barrier
+    _INSTALLED = True
+    print('ATHENA_FC2_TRIAL_HOOK_INSTALLED', file=__import__('sys').stderr, flush=True)

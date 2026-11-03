@@ -3065,7 +3065,7 @@ Other per-instance facts:
 - **Security:** there is NO authentication; anyone on the LAN can use the model. vLLM's `--api-key` (or the gateway idea) would add keys; that is a separate decision.
 - **Rollback:** `systemctl --user disable --now dsv41-lanproxy.service`.
 - **Optional later:** vLLM can bind the LAN itself with `--host 0.0.0.0` in `~/dsv41-tp8.sh` rank-0 args (then stop the forwarder first; 0.0.0.0 also exposes the fabric and tailnet interfaces).
-- **2026-10-26 20:21 UTC — Tailscale too (user request):** the forwarder now also listens on spark-one's tailnet address **100.90.117.38:8000** (`http://spark-one.tail91699.ts.net:8000`). Interfaces are set by `LAN_IFACES` (default `"wlP9s9 tailscale0"`); backup of the LAN-only script `lanproxy.py.bak-lanonly`. Same no-auth caveat applies to every device on the tailnet.
+- **2026-10-26 20:21 UTC — Tailscale too (user request):** the forwarder now also listens on spark-one's tailnet address **<tailscale-ip>:8000** (`http://spark-one.<tailnet>.ts.net:8000`). Interfaces are set by `LAN_IFACES` (default `"wlP9s9 tailscale0"`); backup of the LAN-only script `lanproxy.py.bak-lanonly`. Same no-auth caveat applies to every device on the tailnet.
 
 ## Goal window 3 (2026-10-26 19:35-23:40 UTC): fresh AV pin; codex-adopt bundle + dhtac PROMOTED as a stack (launcher b0cf94d0); RoCEnante, mfront and the rdma_ar env knobs NOT adopted. Final verification: goal NOT met (G1 101.5-102.3 of 120 tok/s in production; prose session MIN 47.9-48.6 of 50, G4min_hat 47.8-48.5)
 
@@ -5057,9 +5057,9 @@ except detref: `VERDICT VP HARD-FAIL (rollback)`.
   - matched and G1 saw no overlap: their spec counters equal the g5-C1 / g5-C0 references, and the sampler never showed
     more than 1 request running in them.
 - **Who.** The API has no authentication and is exposed through `dsv41-lanproxy.service` on spark-one (LAN
-  192.168.0.238:8000, tailnet 100.90.117.38:8000; see "LAN API exposure"). Clients seen during and after the window:
-  LAN host **192.168.0.86** and tailnet node **`fedora` 100.70.246.23, shared by account `aurora@`**. Neither is the
-  Mac's DSH (192.168.0.239 / 100.75.132.97). `/metrics` showed `num_requests_running 1.0` at W0. After the window,
+  192.168.0.238:8000, tailnet <tailscale-ip>:8000; see "LAN API exposure"). Clients seen during and after the window:
+  LAN host **192.168.0.86** and tailnet node **`fedora` <tailscale-ip>, shared by account `aurora@`**. Neither is the
+  Mac's DSH (192.168.0.239 / <tailscale-ip>). `/metrics` showed `num_requests_running 1.0` at W0. After the window,
   foreign requests came at 02:55 (a ~110K-token prompt), 02:58, 03:02, 03:04 and 03:06.
 - The runbook had no step for foreign traffic. The window went ahead because an overlap can only cause a false failure
   (exact counters, dbgrun's idle check, the G1 / G4 guards, gate rc=3, hist1m's refusal), never a false pass. Before
@@ -5198,7 +5198,7 @@ it inline), so the runbook's closing `unset VISION_WINDOW` is moot.
    item 2). D2 (KV: kv14 recommended) is still open too.
 2. **Harden the probes** so that an overlapped probe is "not proven" and rerun, not a rollback (planner decision).
 3. **API exposure (D8).** The plan assumed DSH is the only client. The unauthenticated API serves at least two others
-   through the forwarder: 192.168.0.86 on the LAN, and `fedora` 100.70.246.23 on the tailnet, shared by `aurora@`.
+   through the forwarder: 192.168.0.86 on the LAN, and `fedora` <tailscale-ip> on the tailnet, shared by `aurora@`.
    Accept, restrict the forwarder or the tailnet share, or add API auth.
 4. **VC first** in the next window (optional).
 5. **W0 artifacts:** keep them for a same-day retry, or move / remove them per the runbook before another day.
@@ -5581,7 +5581,7 @@ Rule of the step (window-5 Host phase): run the mhc-host-prep.md B.6 nsys first;
 
   So FUSED_AV is worth about +0.1% at G4, as its mechanism predicts (51-66 us when the draft budget binds, of a 43 ms step). The +0.7-0.8% hat and +1-1.8% 4-session-step gaps come from the F instances landing in lower-AL patterns (T4 42.4-43.2 ms vs 43.9 ms for the controls' AL 2.583 pattern); the control-vs-control spread is as large (C1 vs C2: hat 49.61 vs 49.86, conc8 265.8 vs 273.6).
 - **Decision: NOT promoted** (window rule: >= 0.5% consistent in >= 2 pinned pairs; G1 +0.15/+0.16%, same-output G4 -0.02/+0.21%). FUSED_AV stays installed and off (`DSV41_FUSED_AV` unset).
-- **F2 was stopped early** (trim rule; the answer was clear): from ~11:45 UTC a sustained foreign load (tailnet node 100.106.91.100 with 4 connections, this Mac 192.168.0.239, the LAN poller 192.168.0.86; 2-7 requests running at nearly every 2 s sample; F2 served 1,910 completions, almost all foreign) left no 20 s idle window for long stretches. F2's G1 took 2 h (16 tries for 9 clean units), and G4 run 3, conc8/16 and the closing exact.py never got a window. Every kept unit is clean; 16 overlapped units were discarded (matched 1, G1 7, G4 8). The pinned A/B instances served all of that traffic exactly (a8c3394af9d2 at start, G1 digest unchanged).
+- **F2 was stopped early** (trim rule; the answer was clear): from ~11:45 UTC a sustained foreign load (tailnet node <tailscale-ip> with 4 connections, this Mac 192.168.0.239, the LAN poller 192.168.0.86; 2-7 requests running at nearly every 2 s sample; F2 served 1,910 completions, almost all foreign) left no 20 s idle window for long stretches. F2's G1 took 2 h (16 tries for 9 clean units), and G4 run 3, conc8/16 and the closing exact.py never got a window. Every kept unit is clean; 16 overlapped units were discarded (matched 1, G1 7, G4 8). The pinned A/B instances served all of that traffic exactly (a8c3394af9d2 at start, G1 digest unchanged).
 - **Note for the goal:** pinned control C2 had every session of every timed G4 run >= 50 tok/s (prose MIN 50.19, 12/12), and C1 had 11/12 (MIN 49.70). With the mHC overlap the G4 goal is now decided by which batching pattern the prose session lands in, not by step time.
 
 ### 3. Production after the step
@@ -5618,7 +5618,7 @@ Rule of the step (window-5 Host phase): run the mhc-host-prep.md B.6 nsys first;
 - **Idle power** (production, 120 s windows with no request):
   - GPU 6.9-9.8 W per node by `nvidia-smi` (8-node sum 66-68 W); spark-one box meter 37.3-38.0 W; switch 260 W over its two PSUs; whole fleet ~565 W (an estimate, not metered).
   - The SM clock read 1969-1989 MHz at every check on 8/8. No clock or power setting was changed.
-- **Foreign traffic:** the tailnet client 100.106.91.100 sent bursts of short chat requests every 5-15 s, mostly during the pinned run. One exact.py start, two G1 units and one exact.py #2 were discarded as FOREIGN and rerun; every kept measurement is clean. `dsv41-lanproxy` was not touched.
+- **Foreign traffic:** the tailnet client <tailscale-ip> sent bursts of short chat requests every 5-15 s, mostly during the pinned run. One exact.py start, two G1 units and one exact.py #2 were discarded as FOREIGN and rerun; every kept measurement is clean. `dsv41-lanproxy` was not touched.
 
 ### 1. What goal window 5 changed (every step has its own section above)
 
@@ -5662,7 +5662,7 @@ User directives applied in this step: the trimmed suites of 2026-10-27 (final ve
 
 ### 3. Method
 
-**Foreign-traffic rule (goal window 5).** The API is open on the LAN and the tailnet with no authentication. Other clients use it through `dsv41-lanproxy`: the tailnet nodes `fedora` 100.70.246.23 and 100.106.91.100, DSH on the Mac (192.168.0.239), and the LAN poller 192.168.0.86, which only polls `/v1/models`. A concurrent request changes batch composition and can flip greedy outputs. So:
+**Foreign-traffic rule (goal window 5).** The API is open on the LAN and the tailnet with no authentication. Other clients use it through `dsv41-lanproxy`: the tailnet nodes `fedora` <tailscale-ip> and <tailscale-ip>, DSH on the Mac (192.168.0.239), and the LAN poller 192.168.0.86, which only polls `/v1/models`. A concurrent request changes batch composition and can flip greedy outputs. So:
 - Before every exactness or timing unit, wait until `vllm:num_requests_running` == `num_requests_waiting` == 0 and `request_success_total` has not moved for >= 30 s.
 - During the unit, run a 0.5 s `/metrics` sampler.
 - A unit is CLEAN only if the success counter moved by exactly its own requests and running + waiting never went above its own concurrency. Otherwise it is FOREIGN: NOT PROVEN, its result discarded (kept aside) and the unit rerun. A FOREIGN unit is never a pass and never by itself a reason to roll back.

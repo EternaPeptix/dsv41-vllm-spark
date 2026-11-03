@@ -1,0 +1,189 @@
+full names:
+  3012 void <unnamed>::ar_kernel_pl<(int)2, (bool)0, (int)8>(<unnamed>::Params)
+  2880 void <unnamed>::ar_kernel_pl<(int)3, (bool)0, (int)8>(<unnamed>::Params)
+  2268 void <unnamed>::ar_kernel_pl<(int)0, (bool)0, (int)8>(<unnamed>::Params)
+  360 void <unnamed>::ar_kernel_pl<(int)1, (bool)0, (int)8>(<unnamed>::Params)
+  180 void at::native::vectorized_elementwise_kernel<(int)4, void at::native::compare_scalar_kernel<long>(at::TensorIteratorBase &, at::native::<unnamed>::OpType, T1)
+
+=== prose: AR/it 145.0 l2pf/it 163.0 unpaired-pf 2400
+mode grid pfgrid sizeclass n/it  p10   p50   p90   | pfdur p50 | pfend-arend p10 p50 p90 frac>0 | next-gap p50 | us/step sum(dur)
+   0    3    1 L>=24    0.78   22.7   27.0   38.9 |   24.4 |  -11.9   -2.0    1.7  0.28 |    0.4 |      23
+   0    3    1 M<24    17.88   26.0   30.2   43.6 |   22.3 |  -22.9   -8.7   -3.6  0.00 |    0.4 |     634
+   0    3    2 S<12    14.68   24.5   33.6   48.9 |    9.4 |  -40.2  -25.0  -16.7  0.00 |    0.4 |     573
+   0    3    3 S<12     3.22   25.8   33.7   52.5 |    8.9 |  -42.2  -25.5  -16.7  0.00 |    0.4 |     127
+   0    3    0 none     0.93   18.2   26.8   42.6 |    nan |    nan    nan    nan  0.00 |    5.7 |      28
+   1    1    0 none     6.00   12.6   14.3   32.6 |    nan |    nan    nan    nan  0.00 |    0.6 |     121
+   2    5    1 L>=24    2.42   35.6   37.5   42.1 |   24.3 |  -17.8  -13.2  -10.9  0.00 |    0.4 |      94
+   2    5    1 M<24    18.25   35.7   39.8   47.1 |   22.1 |  -27.7  -18.1  -12.9  0.00 |    0.4 |     769
+   2    8    1 M<24     0.52   38.8   42.4   48.4 |   22.3 |  -29.7  -20.3  -15.4  0.00 |    0.4 |      23
+   2    5    2 S<12    16.20   32.9   39.5   47.9 |    9.6 |  -39.0  -30.9  -24.7  0.00 |    0.4 |     677
+   2    8    2 S<12     0.53   36.1   44.2   49.4 |    9.6 |  -40.9  -33.8  -27.1  0.00 |    0.4 |      23
+   2    5    3 S<12     3.53   34.6   40.3   48.2 |    9.5 |  -39.5  -31.5  -25.4  0.00 |    0.4 |     149
+   2    5    0 none     1.03   28.3   32.5   42.2 |    nan |    nan    nan    nan  0.00 |    5.6 |     311
+   2    7    0 none     7.00   29.2   33.5   45.3 |    nan |    nan    nan    nan  0.00 |    0.4 |     256
+   3    1    2 L>=24    1.97   26.8   30.9   36.0 |   36.3 |   -6.3    0.4   15.1  0.52 |    0.4 |      62
+   3    1    4 L>=24   34.20   27.7   31.5   36.4 |   31.6 |   -8.9   -0.5    4.1  0.46 |    0.4 |    1105
+   3    1    5 L>=24    3.57   27.9   37.9   48.0 |   33.2 |  -14.9   -3.3    3.9  0.28 |    0.4 |     136
+   3    1    4 M<24     1.80   32.4   35.1   38.6 |   23.0 |  -15.6  -12.2   -9.2  0.00 |    0.4 |      65
+   3    1    5 M<24     0.43   26.9   28.5   38.2 |   23.6 |  -15.0   -4.8   -3.7  0.00 |    0.4 |      14
+   3    2    2 S<12     0.47   21.4   25.4   30.0 |    6.9 |  -23.5  -18.1  -15.2  0.00 |    0.5 |      13
+   3    4    2 S<12     0.52   26.5   28.8   32.8 |    7.1 |  -26.3  -22.2  -19.4  0.00 |    0.5 |      15
+   3    2    3 S<12     0.47   24.3   27.4   34.6 |    8.1 |  -25.8  -18.8  -15.4  0.00 |    0.5 |      14
+   3    4    3 S<12     0.52   29.5   32.4   37.7 |    9.1 |  -28.8  -23.0  -20.6  0.00 |    0.5 |      17
+   3    1    0 none     4.00   12.6   16.1   23.6 |    nan |    nan    nan    nan  0.00 |    0.4 |      76
+void at::nat    1    0 none     3.00    1.2    1.3    3.2 |    nan |    nan    nan    nan  0.00 |    0.5 |       6
+--- aggregated mode/size
+   0 L>=24  n/it   0.78 p10   22.7 p50   27.0 p90   38.9 grids [(3, 47)]
+   0 M<24   n/it  18.18 p10   25.9 p50   30.2 p90   44.0 grids [(3, 1091)]
+   0 S<12   n/it  17.90 p10   24.8 p50   33.6 p90   49.0 grids [(3, 1074)]
+   0 none   n/it   0.93 p10   18.2 p50   26.8 p90   42.6 grids [(3, 56)]
+   1 none   n/it   6.00 p10   12.6 p50   14.3 p90   32.6 grids [(1, 360)]
+   2 L>=24  n/it   2.58 p10   35.6 p50   37.7 p90   42.3 grids [(5, 146), (8, 9)]
+   2 M<24   n/it  19.17 p10   35.8 p50   40.0 p90   47.5 grids [(5, 1119), (8, 31)]
+   2 S<12   n/it  20.38 p10   33.3 p50   39.8 p90   48.3 grids [(5, 1184), (8, 39)]
+   2 none   n/it   8.07 p10   29.1 p50   33.4 p90   44.9 grids [(7, 420), (5, 62), (8, 2)]
+   3 L>=24  n/it  39.77 p10   27.6 p50   31.6 p90   38.1 grids [(1, 2384), (2, 2)]
+   3 M<24   n/it   2.23 p10   28.5 p50   34.7 p90   38.5 grids [(1, 134)]
+   3 S<12   n/it   2.00 p10   24.1 p50   28.9 p90   34.7 grids [(4, 62), (2, 56), (5, 2)]
+   3 none   n/it   4.00 p10   12.6 p50   16.1 p90   23.6 grids [(1, 240)]
+void at::nat none   n/it   3.00 p10    1.2 p50    1.3 p90    3.2 grids [(1, 180)]
+--- next non-pf kernel after AR, with burst, by size class
+     3 L>=24  _q_kv_norm_quant_kernel              n/it 36.38 gap p50    0.4
+     2 M<24   void <unnamed>::mhc_post_norm_kern   n/it 18.47 gap p50    0.4
+     2 S<12   void <unnamed>::mhc_post_norm_kern   n/it 18.30 gap p50    0.4
+     0 M<24   void <unnamed>::mhc_post_norm_kern   n/it 17.65 gap p50    0.4
+     0 S<12   void <unnamed>::mhc_post_norm_kern   n/it 16.50 gap p50    0.4
+     2 L>=24  void <unnamed>::mhc_post_norm_kern   n/it  2.43 gap p50    0.4
+     3 M<24   _q_kv_norm_quant_kernel              n/it  2.23 gap p50    0.4
+     3 S<12   _fused_engram_post_wkv_kernel        n/it  2.00 gap p50    0.5
+     3 L>=24  kernel_cutlass_kernel_flashinferqu   n/it  1.93 gap p50    0.4
+     3 L>=24  void cutlass::device_kernel<flashi   n/it  1.38 gap p50    1.4
+     2 S<12   mhc_post_tilelang_kernel             n/it  1.07 gap p50    0.5
+     2 S<12   kernel_cutlass_kernel_flashinferqu   n/it  1.02 gap p50    1.2
+     0 S<12   mhc_post_tilelang_kernel             n/it  0.93 gap p50    0.5
+     0 L>=24  void <unnamed>::mhc_post_norm_kern   n/it  0.77 gap p50    0.4
+--- bursts running past AR end: 17.98/it; with no other kernel in overrun 1.68/it; co-resident kernels (per it):
+    14.33  _q_kv_norm_quant_kernel
+     9.37  void cutlass::device_kernel<flashinfer::gemm::De
+     0.98  kernel_cutlass_kernel_flashinferquantizationkern
+     0.32  _fused_save_compress_norm_kernel
+     0.22  void <unnamed>::mhc_post_norm_kernel<(int)1, (bo
+     0.07  void vllm::deepseek_v4_fused_ops::fusedDeepseekV
+     0.02  void at::native::vectorized_elementwise_kernel<(
+     0.02  void cutlass::Kernel2<cutlass_80_wmma_tensorop_s
+     0.02  void <unnamed>::mhc_proj_kernel<(int)4>(const __
+
+=== code: AR/it 145.0 l2pf/it 163.0 unpaired-pf 2400
+mode grid pfgrid sizeclass n/it  p10   p50   p90   | pfdur p50 | pfend-arend p10 p50 p90 frac>0 | next-gap p50 | us/step sum(dur)
+   1    1    0 none     6.00   12.7   14.5   36.3 |    nan |    nan    nan    nan  0.00 |    0.6 |     135
+   2    5    1 L>=24    3.22   35.1   37.6   43.6 |   24.3 |  -19.7  -13.3  -10.7  0.00 |    0.4 |     128
+   2    8    1 L>=24    1.25   37.6   39.1   42.1 |   24.5 |  -18.0  -14.6  -12.9  0.00 |    0.4 |      50
+   2    5    1 M<24    30.12   35.7   40.1   51.1 |   22.3 |  -30.9  -18.3  -12.8  0.00 |    0.4 |    1339
+   2    8    1 M<24     5.42   37.9   42.7   68.3 |   22.4 |  -46.9  -21.1  -14.6  0.00 |    0.4 |     267
+   2    5    2 S<12    26.52   33.4   39.8   55.1 |    9.7 |  -46.5  -31.0  -24.5  0.00 |    0.4 |    1207
+   2    8    2 S<12     5.33   36.4   44.2   61.6 |    9.8 |  -51.7  -35.1  -27.6  0.00 |    0.4 |     274
+   2    5    3 S<12     5.83   34.9   40.6   55.5 |    9.6 |  -46.3  -31.7  -25.3  0.00 |    0.4 |     267
+   2    8    3 S<12     1.17   37.8   44.9  103.8 |    9.8 |  -90.7  -35.6  -28.0  0.00 |    0.4 |      67
+   2    5    0 none     1.67   27.9   34.2   54.3 |    nan |    nan    nan    nan  0.00 |    5.8 |    1162
+   2    7    0 none     7.00   29.1   34.0   49.3 |    nan |    nan    nan    nan  0.00 |    0.4 |     275
+   3    1    2 L>=24    1.67   28.4   31.8   37.2 |   37.7 |   -7.6    0.2   14.6  0.50 |    0.4 |      55
+   3    1    4 L>=24   33.75   28.5   32.0   36.2 |   31.7 |   -8.8   -0.9    3.7  0.42 |    0.4 |    1117
+   3    1    5 L>=24    3.82   26.8   33.9   51.0 |   31.8 |  -16.1   -2.3    5.0  0.33 |    0.4 |     143
+   3    1    4 M<24     2.25   32.6   35.5   39.6 |   23.1 |  -16.4  -12.5   -9.4  0.00 |    0.4 |      82
+   3    4    2 S<12     0.82   27.1   30.9   33.9 |    7.1 |  -27.6  -23.9  -19.0  0.00 |    0.5 |      25
+   3    4    3 S<12     0.83   29.9   32.6   37.5 |    9.2 |  -28.9  -23.6  -20.9  0.00 |    0.5 |      28
+   3    1    0 none     4.00   13.0   16.2   26.5 |    nan |    nan    nan    nan  0.00 |    0.4 |      78
+void at::nat    1    0 none     3.00    1.2    1.3    3.1 |    nan |    nan    nan    nan  0.00 |    0.5 |       6
+--- aggregated mode/size
+   1 none   n/it   6.00 p10   12.7 p50   14.5 p90   36.3 grids [(1, 360)]
+   2 L>=24  n/it   4.47 p10   35.6 p50   38.1 p90   42.8 grids [(5, 193), (8, 75)]
+   2 M<24   n/it  35.68 p10   35.9 p50   40.5 p90   52.3 grids [(5, 1816), (8, 325)]
+   2 S<12   n/it  38.85 p10   33.8 p50   40.5 p90   56.9 grids [(5, 1941), (8, 390)]
+   2 none   n/it   9.00 p10   29.1 p50   34.1 p90   50.2 grids [(7, 420), (5, 100), (8, 20)]
+   3 L>=24  n/it  39.57 p10   28.4 p50   32.0 p90   37.5 grids [(1, 2354), (2, 20)]
+   3 M<24   n/it   2.45 p10   32.1 p50   35.5 p90   39.6 grids [(1, 146), (4, 1)]
+   3 S<12   n/it   1.98 p10   27.7 p50   32.0 p90   37.7 grids [(4, 99), (5, 20)]
+   3 none   n/it   4.00 p10   13.0 p50   16.2 p90   26.5 grids [(1, 240)]
+void at::nat none   n/it   3.00 p10    1.2 p50    1.3 p90    3.1 grids [(1, 180)]
+--- next non-pf kernel after AR, with burst, by size class
+     3 L>=24  _q_kv_norm_quant_kernel              n/it 36.45 gap p50    0.4
+     2 S<12   void <unnamed>::mhc_post_norm_kern   n/it 35.08 gap p50    0.4
+     2 M<24   void <unnamed>::mhc_post_norm_kern   n/it 34.37 gap p50    0.4
+     2 L>=24  void <unnamed>::mhc_post_norm_kern   n/it  4.30 gap p50    0.4
+     3 M<24   _q_kv_norm_quant_kernel              n/it  2.43 gap p50    0.4
+     2 S<12   mhc_post_tilelang_kernel             n/it  2.00 gap p50    0.5
+     3 S<12   _fused_engram_post_wkv_kernel        n/it  1.98 gap p50    0.5
+     3 L>=24  kernel_cutlass_kernel_flashinferqu   n/it  1.90 gap p50    0.4
+     2 S<12   kernel_cutlass_kernel_flashinferqu   n/it  1.77 gap p50    1.2
+     2 M<24   kernel_cutlass_kernel_flashinferqu   n/it  1.32 gap p50    1.2
+     3 L>=24  void cutlass::device_kernel<flashi   n/it  1.17 gap p50    1.6
+     2 L>=24  kernel_cutlass_kernel_flashinferqu   n/it  0.17 gap p50    1.2
+     3 L>=24  void at::native::vectorized_elemen   n/it  0.05 gap p50    4.8
+     3 M<24   _fused_engram_post_wkv_kernel        n/it  0.02 gap p50    0.5
+--- bursts running past AR end: 16.55/it; with no other kernel in overrun 1.48/it; co-resident kernels (per it):
+    13.65  _q_kv_norm_quant_kernel
+     8.17  void cutlass::device_kernel<flashinfer::gemm::De
+     0.87  kernel_cutlass_kernel_flashinferquantizationkern
+     0.33  _fused_save_compress_norm_kernel
+     0.03  void vllm::deepseek_v4_fused_ops::fusedDeepseekV
+     0.02  void at::native::vectorized_elementwise_kernel<(
+
+=== g4: AR/it 106.7 l2pf/it 127.7 unpaired-pf 2401
+mode grid pfgrid sizeclass n/it  p10   p50   p90   | pfdur p50 | pfend-arend p10 p50 p90 frac>0 | next-gap p50 | us/step sum(dur)
+   1    1    0 none     6.00   13.0   14.8  108.7 |    nan |    nan    nan    nan  0.00 |    0.6 |     223
+   2   10    1 L>=24    1.38   39.2   41.8   48.0 |   24.8 |  -23.8  -16.9  -14.0  0.00 |    0.4 |      59
+   2   15    1 L>=24    1.73   41.4   43.3   48.8 |   24.5 |  -24.0  -19.0  -17.3  0.00 |    0.4 |      78
+   2   16    1 L>=24    2.28   45.8   49.2   60.9 |   24.5 |  -35.4  -24.3  -21.4  0.00 |    0.4 |     119
+   2   15    4 L>=24   10.97   50.8   61.7   74.2 |   30.0 |  -45.1  -32.1  -20.9  0.00 |    0.4 |     718
+   2   16    4 L>=24   15.48   55.8   66.5   81.2 |   30.2 |  -50.9  -36.7  -24.9  0.00 |    0.4 |    1079
+   2   15    5 L>=24    2.57   53.0   61.9   72.5 |   28.0 |  -45.4  -34.0  -25.2  0.00 |    0.4 |     166
+   2   16    5 L>=24    3.62   57.4   67.7   79.6 |   28.4 |  -51.9  -39.6  -29.8  0.00 |    0.4 |     252
+   2   10    1 M<24     3.27   42.1   45.1   53.0 |   22.6 |  -32.9  -23.3  -19.2  0.00 |    0.4 |     154
+   2   15    1 M<24    12.93   43.4   48.5   58.1 |   22.3 |  -38.3  -26.7  -21.2  0.00 |    0.4 |     689
+   2   16    1 M<24    18.38   47.6   52.4   61.6 |   22.8 |  -40.5  -30.3  -24.9  0.00 |    0.4 |    1013
+   2   10    2 S<12     3.72   37.9   46.5   58.0 |    9.6 |  -48.4  -37.5  -29.0  0.00 |    0.4 |     179
+   2   15    2 S<12     0.73   36.9   47.7   64.8 |    1.8 |  -56.9  -45.7  -35.3  0.00 |    0.6 |      40
+   2   16    2 S<12     1.03   43.2   52.2   60.8 |    1.9 |  -56.4  -50.1  -41.1  0.00 |    0.5 |      54
+   2   10    3 S<12     0.82   38.4   47.5   57.9 |    9.7 |  -50.4  -39.7  -29.2  0.00 |    0.4 |      40
+   2   15    0 none     0.73   37.0   43.4   59.2 |    nan |    nan    nan    nan  0.00 |    7.7 |     140
+   2   16    0 none     8.03   46.1   53.3   63.6 |    nan |    nan    nan    nan  0.00 |    0.4 |     462
+   3    3    2 L>=24    1.73   31.7   33.8   37.5 |   39.5 |   -4.0    5.5    8.0  0.79 |    0.4 |      60
+   3    1    4 L>=24    4.05   28.9   31.0   34.5 |   32.1 |   -5.9    1.0    3.4  0.56 |    0.4 |     128
+   3   13    4 L>=24    0.50   63.9   67.8   72.1 |   29.4 |  -42.3  -38.6  -34.1  0.00 |    0.5 |      34
+   3    1    5 L>=24    0.47   23.3   36.5   45.0 |   35.1 |   -7.3   -1.2   12.8  0.43 |    0.4 |      16
+   3   13    5 L>=24    0.50   70.6   74.3   80.7 |   30.8 |  -46.6  -43.5  -39.9  0.00 |    0.5 |      37
+   3    2    0 none     0.48   19.0   29.1   38.3 |    nan |    nan    nan    nan  0.00 |    3.0 |      14
+   3    3    0 none     0.50   21.6   30.1   51.4 |    nan |    nan    nan    nan  0.00 |    2.9 |      20
+void at::nat    1    0 none     3.00    1.2    1.3    3.3 |    nan |    nan    nan    nan  0.00 |    0.5 |       6
+--- aggregated mode/size
+   1 none   n/it   6.00 p10   13.0 p50   14.8 p90  108.7 grids [(1, 360)]
+   2 L>=24  n/it  38.03 p10   47.6 p50   62.8 p90   77.3 grids [(16, 1283), (15, 916), (10, 83)]
+   2 M<24   n/it  34.65 p10   44.3 p50   50.5 p90   60.3 grids [(16, 1104), (15, 778), (10, 197)]
+   2 S<12   n/it   6.30 p10   38.2 p50   47.5 p90   58.6 grids [(10, 272), (16, 62), (15, 44)]
+   2 none   n/it   9.02 p10   43.5 p50   52.7 p90   62.8 grids [(16, 482), (15, 44), (10, 15)]
+   3 L>=24  n/it   8.28 p10   29.4 p50   33.3 p90   69.3 grids [(1, 271), (3, 104), (13, 60), (10, 44)]
+   3 M<24   n/it   0.15 p10   33.9 p50   34.7 p90   36.7 grids [(1, 9)]
+   3 S<12   n/it   0.23 p10   38.6 p50   41.7 p90   44.9 grids [(7, 14)]
+   3 none   n/it   1.00 p10   20.1 p50   29.4 p90   41.8 grids [(3, 30), (2, 29), (4, 1)]
+void at::nat none   n/it   3.00 p10    1.2 p50    1.3 p90    3.3 grids [(1, 180)]
+--- next non-pf kernel after AR, with burst, by size class
+     2 L>=24  void <unnamed>::mhc_post_norm_kern   n/it 36.08 gap p50    0.4
+     2 M<24   void <unnamed>::mhc_post_norm_kern   n/it 33.07 gap p50    0.4
+     3 L>=24  _q_kv_norm_quant_kernel              n/it  4.38 gap p50    0.4
+     2 S<12   void <unnamed>::mhc_post_norm_kern   n/it  4.05 gap p50    0.4
+     2 S<12   mhc_post_tilelang_kernel             n/it  2.00 gap p50    0.5
+     2 L>=24  kernel_cutlass_kernel_flashinferqu   n/it  1.93 gap p50    5.0
+     3 L>=24  kernel_cutlass_kernel_flashinferqu   n/it  1.92 gap p50    0.4
+     3 L>=24  _fused_engram_post_wkv_kernel        n/it  1.77 gap p50    0.5
+     2 M<24   kernel_cutlass_kernel_flashinferqu   n/it  1.57 gap p50    3.6
+     2 S<12   kernel_cutlass_kernel_flashinferqu   n/it  0.25 gap p50    1.5
+     3 S<12   _fused_engram_post_wkv_kernel        n/it  0.23 gap p50    0.5
+     3 L>=24  void cutlass::device_kernel<flashi   n/it  0.22 gap p50    1.3
+     3 M<24   _q_kv_norm_quant_kernel              n/it  0.15 gap p50    0.4
+     2 M<24   nvjet_sm121_tss_mma_32x32x64_12_32   n/it  0.02 gap p50    5.0
+--- bursts running past AR end: 4.03/it; with no other kernel in overrun 0.20/it; co-resident kernels (per it):
+     2.40  void cutlass::device_kernel<flashinfer::gemm::De
+     2.22  _q_kv_norm_quant_kernel
+     1.45  kernel_cutlass_kernel_flashinferquantizationkern
+     0.08  _fused_save_compress_norm_kernel
+     0.02  void vllm::deepseek_v4_fused_ops::fusedDeepseekV

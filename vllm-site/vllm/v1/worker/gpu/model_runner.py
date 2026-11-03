@@ -27,6 +27,10 @@ from typing import Any, NamedTuple
 
 import numpy as np
 import torch
+import sys as _dsv41_sys  # dsv41-steer
+def _dsv41_steer():  # dsv41-steer
+    m = _dsv41_sys.modules.get("vllm.models.deepseek_v41.nvidia.dsv41_steer")  # dsv41-steer
+    return None if m is None else m.STEER  # dsv41-steer
 import torch.nn as nn
 
 import vllm.envs as envs
@@ -1034,6 +1038,17 @@ class GPUModelRunner(LoRAModelRunnerMixin):
         del hidden_states, sample_hidden_states
         self.reset_encoder_cache()
         gc.collect()
+        if self.supports_mm_inputs and __import__("os").environ.get(
+            "DSV41_MM_PIN_TRIM", "0"
+        ) == "1":
+            # vision 2026-10-27 (vis; exported =1 by the launcher's images-on branch, unset =
+            # stock): the startup encoder profile (16 max-size images, ~173 MB of patches) leaves
+            # a 256 MiB block in torch's caching host allocator for the life of the process;
+            # release it. Host memory only (every copy finished at the synchronize above).
+            try:
+                torch._C._host_emptyCache()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("DSV41_MM_PIN_TRIM: host emptyCache failed: %s", exc)
 
     def reset_mm_cache(self) -> None:
         if self.encoder_cache is not None:
@@ -1186,6 +1201,8 @@ class GPUModelRunner(LoRAModelRunnerMixin):
         # Call model_state.remove_request *before* req_states.remove_request
         # so the model_state can still look up the slot index.
         self.model_state.remove_request(req_id)
+        if (_st := _dsv41_steer()) is not None:  # dsv41-steer
+            _st.remove_request(req_id)  # dsv41-steer
         req_idx = self.req_states.remove_request(req_id)
         if req_idx is None:
             return False
@@ -1249,6 +1266,8 @@ class GPUModelRunner(LoRAModelRunnerMixin):
                 max_tokens=sampling_params.max_tokens if sampling_params else 1,  # type: ignore[arg-type]
             )
             req_index = self.req_states.req_id_to_index[req_id]
+            if (_st := _dsv41_steer()) is not None:  # dsv41-steer
+                _st.add_request(req_id, sampling_params, prompt_len)  # dsv41-steer
             if self.adaptive_verification is not None:
                 self.adaptive_verification.add_request(req_index)
 
@@ -1527,6 +1546,9 @@ class GPUModelRunner(LoRAModelRunnerMixin):
             self.input_buffers.seq_lens,
         )
         seq_lens = self.input_buffers.seq_lens[:num_reqs_padded]
+        if (_st := _dsv41_steer()) is not None and _st.ready:  # dsv41-steer
+            _st.prepare_v2(req_ids, num_tokens, query_start_loc,  # dsv41-steer
+                                          self.input_buffers.positions)  # dsv41-steer
 
         # Some input token ids are directly read from the last sampled tokens
         # and draft tokens. Also, get the logits indices to sample tokens from.
@@ -2020,6 +2042,19 @@ class GPUModelRunner(LoRAModelRunnerMixin):
                 inputs_embeds = self.model_state.dummy_inputs_embeds(
                     input_batch.num_tokens_after_padding
                 )
+                if (cost_profile_seed is not None or randomize_inputs) and __import__(
+                    "os"
+                ).environ.get("DSV41_DUMMY_EMBED", "0") == "1":
+                    # vision 2026-10-27 (vis; the launcher's images-on branch exports
+                    # DSV41_DUMMY_EMBED=1, unset = stock): with inputs_embeds (image input on)
+                    # the routing probe's random ids must still reach the model as their
+                    # embeddings, as they do on the input_ids path; otherwise every row reads
+                    # the zeroed buffer, routes to the same experts and the unpinned AV cost
+                    # curve flattens. Dummy runs only; unreachable with images off.
+                    n = input_batch.num_tokens
+                    inputs_embeds[:n].copy_(
+                        self.model.embed_input_ids(input_batch.input_ids[:n])
+                    )
             else:
                 scheduled_encoder_inputs = scheduler_output.scheduled_encoder_inputs
                 if self.supports_mm_inputs and self.lora_config is not None:
@@ -2128,6 +2163,8 @@ class GPUModelRunner(LoRAModelRunnerMixin):
                     model_output = self.model(**model_inputs)
 
         self.kv_connector.finish_forward()
+        if (_st := _dsv41_steer()) is not None and _st.cap_specs:  # dsv41-steer
+            _st.after_forward()  # dsv41-steer
 
         if self.is_last_pp_rank:
             if self.use_aux_hidden_state_outputs:

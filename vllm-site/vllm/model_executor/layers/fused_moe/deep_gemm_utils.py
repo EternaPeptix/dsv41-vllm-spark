@@ -5,6 +5,7 @@ and updated to fit vllm needs and terminology.
 """
 
 import math
+import os
 
 import torch
 
@@ -464,6 +465,344 @@ def ep_gather(
     return
 
 
+# =====================================================================================================
+# g3 mfront (2026-10-26, default off): fused M32 MoE permute (DSV41_MOE_FUSED_PERMUTE)
+#
+#   DSV41_MOE_FUSED_PERMUTE=0       stock (default): count_expert_num_tokens, torch.zeros(scales), torch.full(-1),
+#                                   ep_scatter_1, ep_scatter_2, then DeepGEMM transpose_and_pack inside FC1
+#                                   (6 kernels per target MoE layer, ~14 us/layer on the bench, ~22 us in the
+#                                   4-user serving profile)
+#   DSV41_MOE_FUSED_PERMUTE=1       target decode MoE on the M32 path only (E 384, topk 6, 32-row alignment,
+#                                   FP8 activations with fp32 UE8M0-valued per-128 scales): 2 kernels
+#                                     plan   : grouped_layout = -1 and packed scales = 0 over M_sum rows (what
+#                                              torch.full / torch.zeros + transpose_and_pack leave), and the
+#                                              32-aligned expert starts (same rounding/cumsum as ep_scatter_1)
+#                                     scatter: one program per (token, k) slot: dest = atomic cursor (as
+#                                              ep_scatter_2), copy the FP8 row, grouped_layout[dest] = expert,
+#                                              inv_perm, and the 4 UE8M0 bytes per packed int32 word written
+#                                              directly in DeepGEMM's MN-major TMA-aligned layout with the exact
+#                                              transpose_and_pack_fp32_into_ue8m0 formula
+#                                              (v0 >> 23) | (v1 >> 15) | (v2 >> 7) | (v3 << 1)
+#                                   FC1 then receives the packed int32 scales (as FC2 already does from the fused
+#                                   SiLU-quant kernel) and skips its transpose_and_pack launch.
+#   DSV41_MOE_FUSED_PERMUTE=verify  serve the stock path; also run the fused kernels into shadow buffers and count
+#                                   mismatches on the device (rows by slot, packed scale words, grouped_layout,
+#                                   expert ends, dead-row scale words); report: touch ~/dsv41-logs/mfront-verify.trigger
+#                                   (-> mfront-verify.<host>.<pid>.json).
+#
+# Exactness (bitwise MoE output): every live slot's FP8 row and packed UE8M0 scale bytes are byte copies / the same bit
+# formula; grouped_layout, the per-expert 32-aligned segments, LIVE_ACT expert ends and the dead-row scale words are
+# identical arrays. Only the order of rows INSIDE an expert segment can differ (it is atomic-arrival order in both
+# paths); every FC1/FC2 output row depends on its own A row and scale only and ep_gather reads through inv_perm, so
+# the MoE output is unchanged. tests/test_mfront_gpu.py checks the full MoE output bitwise.
+# =====================================================================================================
+_DSV41_FP_MODE = os.environ.get("DSV41_MOE_FUSED_PERMUTE", "0").strip().lower()
+if _DSV41_FP_MODE in ("", "off"):
+    _DSV41_FP_MODE = "0"
+if _DSV41_FP_MODE not in ("0", "1", "verify"):
+    raise ValueError(f"DSV41_MOE_FUSED_PERMUTE must be 0|1|verify, got {_DSV41_FP_MODE!r}")
+_DSV41_FP_SLOTS = 1024  # max M * topk handled by one plan program (M32 path: M <= 96 -> 576)
+_DSV41_FP_FILL_ROWS = 1024
+
+
+@triton.jit
+def _dsv41_fp_plan_kernel(
+    topk_ids,
+    ids_stride0,
+    ids_stride1,
+    cursor,          # [E] int32 out: 32-aligned expert start (advanced to the live end by the scatter kernel)
+    layout,          # [M_sum] int32 out: -1
+    sfp,             # packed int32 scales, element (row r, pack p) at sfp + p * mn_aligned + r: 0
+    M,
+    M_sum,
+    mn_aligned,
+    E: tl.constexpr,
+    TOPK: tl.constexpr,
+    ALIGN: tl.constexpr,
+    PACKS: tl.constexpr,
+    SLOTS: tl.constexpr,
+    E_PAD: tl.constexpr,
+    FILL_ROWS: tl.constexpr,
+):
+    pid = tl.program_id(0)
+    r = pid * FILL_ROWS + tl.arange(0, FILL_ROWS)
+    rm = r < M_sum
+    tl.store(layout + r, tl.full([FILL_ROWS], -1, tl.int32), mask=rm)
+    zero = tl.zeros([FILL_ROWS], dtype=tl.int32)
+    for p in tl.static_range(PACKS):
+        tl.store(sfp + p * mn_aligned + r, zero, mask=rm)
+    if pid == 0:
+        s = tl.arange(0, SLOTS)
+        sm = s < M * TOPK
+        t = s // TOPK
+        k = s % TOPK
+        ids = tl.load(topk_ids + t * ids_stride0 + k * ids_stride1, mask=sm, other=-1).to(tl.int32)
+        valid = sm & (ids >= 0) & (ids < E)
+        cnt = tl.histogram(tl.where(valid, ids, E), E_PAD)
+        b = tl.arange(0, E_PAD)
+        cnt = tl.where(b < E, cnt, 0)
+        aligned = (cnt + ALIGN - 1) // ALIGN * ALIGN
+        start = tl.cumsum(aligned, axis=0) - aligned
+        tl.store(cursor + b, start.to(tl.int32), mask=b < E)
+
+
+@triton.jit
+def _dsv41_fp_scatter_kernel(
+    topk_ids,
+    ids_stride0,
+    ids_stride1,
+    aq_words,        # [M, H/4] int32 view of the FP8 rows
+    aq_row_words,
+    sf_bits,         # [M, SF_K] int32 view of the fp32 scales (any strides)
+    sf_stride0,
+    sf_stride1,
+    cursor,
+    out_words,       # [M_sum, H/4] int32 view of the permuted FP8 rows
+    out_row_words,
+    sfp,
+    mn_aligned,
+    layout,
+    inv_perm,
+    inv_stride0,
+    inv_stride1,
+    E: tl.constexpr,
+    TOPK: tl.constexpr,
+    H_WORDS: tl.constexpr,
+    H_BLOCK: tl.constexpr,
+    SF_K: tl.constexpr,
+    PACKS: tl.constexpr,
+    PACKS_PAD: tl.constexpr,
+):
+    slot = tl.program_id(0)
+    t = slot // TOPK
+    k = slot % TOPK
+    e = tl.load(topk_ids + t * ids_stride0 + k * ids_stride1).to(tl.int32)
+    if (e >= 0) & (e < E):
+        dest = tl.atomic_add(cursor + e, 1)
+        tl.store(inv_perm + t * inv_stride0 + k * inv_stride1, dest)
+        tl.store(layout + dest, e)
+        w = tl.arange(0, H_BLOCK)
+        wm = w < H_WORDS
+        row = tl.load(aq_words + t.to(tl.int64) * aq_row_words + w, mask=wm)
+        tl.store(out_words + dest.to(tl.int64) * out_row_words + w, row, mask=wm)
+        p = tl.arange(0, PACKS_PAD)
+        pm = p < PACKS
+        base = sf_bits + t.to(tl.int64) * sf_stride0
+        g0 = p * 4
+        v0 = tl.load(base + g0 * sf_stride1, mask=pm & (g0 < SF_K), other=0).to(tl.uint32, bitcast=True)
+        v1 = tl.load(base + (g0 + 1) * sf_stride1, mask=pm & (g0 + 1 < SF_K), other=0).to(tl.uint32, bitcast=True)
+        v2 = tl.load(base + (g0 + 2) * sf_stride1, mask=pm & (g0 + 2 < SF_K), other=0).to(tl.uint32, bitcast=True)
+        v3 = tl.load(base + (g0 + 3) * sf_stride1, mask=pm & (g0 + 3 < SF_K), other=0).to(tl.uint32, bitcast=True)
+        packed = (v0 >> 23) | (v1 >> 15) | (v2 >> 7) | (v3 << 1)
+        tl.store(sfp + p * mn_aligned + dest, packed.to(tl.int32, bitcast=True), mask=pm)
+
+
+def dsv41_fp_eligible(aq, aq_scale, topk_ids, local_num_experts, expert_map, expert_tokens_meta,
+                      block_k, use_psum_layout, align_used) -> bool:
+    """g3 mfront gate: the qualified target M32 decode geometry only."""
+    if _DSV41_FP_MODE == "0":
+        return False
+    if expert_map is not None or use_psum_layout or align_used != 32:
+        return False
+    if expert_tokens_meta is not None and getattr(expert_tokens_meta, "expert_num_tokens", None) is not None:
+        return False
+    if local_num_experts != 384 or topk_ids.dim() != 2 or topk_ids.size(1) != 6:
+        return False
+    M, H = aq.shape
+    if topk_ids.size(0) != M or M * 6 > _DSV41_FP_SLOTS or block_k != 128 or H % 128 or H % 4:
+        return False
+    if aq.dtype != torch.float8_e4m3fn or not aq.is_contiguous():
+        return False
+    if aq_scale.dtype != torch.float32 or aq_scale.dim() != 2 or tuple(aq_scale.shape) != (M, H // 128):
+        return False
+    return topk_ids.dtype in (torch.int32, torch.int64)
+
+
+def dsv41_fused_permute(aq, aq_scale, topk_ids, local_num_experts, aq_out, M_sum, align_used):
+    """Returns (aq_out, packed_scales_int32 [M_sum, packs] MN-major, grouped_layout, inv_perm, expert_ends)."""
+    M, H = aq.shape
+    topk = topk_ids.size(1)
+    E = local_num_experts
+    sf_k = H // 128
+    packs = (sf_k + 3) // 4
+    mn_aligned = round_up(M_sum, 4)
+    device = aq.device
+    if aq_out is None:
+        aq_out = torch.empty((M_sum, H), device=device, dtype=aq.dtype)
+    assert aq_out.shape == (M_sum, H) and aq_out.is_contiguous()
+    sfp = torch.empty_strided((M_sum, packs), (1, mn_aligned), device=device, dtype=torch.int32)
+    layout = torch.empty((M_sum,), device=device, dtype=torch.int32)
+    inv_perm = torch.empty(topk_ids.shape, device=device, dtype=torch.int32)
+    cursor = torch.empty((E,), device=device, dtype=torch.int32)
+    _dsv41_fp_plan_kernel[(triton.cdiv(M_sum, _DSV41_FP_FILL_ROWS),)](
+        topk_ids, topk_ids.stride(0), topk_ids.stride(1), cursor, layout, sfp, M, M_sum, mn_aligned,
+        E=E, TOPK=topk, ALIGN=align_used, PACKS=packs, SLOTS=_DSV41_FP_SLOTS,
+        E_PAD=triton.next_power_of_2(E + 1), FILL_ROWS=_DSV41_FP_FILL_ROWS, num_warps=4,
+    )
+    if M * topk > 0:
+        aw = aq.view(torch.int32)
+        ow = aq_out.view(torch.int32)
+        sb = aq_scale.view(torch.int32)
+        _dsv41_fp_scatter_kernel[(M * topk,)](
+            topk_ids, topk_ids.stride(0), topk_ids.stride(1), aw, aw.stride(0), sb, sb.stride(0), sb.stride(1),
+            cursor, ow, ow.stride(0), sfp, mn_aligned, layout, inv_perm, inv_perm.stride(0), inv_perm.stride(1),
+            E=E, TOPK=topk, H_WORDS=H // 4, H_BLOCK=triton.next_power_of_2(H // 4), SF_K=sf_k, PACKS=packs,
+            PACKS_PAD=triton.next_power_of_2(packs), num_warps=4,
+        )
+    return aq_out, sfp, layout, inv_perm, cursor
+
+
+@triton.jit
+def _dsv41_fp_compare_kernel(
+    topk_ids, ids_stride0, ids_stride1,
+    inv_s, inv_s0, inv_s1, inv_f, inv_f0, inv_f1,
+    out_s, out_f, row_words,
+    sf_s, sf_s0, sf_s1,
+    sfp_f, mn_aligned,
+    lay_s, lay_f, M_sum, cur_s, cur_f,
+    counters,
+    M,
+    E: tl.constexpr, TOPK: tl.constexpr, H_WORDS: tl.constexpr, H_BLOCK: tl.constexpr, SF_K: tl.constexpr,
+    PACKS: tl.constexpr, PACKS_PAD: tl.constexpr, LAY_BLOCK: tl.constexpr, E_PAD: tl.constexpr,
+):
+    pid = tl.program_id(0)
+    if pid < M * TOPK:
+        t = pid // TOPK
+        k = pid % TOPK
+        e = tl.load(topk_ids + t * ids_stride0 + k * ids_stride1).to(tl.int32)
+        if (e >= 0) & (e < E):
+            ds = tl.load(inv_s + t * inv_s0 + k * inv_s1).to(tl.int64)
+            df = tl.load(inv_f + t * inv_f0 + k * inv_f1).to(tl.int64)
+            w = tl.arange(0, H_BLOCK)
+            wm = w < H_WORDS
+            a = tl.load(out_s + ds * row_words + w, mask=wm, other=0)
+            b = tl.load(out_f + df * row_words + w, mask=wm, other=0)
+            bad = tl.sum(tl.where(wm & (a != b), 1, 0), axis=0)
+            p = tl.arange(0, PACKS_PAD)
+            pm = p < PACKS
+            g0 = p * 4
+            base = sf_s + ds * sf_s0
+            v0 = tl.load(base + g0 * sf_s1, mask=pm & (g0 < SF_K), other=0).to(tl.uint32, bitcast=True)
+            v1 = tl.load(base + (g0 + 1) * sf_s1, mask=pm & (g0 + 1 < SF_K), other=0).to(tl.uint32, bitcast=True)
+            v2 = tl.load(base + (g0 + 2) * sf_s1, mask=pm & (g0 + 2 < SF_K), other=0).to(tl.uint32, bitcast=True)
+            v3 = tl.load(base + (g0 + 3) * sf_s1, mask=pm & (g0 + 3 < SF_K), other=0).to(tl.uint32, bitcast=True)
+            want = (v0 >> 23) | (v1 >> 15) | (v2 >> 7) | (v3 << 1)
+            got = tl.load(sfp_f + p * mn_aligned + df, mask=pm, other=0).to(tl.uint32, bitcast=True)
+            sbad = tl.sum(tl.where(pm & (want != got), 1, 0), axis=0)
+            tl.atomic_add(counters + 1, 1)
+            tl.atomic_add(counters + 2, bad.to(tl.int64))
+            tl.atomic_add(counters + 3, sbad.to(tl.int64))
+    else:
+        nbad = tl.zeros([LAY_BLOCK], dtype=tl.int64)
+        for r0 in range(0, M_sum, LAY_BLOCK):
+            r = r0 + tl.arange(0, LAY_BLOCK)
+            rm = r < M_sum
+            ls = tl.load(lay_s + r, mask=rm, other=0)
+            lf = tl.load(lay_f + r, mask=rm, other=0)
+            nbad += tl.where(rm & (ls != lf), 1, 0)
+            for q in tl.static_range(PACKS):  # dead rows: packed scale words must be 0 (as transpose_and_pack of 0.0)
+                z = tl.load(sfp_f + q * mn_aligned + r, mask=rm & (lf < 0), other=0)
+                nbad += tl.where(rm & (lf < 0) & (z != 0), 1, 0)
+        b = tl.arange(0, E_PAD)
+        bm = b < E
+        cs = tl.load(cur_s + b, mask=bm, other=0)
+        cf = tl.load(cur_f + b, mask=bm, other=0)
+        tot = tl.sum(nbad, axis=0) + tl.sum(tl.where(bm & (cs != cf), 1, 0), axis=0).to(tl.int64)
+        tl.atomic_add(counters + 0, 1)
+        tl.atomic_add(counters + 4, tot)
+
+
+class _Dsv41FpVerifier:
+    """DSV41_MOE_FUSED_PERMUTE=verify: counters [layouts compared, slots compared, row-word mismatches,
+    scale-word mismatches, layout/ends/dead-scale mismatches, calls skipped during capture]."""
+
+    def __init__(self):
+        assert not torch.cuda.is_current_stream_capturing()
+        self.device = torch.cuda.current_device()
+        self.counters = torch.zeros(8, dtype=torch.int64, device="cuda")
+        self._host = torch.zeros(8, dtype=torch.int64, pin_memory=True)
+        self._side = torch.cuda.Stream()
+        self.skipped = 0
+        self._start_reporter()
+
+    def check(self, aq, aq_scale, topk_ids, E, M_sum, align_used, served):
+        s_out, s_scale, s_layout, s_inv, s_cursor = served
+        f_out = torch.empty_like(s_out)
+        f_out, f_sfp, f_layout, f_inv, f_cursor = dsv41_fused_permute(aq, aq_scale, topk_ids, E, f_out, M_sum,
+                                                                     align_used)
+        M, H = aq.shape
+        topk = topk_ids.size(1)
+        sf_k = H // 128
+        packs = (sf_k + 3) // 4
+        ss = s_scale.view(torch.int32)
+        so, fo = s_out.view(torch.int32), f_out.view(torch.int32)
+        _dsv41_fp_compare_kernel[(M * topk + 1,)](
+            topk_ids, topk_ids.stride(0), topk_ids.stride(1), s_inv, s_inv.stride(0), s_inv.stride(1),
+            f_inv, f_inv.stride(0), f_inv.stride(1), so, fo, so.stride(0), ss, ss.stride(0), ss.stride(1),
+            f_sfp, round_up(M_sum, 4), s_layout, f_layout, M_sum, s_cursor, f_cursor, self.counters, M,
+            E=E, TOPK=topk, H_WORDS=H // 4, H_BLOCK=triton.next_power_of_2(H // 4), SF_K=sf_k, PACKS=packs,
+            PACKS_PAD=triton.next_power_of_2(packs), LAY_BLOCK=1024, E_PAD=triton.next_power_of_2(E + 1),
+            num_warps=4,
+        )
+
+    def _start_reporter(self):
+        import json
+        import socket
+        import threading
+        import time
+        from pathlib import Path
+
+        root = Path(os.environ.get("DSV41_MOE_FUSED_PERMUTE_VERIFY_DIR", str(Path.home() / "dsv41-logs")))
+        delay = float(os.environ.get("DSV41_MOE_FUSED_PERMUTE_VERIFY_DELAY_S", "600"))
+        trigger = root / "mfront-verify.trigger"
+        out = root / f"mfront-verify.{socket.gethostname()}.{os.getpid()}.json"
+        born = time.time()
+
+        def loop():
+            seen = None
+            while True:
+                time.sleep(2.0)
+                try:
+                    mtime = trigger.stat().st_mtime
+                except OSError:
+                    continue
+                if mtime == seen or time.time() - born < delay:  # never touch CUDA during startup/capture
+                    continue
+                seen = mtime
+                try:
+                    with torch.cuda.device(self.device), torch.cuda.stream(self._side):
+                        self._host.copy_(self.counters, non_blocking=True)
+                        self._side.synchronize()
+                    c = self._host.tolist()
+                    bad = c[2] + c[3] + c[4]
+                    rep = dict(host=socket.gethostname(), pid=os.getpid(), time=time.time(), mode="verify",
+                               calls=c[0], slots=c[1], row_word_mismatch=c[2], scale_word_mismatch=c[3],
+                               layout_ends_deadscale_mismatch=c[4], skipped_eager_capture=self.skipped,
+                               status="MISMATCH" if bad else ("OK" if c[0] else "NO-CALLS"))
+                    tmp = out.with_suffix(".tmp")
+                    tmp.write_text(json.dumps(rep, indent=1))
+                    tmp.replace(out)
+                except Exception as exc:  # diagnostics must never kill serving
+                    try:
+                        out.with_suffix(".err").write_text(repr(exc))
+                    except OSError:
+                        pass
+
+        threading.Thread(target=loop, name="mfront-verify-report", daemon=True).start()
+
+
+_dsv41_fp_verifier: "_Dsv41FpVerifier | None" = None
+
+
+def _dsv41_fp_verify(aq, aq_scale, topk_ids, E, M_sum, align_used, served):
+    global _dsv41_fp_verifier
+    if _dsv41_fp_verifier is None:
+        if torch.cuda.is_current_stream_capturing():
+            return  # first eligible call inside a capture: that graph serves stock unverified
+        _dsv41_fp_verifier = _Dsv41FpVerifier()
+    _dsv41_fp_verifier.check(aq, aq_scale, topk_ids, E, M_sum, align_used, served)
+
+
 def deepgemm_moe_permute(
     aq: torch.Tensor,
     aq_scale: torch.Tensor,
@@ -509,6 +848,16 @@ def deepgemm_moe_permute(
         alignment=block_m,
         expert_tokens_meta=expert_tokens_meta,
     )
+
+    # g3 mfront (DSV41_MOE_FUSED_PERMUTE): fused plan + scatter on the qualified M32 geometry.
+    _fp = dsv41_fp_eligible(aq, aq_scale, topk_ids, local_num_experts, expert_map, expert_tokens_meta,
+                            block_k, use_psum_layout, align_used)
+    if _fp and _DSV41_FP_MODE == "1":
+        f_out, f_sfp, f_layout, f_inv, f_ends = dsv41_fused_permute(
+            aq, aq_scale, topk_ids, local_num_experts, aq_out, M_sum, align_used)
+        if return_expert_ends:
+            return f_out, f_sfp, f_layout, f_inv, align_used, f_ends
+        return f_out, f_sfp, f_layout, f_inv, align_used
 
     expert_start_loc = torch.empty(
         (local_num_experts), device=device, dtype=torch.int32
@@ -571,6 +920,10 @@ def deepgemm_moe_permute(
         pack_ue8m0=pack_ue8m0,
         use_psum_layout=use_psum_layout,
     )
+
+    if _fp and _DSV41_FP_MODE == "verify":
+        _dsv41_fp_verify(aq, aq_scale, topk_ids, local_num_experts, M_sum, align_used,
+                         (aq_out, aq_scale_out, grouped_layout, inv_perm, expert_start_loc))
 
     if return_expert_ends:
         return aq_out, aq_scale_out, grouped_layout, inv_perm, align_used, expert_start_loc

@@ -64,6 +64,9 @@ _FRESH_NOISE_BASE = 1 << 29
 # for the r3-e1 sharded drafter). Mixed or sampled batches use the stock
 # probabilistic graphs. Default 0 = unchanged.
 _DSV41_GREEDY_SHARDED = os.environ.get("DSV41_DSPARK_GREEDY_SHARDED", "0") == "1"
+# g130 boundary, default off: unset = dsv41_boundary.py is never imported.
+_DSV41_MK_FOLD = os.environ.get("DSV41_MK_FOLD", "0").strip().lower() not in ("", "0", "off")
+_DSV41_CTXKV_FOLD = os.environ.get("DSV41_CTXKV_FOLD", "0").strip().lower() not in ("", "0", "off")
 
 
 class DSparkSpeculator(DFlashSpeculator):
@@ -250,6 +253,10 @@ class DSparkSpeculator(DFlashSpeculator):
         self.query_cudagraph_manager = stock
 
     def capture(self) -> None:
+        if _DSV41_MK_FOLD or _DSV41_CTXKV_FOLD:
+            from vllm.models.deepseek_v41.nvidia.dsv41_boundary import prebuild
+
+            prebuild(self)
         super().capture()
         if (
             self._sharded_markov_greedy is None
@@ -317,6 +324,10 @@ class DSparkSpeculator(DFlashSpeculator):
                 self._dsv41_mixed_steps += 1
             return super().propose(input_batch, *args, **kwargs)
         self._dsv41_greedy_steps += 1
+        if _DSV41_MK_FOLD or _DSV41_CTXKV_FOLD:
+            from vllm.models.deepseek_v41.nvidia.dsv41_boundary import audit_tick
+
+            audit_tick(self._dsv41_greedy_steps)
         if self._dsv41_greedy_steps in (1, 1000, 100000):
             logger.info(
                 "DSV41_DSPARK_GREEDY_SHARDED: greedy steps %d, other steps %d",
@@ -457,7 +468,15 @@ class DSparkSpeculator(DFlashSpeculator):
         vocab_start = st["vocab_start"]
         confidence_markov_embeds = []
         prev = self.input_buffers.input_ids[self._anchor_idx[:num_reqs]]
-        for i in range(n_spec):
+        _mk_done = False
+        if _DSV41_MK_FOLD:
+            from vllm.models.deepseek_v41.nvidia.dsv41_boundary import markov_fold_loop
+
+            _mk_done = markov_fold_loop(
+                self, st, lp, base, prev, num_reqs, n_spec,
+                confidence_markov_embeds, tensor_model_parallel_all_gather,
+            )
+        for i in range(0 if _mk_done else n_spec):
             markov_embed = self.model.markov_embed(prev)
             if self.use_confidence_head:
                 confidence_markov_embeds.append(markov_embed)

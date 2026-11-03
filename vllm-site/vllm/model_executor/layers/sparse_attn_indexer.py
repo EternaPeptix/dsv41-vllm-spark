@@ -39,6 +39,12 @@ from vllm.model_executor.layers.indexer_topk import (
 # g5det (goal window 5, 2026-10-27): boundary-tie canonicalization + debug dump of the indexer
 # top-k; inert unless DSV41_TOPK_CANON_TIES or DSV41_DET_DUMP is set (see dsv41_topk_ties.py).
 from vllm.model_executor.layers import dsv41_topk_ties as _g5det
+# BS03 (2026-11-02): one canonical top-512 kernel replaces top-k + TIES + CANON on decode rows; inert unless
+# DSV41_BS03_DET_TOPK=1 (the module is not even imported otherwise; see dsv41_bs03_det_topk.py).
+if os.environ.get("DSV41_BS03_DET_TOPK", "0") == "1":
+    from vllm.model_executor.layers import dsv41_bs03_det_topk as _bs03
+else:
+    _bs03 = None
 from vllm.model_executor.layers.quantization.utils.quant_utils import (
     get_fp8_min_max,
 )
@@ -1037,17 +1043,29 @@ def sparse_attn_indexer(
                 )
         topk_indices = topk_indices_buffer[:num_padded_tokens, :topk_tokens]
 
-        # The backend comes from the layer (config is only readable at model
-        # construction); dispatchers are cached per backend.
-        get_indexer_topk(topk_backend)(
+        # BS03: True = the canonical kernel wrote topk_indices (top-k + TIES + CANON in one launch). False, always so
+        # with the flag unset, = the chain below runs exactly as before. try_decode refuses DCP, so the merge is unaffected.
+        bs03_done = _bs03 is not None and _bs03.try_decode(
             logits,
             seq_lens,
             next_n,
             topk_indices,
             topk_tokens,
-            attn_metadata_narrowed.max_seq_len,
+            topk_backend,
+            decode_metadata.global_seq_lens,
         )
-        if _g5det.ENABLED:
+        # The backend comes from the layer (config is only readable at model
+        # construction); dispatchers are cached per backend.
+        if not bs03_done:
+            get_indexer_topk(topk_backend)(
+                logits,
+                seq_lens,
+                next_n,
+                topk_indices,
+                topk_tokens,
+                attn_metadata_narrowed.max_seq_len,
+            )
+        if _g5det.ENABLED and not bs03_done:
             _g5det.decode_hook(
                 logits,
                 seq_lens,
@@ -1071,7 +1089,7 @@ def sparse_attn_indexer(
                 dcp_world_size,
                 cp_kv_cache_interleave_size,
             )
-        if _DSV41_TOPK_CANON:
+        if _DSV41_TOPK_CANON and not bs03_done:
             _canon_topk_(topk_indices)
 
         if needs_padded_path:

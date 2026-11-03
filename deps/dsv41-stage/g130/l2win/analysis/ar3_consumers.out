@@ -1,0 +1,93 @@
+
+=== prose
+class  n/it  corr slope(AR on burst) | AR p50 by burst-dur quartile | burstdur quartile edges
+0 M  18.18 -0.11 -1.24 |  32.8  30.2  29.5  28.8 |  21.1  22.3  22.9
+0 S  17.90  0.09  1.32 |  31.8  33.5  34.4  34.9 |   7.6   9.3   9.8
+2 L   2.58  0.53  4.00 |  37.4  37.4  37.4  38.8 |  24.1  24.3  24.6
+2 M  19.17 -0.12 -0.74 |  42.5  40.5  39.9  37.5 |  20.9  22.1  23.0
+2 S  20.38  0.16  1.16 |  38.2  39.4  40.8  40.6 |   8.0   9.6  10.0
+3 L  39.77 -0.10 -0.29 |  32.6  31.9  30.6  30.6 |  30.4  31.7  32.7
+3 M   2.23  0.00  0.03 |  35.5  35.3  33.9  34.7 |  22.8  23.1  23.6
+3 S   2.00  0.20  1.24 |  27.0  27.8  30.0  31.2 |   6.9   7.5   9.1
+--- kernel sequence after AR end (offset from AR end, us, p50; first 7 distinct non-l2pf), and burst end relative to AR end
+('0', 'M'): top seq n/it 10.9 of 18.2; burstend-AR-end p50 -8.7
+    void <unnamed>::mhc_post_norm_   start +    0.4  dur     3.3
+    kernel_cutlass_kernel_flashinf   start +    1.8  dur     3.3
+    void <unnamed>::mhc_proj_kerne   start +    5.2  dur    17.0
+    void cutlass::Kernel2<cutlass_   start +    5.4  dur    12.3
+    void cutlass::device_kernel<fl   start +   16.3  dur    26.0
+    void cublasLt::splitKreduce_ke   start +   18.5  dur     3.3
+    _dsv4_topk_kernel                start +   21.1  dur     4.1
+('0', 'S'): top seq n/it 13.4 of 17.9; burstend-AR-end p50 -25.1
+    void <unnamed>::mhc_post_norm_   start +    0.4  dur     3.4
+    kernel_cutlass_kernel_flashinf   start +    1.8  dur     3.3
+    void <unnamed>::mhc_proj_kerne   start +    4.3  dur    17.5
+    void <unnamed>::skinny_mx_kern   start +    5.7  dur     9.3
+    void <unnamed>::ar_kernel_pl<(   start +   16.0  dur    31.9
+    mhc_pre_big_fuse_with_norm_til   start +   24.1  dur     8.9
+    _q_kv_norm_quant_kernel          start +   48.4  dur     2.5
+('2', 'M'): top seq n/it 10.6 of 19.2; burstend-AR-end p50 -18.3
+    void <unnamed>::mhc_post_norm_   start +    0.4  dur     3.4
+    kernel_cutlass_kernel_flashinf   start +    1.8  dur     3.3
+    void <unnamed>::mhc_proj_kerne   start +    5.3  dur    17.5
+    void cutlass::Kernel2<cutlass_   start +    5.5  dur    12.6
+    void cutlass::device_kernel<fl   start +   16.6  dur    23.7
+    void cublasLt::splitKreduce_ke   start +   18.9  dur     3.3
+    _dsv4_topk_kernel                start +   21.6  dur     4.1
+('2', 'S'): top seq n/it 14.2 of 20.4; burstend-AR-end p50 -31.1
+    void <unnamed>::mhc_post_norm_   start +    0.4  dur     3.5
+    kernel_cutlass_kernel_flashinf   start +    1.8  dur     3.7
+    void <unnamed>::mhc_proj_kerne   start +    4.5  dur    17.5
+    void <unnamed>::skinny_mx_kern   start +    6.0  dur    12.2
+    void <unnamed>::ar_kernel_pl<(   start +   19.1  dur    31.2
+    mhc_pre_big_fuse_with_norm_til   start +   22.5  dur    10.0
+    _q_kv_norm_quant_kernel          start +   50.9  dur     2.4
+('3', 'L'): top seq n/it 28.4 of 39.8; burstend-AR-end p50 -0.8
+    _q_kv_norm_quant_kernel          start +    0.4  dur     2.5
+    void cutlass::device_kernel<fl   start +    1.9  dur    11.9
+    void vllm::deepseek_v4_fused_o   start +   14.2  dur     3.4
+    void sparse_mla_prefill_mg_dua   start +   18.5  dur    41.2
+    kernel                           start +   60.9  dur     1.5
+    _sm120_wo_a_partial              start +   62.9  dur    13.2
+    _sm120_wo_a_reduce               start +   76.8  dur     2.0
+('0', 'M') first bf16 Kernel2 start after AR end: p10 5.2 p50 5.4 p90 6.3 n/it 17.9; Kernel2 start minus burst end p10 9.0 p50 14.3
+('2', 'M') first bf16 Kernel2 start after AR end: p10 5.3 p50 5.5 p90 6.5 n/it 18.9; Kernel2 start minus burst end p10 18.4 p50 23.9
+gather L: first device_kernel (q_b GEMM) start after AR end: p10 1.8 p50 1.9 p90 3.1; minus burst end p10 -2.0 p50 2.6 p90 11.6
+AR end -> next kernel gap p10 0.38 p50 0.38 p90 0.64
+
+=== code
+class  n/it  corr slope(AR on burst) | AR p50 by burst-dur quartile | burstdur quartile edges
+2 L   4.47  0.79  1.41 |  37.8  37.8  38.4  39.0 |  24.1  24.3  24.7
+2 M  35.68 -0.13 -1.50 |  43.3  41.2  40.2  37.6 |  21.1  22.3  23.1
+2 S  38.85  0.06  0.89 |  39.4  40.4  41.1  40.9 |   8.3   9.7  10.0
+3 L  39.57 -0.04 -0.13 |  33.1  32.3  30.7  30.8 |  30.4  31.7  32.6
+3 M   2.45 -0.08 -1.42 |  35.5  36.3  35.5  34.8 |  22.8  23.1  23.6
+3 S   1.98  0.30  1.37 |  31.0  32.5  34.5  32.9 |   7.1   7.8   9.3
+--- kernel sequence after AR end (offset from AR end, us, p50; first 7 distinct non-l2pf), and burst end relative to AR end
+('2', 'M'): top seq n/it 19.1 of 35.7; burstend-AR-end p50 -18.8
+    void <unnamed>::mhc_post_norm_   start +    0.4  dur     3.4
+    kernel_cutlass_kernel_flashinf   start +    1.8  dur     3.3
+    void <unnamed>::mhc_proj_kerne   start +    5.3  dur    17.5
+    void cutlass::Kernel2<cutlass_   start +    5.4  dur    12.7
+    void cutlass::device_kernel<fl   start +   16.7  dur    25.8
+    void cublasLt::splitKreduce_ke   start +   19.0  dur     3.3
+    _dsv4_topk_kernel                start +   21.5  dur     4.1
+('2', 'S'): top seq n/it 23.2 of 38.9; burstend-AR-end p50 -31.7
+    void <unnamed>::mhc_post_norm_   start +    0.4  dur     3.5
+    kernel_cutlass_kernel_flashinf   start +    1.8  dur     3.7
+    void <unnamed>::mhc_proj_kerne   start +    4.5  dur    17.7
+    void <unnamed>::skinny_mx_kern   start +    6.0  dur    12.3
+    void <unnamed>::ar_kernel_pl<(   start +   19.1  dur    31.8
+    mhc_pre_big_fuse_with_norm_til   start +   22.8  dur    10.1
+    _q_kv_norm_quant_kernel          start +   51.5  dur     2.4
+('3', 'L'): top seq n/it 28.5 of 39.6; burstend-AR-end p50 -1.1
+    _q_kv_norm_quant_kernel          start +    0.4  dur     2.4
+    void cutlass::device_kernel<fl   start +    1.9  dur    10.8
+    void vllm::deepseek_v4_fused_o   start +   13.5  dur     3.5
+    void sparse_mla_prefill_mg_dua   start +   18.1  dur    41.1
+    kernel                           start +   61.4  dur     1.5
+    _sm120_wo_a_partial              start +   63.6  dur    13.2
+    _sm120_wo_a_reduce               start +   77.4  dur     2.0
+('2', 'M') first bf16 Kernel2 start after AR end: p10 5.3 p50 5.5 p90 6.4 n/it 35.5; Kernel2 start minus burst end p10 18.5 p50 24.4
+gather L: first device_kernel (q_b GEMM) start after AR end: p10 1.8 p50 1.9 p90 3.2; minus burst end p10 -1.3 p50 2.9 p90 11.6
+AR end -> next kernel gap p10 0.38 p50 0.38 p90 0.64

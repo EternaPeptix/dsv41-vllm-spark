@@ -87,6 +87,41 @@ export DSV41_TOPK_CANON_TIES=${DSV41_TOPK_CANON_TIES:-all}  # g5det 2026-10-27 (
 export DSV41_MHC_OVERLAP=${DSV41_MHC_OVERLAP:-moet}  # g5mhc 2026-10-28 (goal window 5, mHC): the mHC boundary's coefficient half (fn projection + 20x Sinkhorn -> post/comb/next pre-mix, first read at the NEXT boundary) runs on a side stream joined after the sublayer, in FULL decode graphs of 1..64 tokens; the critical path keeps the post-mix, collapse, RMSNorm and draft aux in ONE launch (vLLM-Moet b0dc737 mhc_post_norm, mode 1, Apache-2.0, sources ~/dsv41-stage/moet/src/vllm-moet-b0dc737/tools/dsv41_sm120/mhc_overlap, built once per node into ~/.cache/torch_extensions). Bitwise vs the served pair: 0-ulp unit + recorded-input tests (eager + graph replay) and exact.py a8 + the pinned G1 digest; pinned A/B (av-pin-k5-g3FU, 2 pairs vs g5mhc-C3): G1 +3.0%, G4 prose MIN +1.6/+3.9%, G4min_hat +3.8%, 4-session step -4.1..-4.4%; needs site nvidia/model.py ca14bbb1 + dsv41_mhc_overlap.py 4468cad5 (~/dsv41-stage/g5mhc/g5mhc_install.py status|uninstall); stock = the served TileLang kernels on the critical path (slower at 1 user); 0 = off (served path, no side stream)
 export DSV41_MHC_OVERLAP_PROJ=${DSV41_MHC_OVERLAP_PROJ:-moet}  # g5mhc: the side-stream projection is Moet's mhc_proj (4 tokens per CTA, the fn slice read once per block; partials bitwise = the served mhc_fused_tilelang partials); fused = the served kernel (96 CTAs per token)
 [ "$DSV41_SCHED" = 1 ] && export PYTHONPATH=$HOME/dsv41-sched${PYTHONPATH:+:$PYTHONPATH}
+# g130 2026-11-02 bundle: exact a8 + G1 digest 9a18f802 on 4/4 instances; pinned EPEP G1 108.16 vs 106.70 = +1.37%, G4 slowest +1.45%. '=0' / '=1024' turns one off for a launch.
+export DSV41_MOE_LIVE_ACT_MIN_ROWS=${DSV41_MOE_LIVE_ACT_MIN_ROWS:-192} DSV41_FUSED_AV=${DSV41_FUSED_AV:-1} DSV41_RDMA_AG_COLS=${DSV41_RDMA_AG_COLS:-1}
+# g130 2026-11-02: BS03 det_topk (one canonical top-k kernel in the indexer decode path, G1 +0.97%) + mfront fused MoE permute (G1 +1.29%, G4 slowest +1.72%).
+# Exact a8 + G1 digest 9a18f802 + 9 long-prompt hashes (to 128K) on every clean instance. MAX_ROWS=128: det_topk alone passed 1,782 shapes against the integer reference; the live chain is wrong on extreme ties and its eager path overwrote a neighbouring buffer.
+export DSV41_BS03_DET_TOPK=${DSV41_BS03_DET_TOPK:-1} DSV41_BS03_MAX_ROWS=${DSV41_BS03_MAX_ROWS:-128} DSV41_MOE_FUSED_PERMUTE=${DSV41_MOE_FUSED_PERMUTE:-1}
+# g130 2026-11-02: no mHC fn hints in the all-reduce L2 prefetch windows. Pinned C M W C M W: G1 111.72 vs 110.10 = +1.47%, G4 slowest +2.1%, exact a8 + digest 9a18f802 + 9 long-prompt hashes on all instances.
+export DSV41_L2_PREFETCH_MHC=${DSV41_L2_PREFETCH_MHC:-0}
+# g130 2026-11-03: rdma_ar variants (split post, P1 V1+V2, proxy+poll hygiene; .so 14d049dd is a SERVING DEPENDENCY, keep ~/dsv41-stage/g130/rdma/build) + L2 AR-window pacing 125 GB/s at 64 KiB.
+# Pinned chain: rdma +0.94%, pace +0.72%, both G1 113.82 vs 111.90 = +1.72%, G4 slowest +0.9%. Exact a8 + 9a18f802 + 9 long-prompt hashes on all instances; 3,021-request mixed soak 0 failures. Rollback: ~/dsv41-tp8.sh.bak-g130g.
+export RDMA_AR_EXT=${RDMA_AR_EXT:-$HOME/dsv41-stage/g130/rdma/build/rdma_ar_ext.so} RDMA_AR_SPLIT_POST=${RDMA_AR_SPLIT_POST:-1} RDMA_AR_PUB_V1=${RDMA_AR_PUB_V1:-1} RDMA_AR_PUB_V2=${RDMA_AR_PUB_V2:-1} RDMA_AR_HYG_PROXY=${RDMA_AR_HYG_PROXY:-1} RDMA_AR_HYG_POLL=${RDMA_AR_HYG_POLL:-1}
+export DSV41_L2_PREFETCH_PACE_GBPS=${DSV41_L2_PREFETCH_PACE_GBPS:-125} DSV41_L2_PREFETCH_PACE_KINDS=${DSV41_L2_PREFETCH_PACE_KINDS:-ar} DSV41_L2_PREFETCH_PACE_CHUNK=${DSV41_L2_PREFETCH_PACE_CHUNK:-65536}
+# g130 2026-11-03: boundary folds (kit ~/dsv41-stage/g130/boundary a53424e86d00; site files speculator.py/dspark.py patched + dsv41_boundary.py, rollback = site8.sh uninstall + .bak-g130h).
+# Context-KV GEMM merge + Markov fold. Pinned CTTC: G1 114.76/114.84 vs 113.86/113.79 = +0.85%, G4 slowest +2.5%; exact a8 + 9a18f802 + long-prompt cold compare on all instances; real-traffic audit 0 mismatches.
+# Markov fold differs from stock ONLY when a logit row holds NaN (user allowed 2026-11-03).
+export DSV41_CTXKV_FOLD=${DSV41_CTXKV_FOLD:-1} DSV41_MK_FOLD=${DSV41_MK_FOLD:-1} DSV41_MK_FOLD_TILES=${DSV41_MK_FOLD_TILES:-16}
+# incr-tok 2026-11-03: incremental prompt tokenization cache in the API server (site renderers/deepseek_v4.py patched + dsv41_incr_tok.py; kit ~/dsv41-stage/incr-tok).
+# Prompt ids identical to a full tokenize on all 112 A/B steps (229K-355K tokens); TTFT on hit steps 1.50 -> 1.01 s. Guard verifies the first 32 hits then 1 in 64; a mismatch disables it.
+# Rollback: DSV41_INCR_TOK=0, or .bak-incrtok + ~/Documents/dsv41-kits/incr-tok/ops/site8.sh uninstall.
+export DSV41_INCR_TOK=${DSV41_INCR_TOK:-1} DSV41_INCR_TOK_LOG=${DSV41_INCR_TOK_LOG:-$HOME/dsv41-logs/incr-tok.jsonl}
+# fc2 2026-10-31 (user pinned): Athena's forty-layer packed FC2 (copied to ~/dsv41-fc2, root check retargeted), bitwise
+# vs 5b0a889c (exact a8c3394af9d28249, G1 digest 9a18f802); G1 104.2 (-1%), G4 slowest 50.9 (+1.6%). Needs ~11 GB/rank
+# for the packed copies -> KV 16G->4G (1.6M tokens) and --gpu-memory-utilization 0.90. DSV41_FC2=0 = old 5b0a889c layout.
+if [ "${DSV41_FC2:-1}" = 1 ]; then
+  export ATHENA_FC2_SERVING_TRIAL=1 ATHENA_FC2_PACK_ONE_LAYER=1 ATHENA_FC2_FUTURE_RESERVE_MIB=${ATHENA_FC2_FUTURE_RESERVE_MIB:-6144}
+  ATHENA_FC2_PACK_PREFIXES=; for _i in $(seq 0 39); do ATHENA_FC2_PACK_PREFIXES+="${ATHENA_FC2_PACK_PREFIXES:+,}language_model.model.layers.$_i.ffn.experts"; done
+  export ATHENA_FC2_PACK_PREFIXES ATHENA_FC2_PACK_SO=$HOME/dsv41-fc2/athena_fc2_k288_pack_sm121.so ATHENA_FC2_GRAPH_SO=$HOME/dsv41-fc2/athena_tp8_fc2_packed_graph_sm121.so
+  # g130 2026-11-02: FC2 status barrier every 256 steps instead of every step (exact a8 + G1 digest 9a18f802 on 4/4 instances;
+  # pinned BCBC G1 107.31 vs 104.24 = +2.95%, G4 slowest +0.8%). Errors stay sticky until the next check. =1 restores Athena's per-step barrier.
+  # 2026-11-02 fail-stop: a failed check exits all ranks (the old raise was swallowed); cadence 32 = about 0.7 s of exposure at about 0.1% cost.
+  export DSV41_FC2_BARRIER_EVERY=${DSV41_FC2_BARRIER_EVERY:-32}
+  _fc2_ov=$(sha256sum $HOME/dsv41-fc2/athena_fc2_forty_layer_trial.py | cut -c1-12); [ "$_fc2_ov" = "ae2089724597" ] || { echo "FC2 overlay $_fc2_ov != ae2089724597, refusing to start" >&2; exit 1; }
+  export PYTHONPATH=$HOME/dsv41-fc2/site${PYTHONPATH:+:$PYTHONPATH}
+  DSV41_KV_BYTES=${DSV41_KV_BYTES:-4G}
+  DSV41_EXTRA="--gpu-memory-utilization=0.90${DSV41_EXTRA:+ $DSV41_EXTRA}"
+fi
 export CUDA_HOME=/usr/local/cuda TRITON_PTXAS_PATH=/usr/local/cuda/bin/ptxas VLLM_USE_DEEP_GEMM=1
 export PATH=/usr/local/cuda/bin:$PATH
 # SM12x needs 64-token KV blocks: DeepGEMM's indexer takes block_kv (block // ratio) <= 64.
@@ -118,15 +153,38 @@ for f in os.listdir(sys.argv[1]):
 EOF
 pkill -f "^python3 $HOME/balloon.py" >/dev/null 2>&1 || true
 
+# --- vision 2026-10-27, restaged on afa97ae6 2026-10-28 (vis): image input through the checkpoint's DSv4.1 vision
+# tower (32-layer ViT + aligner, bf16, TP-sharded ~117 MiB/rank; the Engram/MoE image masks are already in the site tree).
+# DSV41_IMAGE_LIMIT = images per request (vLLM counts every image in the whole conversation). Unset or 0 = text-only:
+# argv and environment identical to afa97ae6. >0 also passes --mm-processor-cache-gb ${DSV41_MM_CACHE_GB:-0.5}
+# (EngineCore item cache on spark-one; stock 4 GiB) and --allowed-media-domains media.invalid (data: URLs only, no
+# http(s) fetch by the unauthenticated LAN/tailnet API), and exports VLLM_MAX_IMAGE_PIXELS=8388608 (decompression-bomb
+# cap on the API server; DSH sends <= 4.2 MP), VLLM_MEDIA_LOADING_THREAD_COUNT=4 (stock 8; halves the parallel
+# image-decode peak), DSV41_DUMMY_EMBED=1 and DSV41_MM_PIN_TRIM=1 (model_runner.py vis patch, both default 0 in code:
+# AV-profile/autotune dummy runs embed their probe ids instead of reading the zeroed inputs_embeds buffer; the startup
+# encoder profile's pinned host block is released) and CUDA_CACHE_MAXSIZE=4 GiB (keeps the ViT's sm_80-PTX FA2 JIT in
+# ~/.nv/ComputeCache). Same value on all 8 ranks, always. The mHC overlap (DSV41_MHC_OVERLAP above) is untouched.
+# Text outputs bitwise unchanged (pinned exact.py a8 + G1 digest + long-prompt det hashes; plan: Mac vision/PLAN.md,
+# restage: w6/vision-restage/DESIGN.md).
+VIS=${DSV41_IMAGE_LIMIT:-16}  # images on by default 2026-11-01 (user); 0 = text-only
+case "$VIS" in ''|*[!0-9]*) echo "refusing: DSV41_IMAGE_LIMIT='$VIS' is not a non-negative integer" | tee -a "$LOGDIR/rank$R.log" >&2; exit 1 ;; esac
+VIS=$((10#$VIS))
+if [ "$VIS" -gt 0 ]; then
+  export VLLM_MAX_IMAGE_PIXELS=${VLLM_MAX_IMAGE_PIXELS:-8388608} VLLM_MEDIA_LOADING_THREAD_COUNT=${VLLM_MEDIA_LOADING_THREAD_COUNT:-4}
+  export DSV41_DUMMY_EMBED=${DSV41_DUMMY_EMBED:-1} DSV41_MM_PIN_TRIM=${DSV41_MM_PIN_TRIM:-1} CUDA_CACHE_MAXSIZE=${CUDA_CACHE_MAXSIZE:-4294967296}
+fi
+# --- end vision
+
 ARGS=(serve "$MODEL" --served-model-name dsv41
   --tensor-parallel-size 8 --nnodes 8 --node-rank "$R" --master-addr 10.77.0.11 --master-port 29501
   --kv-cache-dtype fp8_ds_mla --block-size 64
   --max-model-len ${DSV41_MAX_MODEL_LEN:-1048576} --max-num-batched-tokens 16384 --max-num-seqs ${DSV41_MAX_NUM_SEQS:-32}
   --kv-cache-memory-bytes ${DSV41_KV_BYTES:-16G}  # r3-e3: 8G -> 16G (3.26M tokens) with max-num-seqs 16 -> 32
-  --limit-mm-per-prompt '{"image":0}'
+  --limit-mm-per-prompt "{\"image\":$VIS}"  # vis: DSV41_IMAGE_LIMIT; 0 = the afa97ae6 argument '{"image":0}'
   --engram-config '{"cpu_offload": true, "use_thp": true}'
   --reasoning-parser deepseek_v41 --tool-call-parser deepseek_v41 --enable-auto-tool-choice
   --enable-prompt-tokens-details)  # user 2026-10-25: always on; usage gains prompt_tokens_details.cached_tokens (frontend only)
+[ "$VIS" -gt 0 ] && ARGS+=(--mm-processor-cache-gb "${DSV41_MM_CACHE_GB:-0.5}" --allowed-media-domains media.invalid)  # vis: only with images on
 # DSpark speculative decoding from the checkpoint's mtp.{0,1,2} weights; DSV41_SPEC=0 disables.
 SPEC=${DSV41_SPEC:-5}
 if [ -n "${DSV41_SPEC_JSON:-}" ]; then

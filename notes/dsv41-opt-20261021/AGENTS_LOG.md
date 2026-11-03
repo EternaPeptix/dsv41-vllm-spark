@@ -112,3 +112,76 @@
 2026-10-29T14:03:11Z | agent=claude | action=pinx verification step: guarded exact.py unit on production pinx-PU (spark-one ~/dsv41-w6ab/runs/pinxv-final-20261029T1401Z, gunit exact2 after a 30.4 s idle window): CLEAN on try 1 (own 6 requests, success delta 6, max busy 1, busy_end 0, settle 0, 0 foreign), anchor a8c3394af9d2 (per-prompt 8c6a41c0/e3aa05bc/1b2d3bb7/cd93c706/9ba77590/bb1e4093, = pinx-U1), PINNED counters 909/467/2335/1373 and per-position 348/233/171/90/67; 8/8 re-check at 14:02:44Z unchanged and all OK (launcher 5b0a889c, manifest b71dda2146a7, tree 36631b8bc6ce/5455, NRestarts=0, 0 ERROR/Traceback, SM 1969-1989 MHz, /health 200, lanproxy active, no leftover processes). CLUSTER_LOCK released at 14:02:59Z (was owner=claude, purpose=pin default + X (user OK), start=2026-10-29T13:17:54Z, eta=2026-10-29T16:17:54Z). Production = launcher 5b0a889c (AV pin + X default); Codex handoff note PINX-RESULT.md written next | launcher_before=5b0a889c85b6b7595a3ba1a3d49ca77399438b9da127f9c455f03dfeea11958a launcher_after=5b0a889c85b6b7595a3ba1a3d49ca77399438b9da127f9c455f03dfeea11958a
 2026-10-30T00:10:30Z | agent=claude | action=lock taken: G4 robustness re-measure on production (goal_conc4 x2 sets of 3 runs, guarded, no restart) | launcher_before=5b0a889c launcher_after=5b0a889c
 2026-10-30T00:13:47Z | agent=claude | action=lock released without measuring: production dsv41-rank (pinx-PU, launcher 5b0a889c) had been STOPPED at 2026-10-29T20:26:13Z (not by claude; no AGENTS_LOG entry) and all 8 Sparks now run athena-vllm-rank0..7.service ('/home/jeweled/Athena Hillclimbing stuff/vllm-tp8-athena.sh', started 00:12Z). Claude did not touch it. | launcher_before=5b0a889c launcher_after=5b0a889c
+2026-11-01T21:21:26Z | agent=claude | action=user-requested production relaunch from Mac over Tailscale (launcher 29efc6b8, compact=1)
+2026-11-02T04:03:29Z | agent=claude | action=enable images (user request): install vis3 launcher cf9d04b1 + model_runner efb03173 on 8/8, relaunch; backups .bak-vis3; build+baseline ~/dsv41-vision3
+2026-11-02T04:17:06Z | agent=claude | action=images LIVE: launcher cf9d04b1 runner efb03173 limit 16; exact a8 and G1 digest 9a18f802 unchanged vs text-only baseline; vision_func F1-F16 hard 0, F17/M2 pass; min MemAvailable 5.3 GB
+2026-11-02T04:18:08Z | agent=claude | action=PROTOCOL LAPSE disclosed: relaunches 2026-11-01T21:21Z and 2026-11-02T04:03Z plus G1/G4/vision benches ran WITHOUT CLUSTER_LOCK (no lock was present at check 04:17Z; client 192.168.0.86 connected, possibly interrupted). Lock will be taken for further cluster work.
+2026-11-02T09:11:05Z | agent=claude | action=lock taken: goal 130 re-profile + exact kernel levers
+2026-11-02T09:12:45Z | agent=claude | action=g130 trace instance start (diagnostic) | launcher_before=cf9d04b1b0880e9bb44ed0aef905055385d8f7ed56c6527a2ff42d080ddedee9 launcher_after=cf9d04b1b0880e9bb44ed0aef905055385d8f7ed56c6527a2ff42d080ddedee9
+2026-11-02T09:22:15Z | agent=claude | action=g130 trace done, production restored | launcher_before=cf9d04b1b0880e9bb44ed0aef905055385d8f7ed56c6527a2ff42d080ddedee9 launcher_after=cf9d04b1b0880e9bb44ed0aef905055385d8f7ed56c6527a2ff42d080ddedee9
+2026-11-02T10:45:52Z | agent=claude | action=g130: FC2 overlay patched flag-inert on 8/8 (DSV41_FC2_BARRIER_EVERY, default 1 = unchanged; .bak-g130 = b2c859c363d2); not active until a launch sets it
+2026-11-02T11:19:54Z | agent=claude | action=g130 barrier A/B done, production restored (flag default)
+2026-11-02T11:21:42Z | agent=claude | action=g130: launcher patched on 8/8 with DSV41_FC2_BARRIER_EVERY default 256 (backup ~/dsv41-tp8.sh.bak-g130 = cf9d04b1); takes effect at next launch
+2026-11-02T11:55:42Z | agent=claude | action=g130 A/B 2 done, production restored
+2026-11-02T11:56:23Z | agent=claude | action=g130: launcher on 8/8 gets bundle defaults (LIVE_ACT_MIN_ROWS=192, FUSED_AV=1, RDMA_AG_COLS=1); .bak-g130b = ea9dc014; effective at next launch
+2026-11-02T11:58:04Z | agent=claude | action=g130 trace instance start (diagnostic) | launcher_before=b87cde8d88f0910d6966959298334a6c1209b6f1aeb947ad32dc4913ded3d4b9 launcher_after=b87cde8d88f0910d6966959298334a6c1209b6f1aeb947ad32dc4913ded3d4b9
+2026-11-02T12:07:36Z | agent=claude | action=g130 trace done, production restored | launcher_before=b87cde8d88f0910d6966959298334a6c1209b6f1aeb947ad32dc4913ded3d4b9 launcher_after=b87cde8d88f0910d6966959298334a6c1209b6f1aeb947ad32dc4913ded3d4b9
+2026-11-02T12:12:33Z | agent=claude | action=g130: fail-stop fix: overlay ae2089724597 on 8/8 (.bak-g130b=623e3029), failed FC2 check exits all ranks; launcher default N=32 + overlay sha guard (.bak-g130c=b87cde8d); effective next launch; fault test next
+2026-11-02T12:28:33Z | agent=claude | action=g130 fault test + production verification done (launcher 62ac6866)
+2026-11-02T14:44:52Z | agent=claude | action=g130 stopped window start (BS03 test spark-two, IXF GPU, mfront repro, ib_write_lat); lock eta extended to 19:30Z; API down up to ~75 min
+2026-11-02T14:51:44Z | agent=claude | action=g130 stopped window done, production restored
+2026-11-02T14:57:42Z | agent=claude | action=g130 window 2 start: install BS03 flag-off on 8/8, mfront keep-list test spark-three, then A/B T P T P (DSV41_BS03_DET_TOPK=1 vs off)
+2026-11-02T14:58:36Z | agent=claude | action=g130 BS03 hook installed flag-off on 8/8 (sparse_attn_indexer.py ebe2ba62, .bak-bs03 = base; inert while DSV41_BS03_DET_TOPK unset)
+2026-11-02T15:52:58Z | agent=claude | action=g130 window 2 done, production restored flag-off
+2026-11-02T15:54:51Z | agent=claude | action=g130 window 3 start: install mfront flag-off on 8/8, A/B M T M T (BS03+FUSED_PERMUTE vs BS03)
+2026-11-02T15:55:39Z | agent=claude | action=g130 mfront site installed flag-off on 8/8 (deep_gemm_utils.py 58e264c8, .bak-g3-mfront = a4a0486a; inert while DSV41_MOE_FUSED_PERMUTE unset)
+2026-11-02T16:41:32Z | agent=claude | action=g130 window 3 done, production restored flags off
+2026-11-02T16:42:37Z | agent=claude | action=g130: launcher on 8/8 gets BS03 + mfront defaults, MAX_ROWS=24 (launcher 61b8dd75, .bak-g130d = 62ac6866); effective next launch
+2026-11-02T16:43:11Z | agent=claude | action=g130 trace instance start (diagnostic) | launcher_before=61b8dd7553bb32650b8d4fd1ccb2cf4956fd3df0a3bed94812d1190ba2030aa6 launcher_after=61b8dd7553bb32650b8d4fd1ccb2cf4956fd3df0a3bed94812d1190ba2030aa6
+2026-11-02T16:52:43Z | agent=claude | action=g130 trace done, production restored | launcher_before=61b8dd7553bb32650b8d4fd1ccb2cf4956fd3df0a3bed94812d1190ba2030aa6 launcher_after=61b8dd7553bb32650b8d4fd1ccb2cf4956fd3df0a3bed94812d1190ba2030aa6
+2026-11-02T17:02:00Z | agent=claude | action=g130 final verify on launcher 61b8dd75 done
+2026-11-02T17:25:13Z | agent=claude | action=g130 window 5 start: BS03 full grid spark-two (API down), then A/B C M W C M W; lock eta 22:30Z
+2026-11-02T18:33:46Z | agent=claude | action=g130 window 5 done, production restored (launcher 61b8dd75)
+2026-11-02T18:39:02Z | agent=claude | action=g130 window 6: launcher 3af65436 (MHC=0, .bak-g130e=61b8dd75); stopped test det-only and chain-only BS03 arms on spark-two; then verify
+2026-11-02T18:55:28Z | agent=claude | action=g130 window 6 done, production on 3af65436
+2026-11-02T19:23:08Z | agent=claude | action=g130 window 7 start: C S D C S D (LENSELECT, D02 .so) then BS03_MAX_ROWS=128 arm; lock eta 03:00Z
+2026-11-02T20:08:59Z | agent=claude | action=g130 window 7 done, production restored 3af65436
+2026-11-02T20:10:20Z | agent=claude | action=g130 window 8: launcher 37757dde (BS03_MAX_ROWS=128, .bak-g130f=3af65436), BlueFlame probe, env agreement check, verify
+2026-11-02T20:23:46Z | agent=claude | action=g130 window 8 done
+2026-11-02T21:49:30Z | agent=claude | action=g130 trace instance start (diagnostic) | launcher_before=37757dde15ad0d1c15729d7e3e87713f5951723173ee6e88f2beeb1e38a48180 launcher_after=37757dde15ad0d1c15729d7e3e87713f5951723173ee6e88f2beeb1e38a48180
+2026-11-02T21:59:49Z | agent=claude | action=g130 trace done, production restored | launcher_before=37757dde15ad0d1c15729d7e3e87713f5951723173ee6e88f2beeb1e38a48180 launcher_after=37757dde15ad0d1c15729d7e3e87713f5951723173ee6e88f2beeb1e38a48180
+2026-11-02T22:18:24Z | agent=claude | action=disk cleanup (user request): ~/.cache/uv, ~/.cache/pip, closed /tmp nsys reports, dangling docker images, unused docker build cache on 8/8
+2026-11-02T23:01:10Z | agent=claude | action=disk cleanup (user approved): delete Athena bulk (tensorfold-run, models, tp4-packs, tensorfold-packs) + athena-* docker images on 8/8; small files archived to kept-small-files-20261103.tgz in her folder
+2026-11-02T23:02:54Z | agent=claude | action=g130 window 10 start: rdma_ar variant bench + L2 window bench, stopped; lock eta 12:00Z
+2026-11-02T23:06:39Z | agent=claude | action=g130 window 10 done, production 37757dde restored
+2026-11-02T23:06:56Z | agent=claude | action=g130 window 10 start: rdma_ar variant bench + L2 window bench, stopped; lock eta 12:00Z
+2026-11-02T23:31:28Z | agent=claude | action=g130 window 10 done, production 37757dde restored
+2026-11-02T23:32:19Z | agent=claude | action=g130 window 11 start: C A P B x2 (kit rdma_ar .so, all variants; L2 pace 125/64K)
+2026-11-03T00:19:08Z | agent=claude | action=g130 window 11 done, production restored
+2026-11-03T00:20:12Z | agent=claude | action=g130 window 12 start: full gate + 25 min soak on combined rdma variants + L2 pace (env only), control arm between
+2026-11-03T01:23:53Z | agent=claude | action=g130 window 12 done, production restored
+2026-11-03T01:24:50Z | agent=claude | action=g130 promote launcher b3976c4b (rdma variants + L2 pace defaults, .bak-g130g=37757dde)
+2026-11-03T01:35:39Z | agent=claude | action=g130 promote verify done
+2026-11-03T02:28:04Z | agent=claude | action=g130 window 14 start: boundary kit (stage, stop, GPU test spark-four, install, audit arm, CTTC); API down or restarting up to 3 h; lock eta 20:00Z
+2026-11-03T02:35:19Z | agent=claude | action=g130 window 14 done, production restored b3976c4b
+2026-11-03T02:36:21Z | agent=claude | action=g130 window 15 start: boundary part a only (context-KV GEMM merge; GPU test bitwise 0 diffs, saves 137 us at M=6, HOLD only on GEMM-alone 52.3 > 50 us cap); install, off, audit, CTTC
+2026-11-03T03:18:30Z | agent=claude | action=g130 window 15 done, production restored b3976c4b
+2026-11-03T03:43:07Z | agent=claude | action=g130 window 16 start: boundary bundle ctx fold + Markov fold (user allowed NaN-only diff into A/B 2026-11-03); install, audit both --conc, CTTC
+2026-11-03T04:19:56Z | agent=claude | action=g130 window 16 done, production restored b3976c4b
+2026-11-03T04:20:41Z | agent=claude | action=g130 window 17: promote boundary folds (site install 8/8 + launcher defaults)
+2026-11-03T04:33:36Z | agent=claude | action=g130 window 17 done, production  with boundary folds
+2026-11-03T04:34:40Z | agent=claude | action=g130 window 18: attention probe on spark-five (stopped, no install)
+2026-11-03T04:40:41Z | agent=claude | action=g130 window 18 done, production restored 66eaa1d9
+2026-11-03T04:41:03Z | agent=claude | action=lock released: g130 kernel campaign paused; production 66eaa1d9 (G1 ~114.8, exact a8 + 9a18f802); remaining levers need multi-day builds (attention diet, XSPLIT kernel, FC1 deal + co-residency stress)
+2026-11-03T07:00:41Z | agent=claude | action=lock taken: steering analytic extraction (capture relaunch) + eval
+2026-11-03T07:29:21Z | agent=claude | action=lock released: steering window stopped (extract failed: system python3 lacks numpy; analytic arms ran unsteered). Will rerun with venv python.
+2026-11-03T07:29:53Z | agent=claude | action=lock taken: steering analytic extraction (capture relaunch) + eval
+2026-11-03T07:30:12Z | agent=claude | action=lock released (aborted start before any relaunch; rerun next)
+2026-11-03T07:30:23Z | agent=claude | action=lock taken: steering analytic extraction (capture relaunch) + eval
+2026-11-03T08:09:53Z | agent=claude | action=lock released: steering analytic extraction + eval done; production 66eaa1d9 with analytic vector published (opt-in per request only)
+2026-11-03T08:41:45Z | agent=claude | action=lock taken: incr-tok deploy (stage, install flag-off, off/on arms, A/B, confirm pair)
+2026-11-03T09:20:53Z | agent=claude | action=incr-tok: ids exact but greedy outputs differed; left installed flag-off for review
+2026-11-03T09:25:14Z | agent=claude | action=incr-tok promoted: launcher 416e3ace (DSV41_INCR_TOK=1 default; .bak-incrtok = 66eaa1d9). Stock greedy at 230K+ already differs across relaunches (off vs off2: 16/56 steps), ids identical 112/112. Lock released.
+2026-11-03T15:36:06Z | agent=claude | action=lock taken: hesitation P0 preflight + P1 trace collection (unit hes-p1, kit 14bc395b30ac, token hes-p1-20261103T153606Z-22477; prod requests only, conc<=6, no relaunch)
+2026-11-03T15:36:37Z | agent=claude | action=hesitation P0 preflight started in unit hes-p1 (kit 14bc395b30ac; prod requests only, no relaunch)
+2026-11-03T15:47:08Z | agent=claude | action=hesitation P0 passed; P1 trace collection started (5.8M tokens ~6.38 h at 254.5 tok/s, hard k=4; conc 6, top-level effort max/high)

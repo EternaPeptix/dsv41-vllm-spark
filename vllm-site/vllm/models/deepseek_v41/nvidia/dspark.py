@@ -70,6 +70,8 @@ logger = init_logger(__name__)
 _EXPERT_SCALE_RE = re.compile(r"\.experts\.\d+\.w[123]\.scale$")
 # rel-2 arm S: same prefix test as _remap_dspark_name (r"mtp\.(\d+)\.(.*)").
 _MTP_NAME_RE = re.compile(r"mtp\.\d+\.")
+# g130 boundary (a), default off: unset = dsv41_boundary.py is never imported.
+_DSV41_CTXKV_FOLD = os.environ.get("DSV41_CTXKV_FOLD", "0").strip().lower() not in ("", "0", "off")
 
 
 class DSparkDeepseekV4Model(nn.Module):
@@ -187,6 +189,13 @@ class DSparkDeepseekV4Model(nn.Module):
         place draft layers in different groups). ``None`` (or a ``None`` entry)
         runs the projection to reserve workspace but writes nothing (profiling).
         """
+        if _DSV41_CTXKV_FOLD:
+            from .dsv41_boundary import ctxkv_precompute
+
+            if ctxkv_precompute(
+                self, main_x, context_positions, context_slot_mappings, _insert_context_kv
+            ):
+                return
         for i, layer in enumerate(self.layers):
             slot_mapping = (
                 None if context_slot_mappings is None else context_slot_mappings[i]

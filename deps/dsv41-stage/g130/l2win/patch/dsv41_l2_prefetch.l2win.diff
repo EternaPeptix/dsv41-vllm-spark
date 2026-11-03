@@ -1,0 +1,101 @@
+--- base/dsv41_l2_prefetch.py.63737f9c	2026-11-02 15:13:43
++++ site/dsv41_l2_prefetch.py	2026-11-02 15:20:41
+@@ -82,6 +82,11 @@
+   DSV41_L2_PREFETCH_PACE_MAX_US   a pacer stops issuing this long after its start (150; 0 = no cap)
+   DSV41_L2_PREFETCH_PACE_CHUNK    bytes per paced prefetch instruction (16384)
+   DSV41_L2_PREFETCH_PACE_LIB      ~/rdma_ar_dsv41/build-g2ct/libdsv41_l2pf_g2.so (missing -> burst, logged)
++  g130 l2win (all default off; cache hints only):
++  DSV41_L2_PREFETCH_PACE_MAX_WIN_KB  forks with more bytes than this are not paced at PACE_GBPS (0 = no limit)
++  DSV41_L2_PREFETCH_PACE_BIG_GBPS    those larger forks are paced at this rate instead of staying burst (0 = burst)
++  DSV41_L2_PREFETCH_BURST_DELAY_US   chain dsv41_spin(this long, 1 CTA) before the burst on the side stream (0 = off)
++  DSV41_L2_PREFETCH_BURST_DELAY_KINDS fork kinds the delay applies to (ar)
+   DSV41_L2_PREFETCH_REPLAN        comma list of cross-window re-plans (window bytes move, never grow):
+     attn    the post-attention all-reduce window (mhc fn + router gate, read right after that AR) is
+             forked at the last wq_b of the attention block instead (second side stream, like WOA), so it
+@@ -148,6 +153,12 @@
+ PACE_DELAY_NS = int(float(_env("DSV41_L2_PREFETCH_PACE_DELAY_US", "0") or "0") * 1000)
+ PACE_MAX_NS = int(float(_env("DSV41_L2_PREFETCH_PACE_MAX_US", "150") or "0") * 1000)
+ PACE_CHUNK = max(16, int(_env("DSV41_L2_PREFETCH_PACE_CHUNK", "16384")) & ~15)
++# g130 l2win (default off; see module doc)
++PACE_MAX_WIN = int(float(_env("DSV41_L2_PREFETCH_PACE_MAX_WIN_KB", "0") or "0") * 1024)
++PACE_BIG_GBPS = float(_env("DSV41_L2_PREFETCH_PACE_BIG_GBPS", "0") or "0")
++BURST_DELAY_NS = int(float(_env("DSV41_L2_PREFETCH_BURST_DELAY_US", "0") or "0") * 1000)
++BURST_DELAY_KINDS = frozenset(k.strip() for k in _env("DSV41_L2_PREFETCH_BURST_DELAY_KINDS", "ar").split(",")
++                              if k.strip())
+ PACE_LIB_PATH = os.path.expanduser(
+     _env("DSV41_L2_PREFETCH_PACE_LIB", "~/rdma_ar_dsv41/build-g2ct/libdsv41_l2pf_g2.so")
+ )
+@@ -155,7 +166,7 @@
+ REPLAN_BUDGET = int(float(_env("DSV41_L2_PREFETCH_REPLAN_MB", "16")) * (1 << 20))
+ _REPLAN_KNOWN = frozenset(("attn", "qbprev", "qbpost"))
+ REPLAN_ATTN = "attn" in REPLAN
+-G2 = PACE_GBPS > 0 or bool(REPLAN)
++G2 = PACE_GBPS > 0 or bool(REPLAN) or BURST_DELAY_NS > 0
+ SONAR_MODULE = "vllm.models.deepseek_v4.nvidia.ops.sonar_bf16_bmm"
+ MODEL_MODULE = "vllm.models.deepseek_v41.nvidia.model"
+ _MAX_INSTALL_TRIES = 100000
+@@ -252,6 +263,9 @@
+             PACE_DELAY_NS / 1e3, PACE_MAX_NS / 1e3, PACE_CHUNK, PACE_LIB_PATH if S.pace_ok else "-",
+             ",".join(sorted(REPLAN)) or "-", REPLAN_BUDGET / 2**20,
+         )
++        if PACE_MAX_WIN > 0 or BURST_DELAY_NS > 0:
++            logger.info("DSV41_L2_PREFETCH l2win: pace_max_win=%d KB pace_big=%g GB/s burst_delay=%.1f us kinds=%s",
++                        PACE_MAX_WIN // 1024, PACE_BIG_GBPS, BURST_DELAY_NS / 1e3, ",".join(sorted(BURST_DELAY_KINDS)))
+     logger.info(
+         "DSV41_L2_PREFETCH armed: budget %.1f MB/window ag=%s max_tokens=%d mhc=%s skip_n=%d lib=%s",
+         BUDGET / 2**20, USE_AG, MAX_TOKENS, MHC, SKIP_N, LIB_PATH,
+@@ -996,6 +1010,10 @@
+ def _parts(segs, fork_kind: str, device) -> list:
+     """[(ptr, take, name)] -> [("b"|"p", table, nseg, bytes)]: burst head + paced tail when pacing applies."""
+     pace = PACE_GBPS > 0 and S.pace_ok and fork_kind in PACE_KINDS
++    pmode = "p"
++    if pace and PACE_MAX_WIN > 0 and sum(tk for _p, tk, _n in segs) > PACE_MAX_WIN:
++        pace = PACE_BIG_GBPS > 0
++        pmode = "q"  # paced at PACE_BIG_GBPS
+     if pace and PACE_HEAD > 0:
+         head, tail = _cap_named(segs, PACE_HEAD)
+     elif pace:
+@@ -1003,7 +1021,8 @@
+     else:
+         head, tail = list(segs), []
+     out = []
+-    for mode, ss in (("b", head), ("p", tail)):
++    bmode = "d" if BURST_DELAY_NS > 0 and fork_kind in BURST_DELAY_KINDS else "b"
++    for mode, ss in ((bmode, head), (pmode, tail)):
+         if not ss:
+             continue
+         t = torch.tensor([v for p, tk, _n in ss for v in (p, tk)], dtype=torch.int64, device=device)
+@@ -1040,7 +1059,8 @@
+             tuple(sorted((i, tuple(s[:2] for s in v)) for i, v in fl["pre"].items())),
+             tuple(sorted((i, tuple(s[:2] for s in v)) for i, v in fl["post"].items())),
+             tuple(sorted((i, tuple(s[:2] for s in v)) for i, v in fl["attn"].items())),
+-            PACE_GBPS if S.pace_ok else 0.0, PACE_HEAD, tuple(sorted(PACE_KINDS)))
++            PACE_GBPS if S.pace_ok else 0.0, PACE_HEAD, tuple(sorted(PACE_KINDS)),
++            PACE_MAX_WIN, PACE_BIG_GBPS, BURST_DELAY_NS, tuple(sorted(BURST_DELAY_KINDS)))
+     return {"pre": pre, "post": post, "attn": attn, "bytes": sum(nb.values()), "summary": summary,
+             "desc": " ".join(desc), "gkey": gkey, "nforks": json.dumps(dict(sorted(nforks.items()))),
+             "nl": fl["nl"]}
+@@ -1059,10 +1079,10 @@
+     the forward); paced parts use the pacer stream (joined at the end of the forward)."""
+     mode, t, nseg, _nb = part
+     main = torch.cuda.current_stream()
+-    if mode == "p" and S.pace_ok:
++    if mode in ("p", "q") and S.pace_ok:
+         side = _side_stream3()
+         side.wait_stream(main)
+-        period_ps = int(round(PACE_CHUNK * 1000.0 / PACE_GBPS))
++        period_ps = int(round(PACE_CHUNK * 1000.0 / (PACE_BIG_GBPS if mode == "q" else PACE_GBPS)))
+         rc = _load_lib_g2().dsv41_l2pf_paced(t.data_ptr(), nseg, PACE_CHUNK, period_ps, PACE_DELAY_NS,
+                                              PACE_MAX_NS, None, side.cuda_stream)
+         if rc:
+@@ -1071,6 +1091,10 @@
+     else:
+         side = _side_stream2() if where == "attn" else _side_stream()
+         side.wait_stream(main)
++        if mode == "d":
++            rc = _load_lib().dsv41_spin(BURST_DELAY_NS, 1, side.cuda_stream)
++            if rc:
++                raise RuntimeError(f"DSV41_L2_PREFETCH_BURST_DELAY: spin launch failed (cuda error {rc})")
+         rc = _load_lib().dsv41_l2pf(t.data_ptr(), nseg, CHUNK, side.cuda_stream)
+         if rc:
+             raise RuntimeError(f"DSV41_L2_PREFETCH: prefetch launch failed (cuda error {rc})")

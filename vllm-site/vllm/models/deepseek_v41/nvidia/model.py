@@ -162,6 +162,7 @@ _DSV41_R4 = any(
 # ---------------------------------------------------------------------------
 import contextlib
 import threading
+from vllm.models.deepseek_v41.nvidia import dsv41_steer as _dsv41_steer  # dsv41-steer
 
 _DSV41_SP_MODE = {
     "1": "fast",
@@ -856,6 +857,7 @@ class DeepseekV4DecoderLayer(nn.Module):
         self.use_sequence_parallel = _use_sequence_parallel(vllm_config)
 
         self.engram: Engram | None = None
+        self._dsv41_layer = next((int(t) for t in str(prefix).split(".") if t.isdigit()), -1)  # dsv41-steer
         if engram_layout is not None:
             layer_id = extract_layer_index(prefix)
             if layer_id in engram_layout.layer_ids:
@@ -1169,6 +1171,8 @@ class DeepseekV4DecoderLayer(nn.Module):
                     engram_hashes[:, self.engram.layer_hash_index],
                     engram_mask,
                 )
+            if _dsv41_steer.STEER is not None and self._dsv41_layer == _dsv41_steer.LAYER:  # dsv41-steer
+                residual = _dsv41_steer.STEER.apply(residual)  # dsv41-steer
             if sp_check and pre_mix is not None:
                 res_in, pre_in = residual, pre_mix
                 post_mix, res_mix, x, attn_pre = _dsv41_sp_self_check_op(
@@ -1795,6 +1799,8 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
                             )
 
         full_num_tokens = positions.shape[0]
+        if _dsv41_steer.STEER is not None:  # dsv41-steer
+            _dsv41_steer.STEER.N = full_num_tokens  # dsv41-steer
         if self.use_sequence_parallel:
             if envs.VLLM_MOE_SKIP_PADDING and is_forward_context_available():
                 forward_context = get_forward_context()
@@ -2054,6 +2060,8 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
         # Every layer's post runs inside the next layer's fused pre, so aux
         # hidden states are read back from there instead of recomputed.
         full_num_tokens = positions.shape[0]
+        if _dsv41_steer.STEER is not None:  # dsv41-steer
+            _dsv41_steer.STEER.N = full_num_tokens  # dsv41-steer
         mega_gate_metadata = self._mega_gate_metadata(input_ids)
         sp_end = layer_ids.stop
         if dsv41_sp and _DSV41_PREFILL_SP_LAYERS > 0:

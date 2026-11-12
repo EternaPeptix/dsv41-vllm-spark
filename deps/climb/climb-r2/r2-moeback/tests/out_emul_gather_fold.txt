@@ -1,0 +1,18 @@
+<512S1-run>/climb-r2/r2-moeback/tests/emul_gather_fold.py:39: RuntimeWarning: overflow encountered in cast
+  r = s.astype(np.float32)                                      # RNE f64 -> f32 (subnormals kept)
+<512S1-run>/climb-r2/r2-moeback/tests/emul_gather_fold.py:38: RuntimeWarning: invalid value encountered in subtract
+  e = (p - (s - bb)) + (a - bb)                                 # TwoSum: p + a == s + e exactly
+<512S1-run>/climb-r2/r2-moeback/tests/emul_add_exhaustive.py:50: RuntimeWarning: overflow encountered in cast
+  y32 = y.astype(np.float32)             # exact: y has <= 8 significant bits and is in bf16 range or inf
+normal         ok
+wide           ok
+subnormal      ok
+zeros          ok
+maxmag         ok
+ties           ok
+cancel         ok
+neg_ids        ok
+status_failed  ok
+fma emulation: 4000/4000 equal to exact-rational rounding
+elements compared: 518400; OLD != NEW: 0; NEGATIVE CONTROL (shared folded into fp32 acc) differs from OLD on 88586 elements
+PASS

@@ -84,6 +84,23 @@ IDX_WPROJ = os.environ.get("DSV41_IDX_WPROJ", "")
 FP8_HEAD = os.environ.get("DSV41_FP8_LMHEAD", "")
 FP8_HEAD_ACT = os.environ.get("DSV41_FP8_LMHEAD_ACT", "a8")
 _SKINNY_DIR = os.environ.get("DSV41_R3_SKINNY_LIB", "/home/jeweled/dsv41-r2/skinny_mx/build")
+R2_V2 = os.environ.get("DSV41_SKINNY_V2", "0").strip().lower() in ("1", "pdl")  # r2-skinny
+if not R2_V2 and os.environ.get("DSV41_SKINNY_V2", "0").strip().lower() not in ("", "0", "off"):  # r2-skinny
+    raise ValueError("DSV41_SKINNY_V2 must be 1|pdl (or 0/unset)")  # r2-skinny
+R2_QFUSE = R2_V2 and os.environ.get("DSV41_SKINNY_QFUSE", "0").strip() == "1"  # r2-skinny
+_DSV41_PRIO_CMP = os.environ.get("DSV41_PRIO_CMP", "").strip().lower() not in ("", "0", "off", "false", "no")  # r5-prio
+
+
+def _dsv41_prio_enter(st, x):  # r5-prio
+    from vllm.models.deepseek_v41.nvidia import dsv41_prio as _prio  # r5-prio
+    return _prio.cmp_enter(st, x)  # r5-prio
+
+
+def _dsv41_prio_leave(tok, y):  # r5-prio
+    from vllm.models.deepseek_v41.nvidia import dsv41_prio as _prio  # r5-prio
+    return _prio.cmp_leave(tok, y)  # r5-prio
+if not R2_V2 and os.environ.get("DSV41_SKINNY_QFUSE", "0").strip() == "1":  # r2-skinny
+    logger.warning("DSV41_SKINNY_QFUSE=1 ignored: it needs DSV41_SKINNY_V2=1|pdl")  # r2-skinny
 
 if QKV_GEMM not in ("skinny", "cutlass"):
     raise ValueError(f"DSV41_QKV_A_SHARD_GEMM must be skinny|cutlass, got {QKV_GEMM!r}")
@@ -252,9 +269,20 @@ class QkvAShard:
         self.s_swz = swizzle_scale(self.s_rm, n, K)  # 1-D F8_128x4 (cutlass)
         if QKV_GEMM == "skinny":
             skinny_ext()
+        if R2_V2:  # r2-skinny
+            try:  # r2-skinny
+                from vllm.models.deepseek_v41.nvidia import dsv41_r2_skinny as _r2s  # r2-skinny
+                self._r2 = _r2s.build(self) if QKV_GEMM == "skinny" else None  # r2-skinny
+            except Exception as _e:  # noqa: BLE001 - never let v2 disable the live shard path  # r2-skinny
+                _warn_once("r2_skinny", "DSV41_SKINNY_V2 disabled (live skinny kept): %r", _e)  # r2-skinny
+                self._r2 = None  # r2-skinny
 
     def gemm(self, xq: torch.Tensor, xs: torch.Tensor) -> torch.Tensor:
         M = xq.shape[0]
+        if R2_V2 and self._r2 is not None:  # r2-skinny
+            _y = self._r2.gemm_a8(xq, xs)  # r2-skinny
+            if _y is not None:  # r2-skinny
+                return _y  # r2-skinny
         if QKV_GEMM == "skinny" and skinny_ext().fits(M, self.K):
             return skinny_ext().skinny_mx_a8(
                 xq.contiguous().view(torch.uint8), xs.view(torch.uint8),
@@ -269,8 +297,17 @@ class QkvAShard:
     def __call__(self, x) -> torch.Tensor:
         from vllm.distributed import tensor_model_parallel_all_gather
 
+        _dsv41_pt = _dsv41_prio_enter(self, x) if _DSV41_PRIO_CMP else None  # r5-prio
+        if R2_QFUSE and self._r2 is not None:  # r2-skinny
+            _y = self._r2.fused(x)  # r2-skinny
+            if _y is not None:  # r2-skinny
+                if _DSV41_PRIO_CMP and _dsv41_pt is not None:  # r5-prio
+                    _y = _dsv41_prio_leave(_dsv41_pt, _y)  # r5-prio
+                return tensor_model_parallel_all_gather(_y, dim=-1).view(*x.shape[:-1], self.N)  # r2-skinny
         xq, xs, shape = _quantize_act(x, self.K)
         y = self.gemm(xq, xs)  # [M, n] bf16: this rank's contiguous output rows
+        if _DSV41_PRIO_CMP and _dsv41_pt is not None:  # r5-prio
+            y = _dsv41_prio_leave(_dsv41_pt, y)  # r5-prio
         # all_gather(dim=-1) == concat of rank slices == the fused [M, N] layout.
         out = tensor_model_parallel_all_gather(y, dim=-1)
         return out.view(*shape[:-1], self.N)

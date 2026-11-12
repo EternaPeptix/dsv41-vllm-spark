@@ -1,0 +1,54 @@
+
+    # expert_num_tokens not on cpu. Cap padding by min(M*num_topk,
+    # local_num_experts) — at batch=1 decode only `num_topk` experts can be
+    # active, so the worst-case `local_num_experts*(align-1)` is too loose.
+    # Also shrink `alignment` to DeepGEMM's per-call theoretical BLOCK_M on
+    # SM100/SM120 when smaller.
+    expected_m = M * num_topk
+    try:
+        from vllm.utils.deep_gemm import (
+            get_theoretical_mk_alignment_for_contiguous_layout,
+        )
+
+        # num_groups=local_num_experts so the helper recovers per-expert em;
+        # omitting it over-picks BLOCK_M on SM120 (heuristic assumes em is
+        # already per-expert).
+        per_call_align = get_theoretical_mk_alignment_for_contiguous_layout(
+            expected_m=expected_m,
+            num_groups=local_num_experts,
+        )
+        if per_call_align and per_call_align <= alignment:
+            alignment = per_call_align
+    except Exception:
+        pass
+
+    max_active_experts = min(M * num_topk, local_num_experts)
+    M_sum = (M * num_topk) + max_active_experts * (alignment - 1)
+    M_sum = round_up(M_sum, alignment)
+    return M_sum, alignment
+
+
+def compute_aligned_M(
+    M: int,
+    num_topk: int,
+    local_num_experts: int,
+    alignment: int,
+    expert_tokens_meta: mk.ExpertTokensMetadata | None,
+) -> int:
+    """Return ``M_sum`` only (backward-compat wrapper).
+
+    Equivalent to :func:`compute_aligned_M_and_alignment`'s first return
+    value. Existing downstream callers and the warmup path that only size
+    a workspace use this. Call sites that need the actual per-expert
+    alignment (to wrap GEMMs in ``mk_alignment_scope``) should use
+    :func:`compute_aligned_M_and_alignment` instead.
+    """
+    M_sum, _ = compute_aligned_M_and_alignment(
+        M, num_topk, local_num_experts, alignment, expert_tokens_meta
+    )
+    return M_sum
+
+
+b2fa2558b1bea06002efacdbcced8d7fba09b409da8f9c294960c0c533293a4c  model_executor/layers/fused_moe/deep_gemm_utils.py
+3.12.3 (main, Aug 31 2026, 10:18:26) [GCC 13.3.0]
+3.7.1

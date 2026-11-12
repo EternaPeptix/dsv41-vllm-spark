@@ -31,6 +31,10 @@ import sys as _dsv41_sys  # dsv41-steer
 def _dsv41_steer():  # dsv41-steer
     m = _dsv41_sys.modules.get("vllm.models.deepseek_v41.nvidia.dsv41_steer")  # dsv41-steer
     return None if m is None else m.STEER  # dsv41-steer
+_DSV41_DTGRAPH = __import__("os").environ.get("DSV41_DTGRAPH", "").strip().lower() not in ("", "0", "off", "false", "no")  # dsv41-r1eager
+if _DSV41_DTGRAPH:  # dsv41-r1eager
+    from vllm.v1.worker.gpu import dsv41_dtgraph as _dsv41_dtg  # dsv41-r1eager
+    _DSV41_DTGRAPH = _dsv41_dtg.ON  # dsv41-r1eager
 import torch.nn as nn
 
 import vllm.envs as envs
@@ -1911,6 +1915,8 @@ class GPUModelRunner(LoRAModelRunnerMixin):
             if self.observability_config.cudagraph_metrics:
                 cudagraph_stats = make_cudagraph_stats(batch_desc, num_toks)
             assert batch_req_state is not None
+            if _DSV41_DTGRAPH:  # dsv41-r1eager
+                _dsv41_dtg.dt_begin(self, scheduler_output, batch_req_state, batch_desc)  # dsv41-r1eager
             input_batch = self.prepare_inputs(
                 scheduler_output, batch_req_state, batch_desc, num_active_loras
             )
@@ -2031,6 +2037,8 @@ class GPUModelRunner(LoRAModelRunnerMixin):
                 for_capture=dummy_run and batch_desc.cg_mode == CUDAGraphMode.FULL,
             )
 
+        if _DSV41_DTGRAPH:  # dsv41-r1eager
+            _dsv41_dtg.dt_end(self)  # dsv41-r1eager
         input_ids = input_batch.input_ids
         inputs_embeds = None
         ec_connector_output = None
@@ -2566,3 +2574,7 @@ def sort_batch_req_ids(
         num,
     )
     return sorted(num_tokens_per_req, key=key)
+
+
+if _DSV41_DTGRAPH:  # dsv41-r1eager
+    _dsv41_dtg.wrap_execute_model(GPUModelRunner)  # dsv41-r1eager

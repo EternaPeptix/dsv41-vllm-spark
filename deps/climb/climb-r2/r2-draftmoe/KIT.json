@@ -1,0 +1,229 @@
+{
+  "name": "r2-draftmoe",
+  "levers": [
+    {
+      "gid": "G17",
+      "audit_id": "moe:L-D",
+      "flag": "DSV41_DRAFT_MOE_G17",
+      "status": "partial",
+      "built": [
+        "fc1: drafter FC1 compaction N 768->576 (M32 E=128 path and the 128-row path)",
+        "perm: mfront fused permute generalised to E=128/top-3 (M32 path)"
+      ],
+      "skipped": [
+        "fc2: FC2 K 384->288 (drops trailing k32 MMA chunks = changed per-element accumulation sequence, -0/+0 class; needs an E=128 rebuild of the FC2C/Athena native; ~0.05% G1; FC2C slower at M=1 on the target)"
+      ]
+    }
+  ],
+  "flags": [
+    {
+      "name": "DSV41_DRAFT_MOE_G17",
+      "default": "0",
+      "on_value": "1",
+      "values": {
+        "0": "off (module dsv41_r2_draftmoe never imported; code path identical to today)",
+        "fc1": "stage 1: drafter FC1 compaction only",
+        "perm": "stage 2: drafter fused permute only",
+        "1": "fc1 + perm (treatment)",
+        "permverify": "diagnostic: serve stock permute, shadow-compare the fused one (mfront verifier); combinable as fc1,permverify"
+      },
+      "meaning": "G17 drafter MoE compaction: FC1 N 768->576 on the DSpark drafter (E128 top-3) and the g3 mfront fused permute for the drafter geometry. Read once at import."
+    }
+  ],
+  "files": [
+    {
+      "path": "model_executor/layers/quantization/mxfp4.py",
+      "base_sha256": "67339029cb706177e7c46dabef1cc554c607ecda3bd980c0bafbe6fb19f962e6",
+      "base_sha256_with_r1": [
+        "67339029cb706177e7c46dabef1cc554c607ecda3bd980c0bafbe6fb19f962e6"
+      ],
+      "action": "patch",
+      "base_sha256_with_other_kits": {},
+      "accepts": "the live base_sha256, or any file whose '# r1-pdl' / '# r2-moefront' tagged lines strip back to it (the recorded composed shas are examples of that rule, checked by tests/test_install.py)",
+      "edit_kind": "pure insertion of lines ending in '# r2-draftmoe' (strip-tag == pre-install file)"
+    },
+    {
+      "path": "model_executor/layers/fused_moe/experts/deep_gemm_moe.py",
+      "base_sha256": "9364f121aacf5061be13b6490b83b58ad2bf11cbb1e154c84ef5c2a54ba61097",
+      "base_sha256_with_r1": [
+        "9364f121aacf5061be13b6490b83b58ad2bf11cbb1e154c84ef5c2a54ba61097"
+      ],
+      "action": "patch",
+      "base_sha256_with_other_kits": {
+        "r2-moefront (r1-pdl does not touch it)": "b2c3b833e3e353022920a22f054ba7ae05bb69d94118579343e9f2930f5be5b1"
+      },
+      "accepts": "the live base_sha256, or any file whose '# r1-pdl' / '# r2-moefront' tagged lines strip back to it (the recorded composed shas are examples of that rule, checked by tests/test_install.py)",
+      "edit_kind": "pure insertion of lines ending in '# r2-draftmoe' (strip-tag == pre-install file)"
+    },
+    {
+      "path": "model_executor/layers/fused_moe/experts/dsv41_draft_m32.py",
+      "base_sha256": "a17d574a1811f46e712fec858a5be13cfbacd7a669aa8893838104f36b96eb95",
+      "base_sha256_with_r1": [
+        "a17d574a1811f46e712fec858a5be13cfbacd7a669aa8893838104f36b96eb95"
+      ],
+      "action": "patch",
+      "base_sha256_with_other_kits": {},
+      "accepts": "the live base_sha256, or any file whose '# r1-pdl' / '# r2-moefront' tagged lines strip back to it (the recorded composed shas are examples of that rule, checked by tests/test_install.py)",
+      "edit_kind": "pure insertion of lines ending in '# r2-draftmoe' (strip-tag == pre-install file)"
+    },
+    {
+      "path": "model_executor/layers/fused_moe/deep_gemm_utils.py",
+      "base_sha256": "58e264c8b870196fd006e80dc6484247820d75ec1561705b2fe3f1f74bba8cd6",
+      "base_sha256_with_r1": [
+        "58e264c8b870196fd006e80dc6484247820d75ec1561705b2fe3f1f74bba8cd6",
+        "c3a05cca1b4f439314c7470621706dee54e37a7ad86a609feb1c2b21bea56765"
+      ],
+      "action": "patch",
+      "r1_note": "c3a05cca = live base + r1-pdl (G07 glue PDL) edits as of 2026-11-08. r1-pdl hooks dsv41_fused_permute for every caller (E/TOPK passed through), so with DSV41_GLUE_PDL including 'fp' the drafter fused permute also launches through r1-pdl's PDL kernels: that pair has its own arm (g17+pdl) and its own device_test run.",
+      "base_sha256_with_other_kits": {
+        "r1-pdl": "c3a05cca1b4f439314c7470621706dee54e37a7ad86a609feb1c2b21bea56765",
+        "r2-moefront": "9ce425b5489290f007698898d70b9bbd9287824f8d645e51b1228288733a08f5",
+        "r1-pdl + r2-moefront": "97f26924515564733028986dcd2774e495913aef13db09b106a30636e066b4aa"
+      },
+      "accepts": "the live base_sha256, or any file whose '# r1-pdl' / '# r2-moefront' tagged lines strip back to it (the recorded composed shas are examples of that rule, checked by tests/test_install.py)",
+      "edit_kind": "pure insertion of lines ending in '# r2-draftmoe' (strip-tag == pre-install file)"
+    },
+    {
+      "path": "model_executor/layers/fused_moe/experts/dsv41_r2_draftmoe.py",
+      "base_sha256": null,
+      "action": "new",
+      "sha256": "f83e055cc058a9d40e688b962dd749f81ec0b7de0123a6498f149e389c4c17f0"
+    },
+    {
+      "path": "$HOME/dsv41-stage/g130/fc1/jit/deal-base/cache/sm120_m_grouped_fp8_fp4_gemm_contiguous_1d1d.15880fe86194f0cd52e055d46b8c154f",
+      "base_sha256": null,
+      "action": "new (optional, install.py prejit; else JIT-compiled by DeepGEMM at first use; left in place by uninstall: unreachable with the kit off)"
+    },
+    {
+      "path": "$HOME/.cache/vllm/deep_gemm/cache/sm120_m_grouped_fp8_fp4_gemm_contiguous_1d1d.3a6d4662641d78cb41691c5a89306f93",
+      "base_sha256": null,
+      "action": "new (optional, install.py prejit; else JIT-compiled by DeepGEMM at first use; left in place by uninstall: unreachable with the kit off)"
+    },
+    {
+      "path": "$HOME/.cache/vllm/deep_gemm/cache/sm120_m_grouped_fp8_fp4_gemm_contiguous_1d1d.5a63770a66faeaa4f1203886b22d547d",
+      "base_sha256": null,
+      "action": "new (optional, install.py prejit; else JIT-compiled by DeepGEMM at first use; left in place by uninstall: unreachable with the kit off)"
+    }
+  ],
+  "prejit": {
+    "m32": {
+      "src_key": "38370f025fa32d286ae7c509391f8b1a",
+      "src_kernel_cu_sha256": "ed1512958f86b309a92ccadf6b207d950cfa6a849d4f691e78b3a0d8737488b7",
+      "src_cubin_sha256": "6a816f4681a635b454d899871e013cbc3249c9b424beb23ed14e8e717f03f965",
+      "new_key": "15880fe86194f0cd52e055d46b8c154f",
+      "new_kernel_cu_sha256": "fe5bee03ae1ec518602593f67487448ab8355c15c11580afdd8dbf2dbf7b9505",
+      "cubin_sha256": null,
+      "cache": "deal"
+    },
+    "dg128": {
+      "src_key": "5559d05917b5ddb32bdf764a8f6c15b2",
+      "src_kernel_cu_sha256": "d88102becb92cafb8a6bb7c8348827c3e8722c7b3e045510b651070ff05d6478",
+      "src_cubin_sha256": {
+        "spark-one (builder, 13:20Z)": "84ecdc261418709b66b5a6646f64979b4d8106b6dcd79023df11e3d548f20d0a",
+        "spark-eight (2026-11-08 fix pass)": "5cc4cce7569a4c1672df1aaf368d882675127a4d0506ed233963286570bdecca"
+      },
+      "new_key": "3a6d4662641d78cb41691c5a89306f93",
+      "new_kernel_cu_sha256": "6a9ee0f9b74c6077a56ae229f54f786b3cbb4e351498b23a47f2d8bd9ae6236e",
+      "cubin_sha256": null,
+      "cache": "dg",
+      "tile": "BLOCK 128x128x128, 2 stages"
+    },
+    "dg128b": {
+      "cache": "dg",
+      "tile": "BLOCK 128x64x128, 3 stages",
+      "src_key": "2201c753bd89df488de6d5c86e83e112",
+      "src_kernel_cu_sha256": "301a0d1e8e46efc2f376ca27cc8b90c191d1ac2046d5e7ab5d0d3dd46c8647c6",
+      "src_cubin_sha256": {
+        "spark-eight (2026-11-08 fix pass)": "6b7c531002d76247d795a0723ef5445fb86f611c56441ca03eb5da806caf2845"
+      },
+      "new_key": "5a63770a66faeaa4f1203886b22d547d",
+      "new_kernel_cu_sha256": "fc936b7877b755a4585b2125d0fb2d00710ea680512316afbca521606c9fdbf6",
+      "cubin_sha256": null
+    }
+  },
+  "prejit_note": "Keys computed with tools/djkey.py read-only on spark-eight (python -I via stdin, nothing written). Each source key reproduced itself. The same one-line N edit applied to the target's two 128-row N768 configs gives 0e915d63 -> ec8c0dc5 and 4ea90a59 -> 8135464c, both live target-compact entries that DeepGEMM JIT-compiled itself. So both tile configs map N768 -> N576 one to one. Cubin shas of the same kernel.cu differ between nodes (5559d059: 84ecdc26 on spark-one, 5cc4cce7 on spark-eight), so cubin_sha256 is recorded per node after the first prejit and not used as a gate.",
+  "install": "python3 install.py install && python3 install.py prejit",
+  "uninstall": "python3 install.py uninstall",
+  "depends_on": [
+    "production fda6d05a: DSV41_SM121_TARGET_M32=1, DSV41_DRAFT_MOE_M32=1, DSV41_MOE_COMPACT=1 (compact SiLU writer; the drafter fc1 gate now requires it and logs 'NOT compacted' otherwise), DSV41_MOE_LIVE_ACT=1 (MIN_ROWS 192), DSV41_MOE_M32_G1=all + DSV41_MOE_FC1_DEAL=deal (deal-base tree / JIT cache)"
+  ],
+  "conflicts_with": [],
+  "expected_gain_pct": {
+    "low": 0.15,
+    "central": 0.24,
+    "high": 0.32,
+    "basis": "d = FC1 21-41 us + permute 15-36 us (net of the s16 shared-expert overlap shift) per step on the drafter main stream (audit verify-G17-combined trace numbers): low 35 / central 55 / high 75 us; G1' = mean 1000*AL/(T-d) over code/prose/maths (T 24.26/21.33/24.04 ms, AL 2.926/1.843/3.613). Skeptic's +0.29% central includes ~12 us FC2 K-tail, not built here."
+  },
+  "window_arms": [
+    {
+      "name": "control",
+      "env": {}
+    },
+    {
+      "name": "g17",
+      "env": {
+        "DSV41_DRAFT_MOE_G17": "1"
+      }
+    },
+    {
+      "name": "g17-fc1 (stage 1)",
+      "env": {
+        "DSV41_DRAFT_MOE_G17": "fc1"
+      }
+    },
+    {
+      "name": "g17-perm (stage 2)",
+      "env": {
+        "DSV41_DRAFT_MOE_G17": "perm"
+      }
+    },
+    {
+      "name": "g17-shadow (exactness diagnostic, not a timing arm)",
+      "env": {
+        "DSV41_DRAFT_MOE_G17": "fc1,permverify"
+      }
+    },
+    {
+      "name": "g17+pdl (pair arm, needed before promoting both; r1-pdl installed)",
+      "env": {
+        "DSV41_DRAFT_MOE_G17": "1",
+        "DSV41_GLUE_PDL": "1"
+      }
+    }
+  ],
+  "device_checks": [
+    "device_test.py on a stopped node: spark-eight first (exit 0), then with --real-weights on every node (each rank holds different expert slices), BEFORE any timing arm. Exit 0 = every case bitwise identical (FC1 columns, padded pad columns +0, FC2 input bytes + packed scales, MoE output; M32 and 128-row paths; eager and CUDA-graph replay; random, hostile and real mtp.0-2 weights). On a node with r1-pdl installed, run it a second time with DSV41_GLUE_PDL=fp (device_test calls deep_gemm_utils.dsv41_fused_permute, which r1-pdl hooks) to qualify the g17+pdl pair at E=128.",
+    "rank0.log after relaunch with DSV41_DRAFT_MOE_G17=1: 3 lines 'drafter compact FC1 enabled for routed-MoE layer 1..3', no 'NOT compacted' line, no JIT stall beyond one cold compile if prejit was skipped",
+    "exact.py combined == ec2f4437f8e1ed09 and G1 outputs_digest == 2f7fdccbd388225a with the flag on (and with fc1, perm separately)",
+    "shadow arm DSV41_DRAFT_MOE_G17=fc1,permverify: touch ~/dsv41-logs/mfront-verify.trigger after >=600 s; every mfront-verify.<host>.<pid>.json status OK with calls > 0",
+    "nsys: drafter MoE layers lose count_expert_num_tokens/fill/ep_scatter_1/ep_scatter_2/transpose_and_pack, gain _dsv41_fp_plan_kernel/_dsv41_fp_scatter_kernel; drafter FC1 (sm120_fp8_fp4_gemm_1d1d_impl<0,576,5120,...,128 groups>) 9-15% shorter",
+    "after the first long prompt (drafter call with M > 160) with the flag on: install.py prejit-status / ls ~/.cache/vllm/deep_gemm/cache shows no new N576 E128 key other than 3a6d4662 / 5a63770a (else a third tile config was JIT-compiled mid-serving once)"
+  ],
+  "interacts_with": [
+    "r1-pdl (DSV41_GLUE_PDL with the 'fp' scope): its edit replaces the body of deep_gemm_utils.dsv41_fused_permute for every caller, so with DSV41_DRAFT_MOE_G17 perm/1 AND DSV41_GLUE_PDL on, the drafter's fused permute also launches through r1-pdl's PDL kernels, which were qualified only at E=384. Gate: device_test.py with DSV41_GLUE_PDL=fp exit 0, then arm g17+pdl.",
+    "DSV41_DRAFT_MOE_M32=verify: still works with fc1 (shadow geometry accepts N576)."
+  ],
+  "production_launcher_seen": [
+    "fda6d05a (brief)",
+    "08a249da (live 2026-11-08 14:00Z; the 4 base files unchanged, MoE defaults unchanged)"
+  ],
+  "tests": [
+    "tests/test_install.py (stdlib; run on the Mac where climb-r1 exists)",
+    "tests/test_compose.py (stdlib; Mac; runs the real r1-pdl and r2-moefront installers on scratch copies: LIFO, FIFO refusal, blind-restore, moefront-on-top)",
+    "tests/test_plan.py (torch CPU)",
+    "tests/test_emulation.py (torch CPU)",
+    "tests/test_device_harness.py (stdlib)",
+    "device_test.py (GPU, lead, stopped node)"
+  ],
+  "new_module_sha256": "f83e055cc058a9d40e688b962dd749f81ec0b7de0123a6498f149e389c4c17f0",
+  "install_order": "r1-pdl (if used) -> r2-moefront (if used) -> r2-draftmoe. Our installer also accepts r2-moefront installed on top of ours, but r2-moefront's own installer (as of this fix) only strips '# r1-pdl' and refuses a file with our lines, so it must go first unless it also strips '# r2-draftmoe' (our edits are pure tagged insertions, so stripping is exact).",
+  "uninstall_order": "LIFO: r2-draftmoe -> r2-moefront -> r1-pdl. Our uninstall strips only our tagged lines after verifying the file is our patch of an accepted base, so it is correct in any order. r1-pdl's uninstall refuses (sha check) while our lines are present, so FIFO cannot silently drop our edits.",
+  "composes_with": [
+    "r1-pdl (deep_gemm_utils.py; installed first)",
+    "r2-moefront (deep_gemm_utils.py and deep_gemm_moe.py; same '_DSV41_FP_FILL_ROWS = 1024' and 'logger = init_logger(__name__)' anchors, both pure insertions; tested in both orders)"
+  ],
+  "notes": [
+    "DSV41_WEIGHT_DIGEST output differs for the drafter w13 with fc1 on (w13 is stored [128, 576, 2560] instead of [128, 768, 2560]). This is expected and not a regression; the digests of all other weights are unchanged.",
+    "The central gain (+0.24%) is below the +0.3% promotion bar: G17 needs a long measurement or stacking with another lever to be promoted."
+  ]
+}

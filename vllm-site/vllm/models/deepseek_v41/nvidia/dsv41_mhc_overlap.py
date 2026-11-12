@@ -82,6 +82,10 @@ OVERLAP_PRE = _env("DSV41_MHC_OVERLAP_PRE", "0") == "1"
 JOIN = _env("DSV41_MHC_OVERLAP_JOIN", "boundary")
 if JOIN not in ("boundary", "ar"):
     JOIN = "boundary"
+FORK_LATE = _env("DSV41_MHC_OVERLAP_FORK_LATE", "0") in ("1", "on", "true")  # climb round 5  # r5-ffnfront
+_R5 = None  # r5-ffnfront
+if FORK_LATE:  # r5-ffnfront
+    from vllm.distributed.device_communicators import dsv41_ffnfront as _R5  # r5-ffnfront
 MOET_DIR = os.path.expanduser(
     os.environ.get(
         "DSV41_MHC_OVERLAP_MOET_DIR",
@@ -158,6 +162,8 @@ def make_stream(vllm_config) -> torch.cuda.Stream | None:
     s._dsv41_mhc_open = False
     _STREAMS.append(s)
     _maybe_hook_join()
+    if FORK_LATE:  # r5-ffnfront
+        _r5_check_hook()  # r5-ffnfront
     logger.info(
         "DSV41_MHC_OVERLAP=%s: mHC coefficients on a side stream in FULL decode graphs of 1..%d tokens "
         "(proj=%s, pre=%s, join=%s%s)",
@@ -206,6 +212,12 @@ def _prepare(hidden: int, hc: int) -> None:
         if PROJ == "moet":
             tt = _dummy(1, hc, hidden, mix, dev)
             m.mhc_proj(tt["x"], tt["residual"], tt["post"], tt["comb"], tt["fn"])
+    if MODE == "moet" and os.environ.get("DSV41_OBLIT_FOLD", "0").strip().lower() not in ("", "0", "off", "false", "no"):  # r2-oblit
+        try:  # r2-oblit
+            from . import dsv41_oblit_fold as _r2o  # r2-oblit
+            _r2o.prepare(hidden, MAX_TOKENS)  # r2-oblit
+        except Exception as exc:  # noqa: BLE001  # r2-oblit
+            logger.warning("DSV41_OBLIT_FOLD disabled: %r", exc)  # r2-oblit
     torch.cuda.synchronize(dev)
 
 
@@ -224,6 +236,8 @@ def _dummy(n, hc, hidden, mix, dev):
 # ------------------------------------------------------------------------------------- fork / join
 def empty_fork(stream: torch.cuda.Stream) -> None:
     """Bring the side stream into the capture without work, so the decoder layer's join stays legal."""
+    if FORK_LATE:  # r5-ffnfront
+        _R5.flush_mhc(stream, "empty")  # r5-ffnfront
     stream.wait_stream(torch.cuda.current_stream())
     stream._dsv41_mhc_open = True
 
@@ -231,6 +245,8 @@ def empty_fork(stream: torch.cuda.Stream) -> None:
 def join(stream: torch.cuda.Stream) -> None:
     """The decoder layer's join (stock placement: after the sublayer). With JOIN=ar the rdma_ar hook may
     already have joined right before the sublayer's all-reduce; then nothing is left to join."""
+    if FORK_LATE:  # r5-ffnfront
+        _R5.flush_mhc(stream, "join")  # r5-ffnfront
     if JOIN == "ar" and not getattr(stream, "_dsv41_mhc_open", True):
         return
     torch.cuda.current_stream().wait_stream(stream)
@@ -249,6 +265,8 @@ def overlap_pre(stock_overlap_fn, *args, stream: torch.cuda.Stream, **kwargs):
     Caveats: it uses record_stream (blocks pinned until the capture ends: 3 boundaries per forward), and
     the L2-prefetch wrapper only wraps mhc_pre_delayed_tilelang, so the learned prefetch plan loses these
     three fn reads (cache hint only, not numerics)."""
+    if FORK_LATE:  # r5-ffnfront
+        _R5.flush_mhc(stream, "pre")  # r5-ffnfront
     stream._dsv41_mhc_pending = None
     out = stock_overlap_fn(*args, stream=stream, **kwargs)
     stream._dsv41_mhc_open = True
@@ -272,6 +290,8 @@ def _maybe_hook_join() -> None:
         if kind == "ar" and torch.cuda.is_current_stream_capturing():
             for s in _STREAMS:
                 if getattr(s, "_dsv41_mhc_open", False):
+                    if FORK_LATE:  # r5-ffnfront
+                        _R5.flush_mhc(s, "ar")  # r5-ffnfront
                     torch.cuda.current_stream().wait_stream(s)
                     s._dsv41_mhc_open = False
         orig(kind)
@@ -329,6 +349,7 @@ def shifted_post_pre_overlap(
     x, residual, post_layer_mix, comb_res_mix, fn, hc_scale, hc_base, rms_eps, hc_pre_eps,
     hc_sinkhorn_eps, hc_post_mult_value, sinkhorn_repeat, pre_mix, norm_weight, norm_eps,
     capture_aux, stream,
+    oblit=None,  # r2-oblit
 ):
     """The served mhc_fused_post_pre_delayed_tilelang, split across the caller stream and `stream`.
 
@@ -366,7 +387,16 @@ def shifted_post_pre_overlap(
     )
 
     # ---- critical path, caller stream ----
-    if MODE == "moet":
+    if oblit is not None:  # r2-oblit
+        if MODE != "moet":  # r2-oblit
+            raise RuntimeError("DSV41_OBLIT_FOLD needs DSV41_MHC_OVERLAP=moet")  # r2-oblit
+        from . import dsv41_oblit_fold as _r2o  # r2-oblit
+        residual_cur, layer_input, aux, x = _r2o.post_norm(  # r2-oblit
+            x, residual, post_layer_mix, comb_res_mix, pre_mix, norm_weight, norm_eps, oblit,  # r2-oblit
+            capture_aux=capture_aux,  # r2-oblit
+        )  # r2-oblit
+        unread = ()  # r2-oblit
+    elif MODE == "moet":  # r2-oblit
         residual_cur, layer_input, aux = _moet().mhc_post_norm(
             x, residual, post_layer_mix, comb_res_mix, pre_mix, norm_weight, norm_eps,
             capture_aux=capture_aux, mode=MOET_MODE,
@@ -388,6 +418,13 @@ def shifted_post_pre_overlap(
         unread = (mix_unread, sqr_unread)
 
     # ---- coefficients, side stream (forked AFTER the critical kernels: they stay the AR's only child) ----
+    if FORK_LATE:  # the identical side work, enqueued after the boundary's main successor  # r5-ffnfront
+        _R5.defer_mhc(stream, functools.partial(  # r5-ffnfront
+            _r5_side, stream, fused_config, x, residual, post_layer_mix, comb_res_mix, fn, hc, hidden, mix,  # r5-ffnfront
+            post2d, n_splits, n, input_size, dev, hc_scale, hc_base, residual_cur, post, comb, layer_input,  # r5-ffnfront
+            norm_weight, pre_mix, next_pre, epi, unread))  # r5-ffnfront
+        stream._dsv41_mhc_open = True  # r5-ffnfront
+        return residual_cur, post.unsqueeze(-1), comb.view(n, hc, hc), layer_input, next_pre, aux  # r5-ffnfront
     main = torch.cuda.current_stream()
     stream.wait_stream(main)
     stream._dsv41_mhc_open = True
@@ -421,6 +458,48 @@ def shifted_post_pre_overlap(
     return residual_cur, post.unsqueeze(-1), comb.view(n, hc, hc), layer_input, next_pre, aux
 
 
+def _r5_side(stream, fused_config, x, residual, post_layer_mix, comb_res_mix, fn, hc, hidden, mix, post2d,  # r5-ffnfront
+             n_splits, n, input_size, dev, hc_scale, hc_base, residual_cur, post, comb, layer_input,  # r5-ffnfront
+             norm_weight, pre_mix, next_pre, epi, unread):  # r5-ffnfront
+    """r5-ffnfront FORK_LATE: shifted_post_pre_overlap's side-stream block, verbatim (AST-checked by the tests)."""  # r5-ffnfront
+    from vllm.model_executor.kernels.mhc.tilelang_kernels import _MHC_FUSED_TILELANG_KERNEL  # r5-ffnfront
+    from vllm.model_executor.kernels.mhc.warmup import MHC_PRE_NORM_KERNEL  # r5-ffnfront
+    from vllm.utils.deep_gemm import tf32_hc_prenorm_gemm  # r5-ffnfront
+    with torch.cuda.stream(stream):  # r5-ffnfront
+        if fused_config is not None:  # r5-ffnfront
+            if PROJ == "narrow":  # r5-ffnfront
+                mixes, sqrsum, dup = _proj_narrow(x, residual, post_layer_mix, comb_res_mix, fn, hc, hidden, mix)  # r5-ffnfront
+            elif PROJ == "moet" and _moet().mhc_proj_applicable(x, residual):  # r5-ffnfront
+                mixes, sqrsum = _moet().mhc_proj(x, residual, post_layer_mix, comb_res_mix, fn)  # r5-ffnfront
+                dup = None  # r5-ffnfront
+            else:  # r5-ffnfront
+                mixes, sqrsum, dup = _MHC_FUSED_TILELANG_KERNEL(  # r5-ffnfront
+                    comb_res_mix, residual, post2d, x, fn.view(mix, hc, hidden), hc, hidden, mix  # r5-ffnfront
+                )  # r5-ffnfront
+        else:  # r5-ffnfront
+            mixes = torch.empty((n_splits, n, mix), device=dev, dtype=torch.float32)  # r5-ffnfront
+            sqrsum = torch.empty((n_splits, n), device=dev, dtype=torch.float32)  # r5-ffnfront
+            tf32_hc_prenorm_gemm(residual_cur.view(n, input_size), fn, mixes, sqrsum, n_splits)  # r5-ffnfront
+            dup = None  # r5-ffnfront
+        MHC_PRE_NORM_KERNEL(  # r5-ffnfront
+            mixes, sqrsum, hc_scale, hc_base, residual_cur, post, comb, layer_input,  # r5-ffnfront
+            norm_weight, pre_mix, next_pre, layer_input,  # r5-ffnfront
+            split_mode="stats", write_aux=False, **epi,  # r5-ffnfront
+        )  # r5-ffnfront
+    stream._dsv41_mhc_pending = (  # r5-ffnfront
+        x, residual, post_layer_mix, comb_res_mix, pre_mix, residual_cur, layer_input,  # r5-ffnfront
+        mixes, sqrsum, dup, post, comb, next_pre, unread,  # r5-ffnfront
+    )  # r5-ffnfront
+def _r5_check_hook() -> None:  # r5-ffnfront
+    """r5-ffnfront FORK_LATE needs model.py's successor hook; without it the lever is switched off (fail closed)."""  # r5-ffnfront
+    global FORK_LATE  # r5-ffnfront
+    mod = sys.modules.get("vllm.models.deepseek_v41.nvidia.model")  # r5-ffnfront
+    if mod is not None and getattr(mod, "_DSV41_R5_SUCC", None) is not None:  # r5-ffnfront
+        logger.info("DSV41_MHC_OVERLAP_FORK_LATE=1 (r5-ffnfront): coefficient half enqueued after the boundary's "  # r5-ffnfront
+                    "main successor (fork-point event right after mhc_post_norm)")  # r5-ffnfront
+        return  # r5-ffnfront
+    FORK_LATE = False  # r5-ffnfront
+    logger.warning("DSV41_MHC_OVERLAP_FORK_LATE=1 (r5-ffnfront): model.py successor hook missing; lever OFF")  # r5-ffnfront
 def wrap_shifted_post_pre(orig):
     """model.py rebinds its module-global mhc_shifted_post_pre to this dispatcher (so the L2-prefetch
     wrapper, which wraps that global by name, wraps the dispatcher; fn stays positional argument 4)."""
@@ -430,7 +509,10 @@ def wrap_shifted_post_pre(orig):
         x, residual, post_layer_mix, comb_res_mix, fn, hc_scale, hc_base, rms_eps, hc_pre_eps,
         hc_sinkhorn_eps, hc_post_mult_value, sinkhorn_repeat, pre_mix=None, norm_weight=None,
         norm_eps=1e-6, capture_aux=False, *, stream=None, reduce_results=False,
+        dsv41_oblit=None,  # r2-oblit
     ):
+        if dsv41_oblit is not None and (stream is None or not ACTIVE or reduce_results or not applicable(x, residual, pre_mix, norm_weight)):  # r2-oblit
+            raise RuntimeError("DSV41_OBLIT_FOLD: boundary cannot take the fold; refusing to drop a projection")  # r2-oblit
         if stream is None:
             if DUMP_DIR:
                 _maybe_dump(x, residual, post_layer_mix, comb_res_mix, fn, hc_scale, hc_base,
@@ -441,6 +523,8 @@ def wrap_shifted_post_pre(orig):
                 hc_sinkhorn_eps, hc_post_mult_value, sinkhorn_repeat, pre_mix, norm_weight, norm_eps,
                 capture_aux, stream=None, reduce_results=reduce_results,
             )
+        if FORK_LATE:  # r5-ffnfront
+            _R5.flush_mhc(stream, "next")  # r5-ffnfront
         # A stream reaches this point only from a FULL-graph capture the decoder layer approved; the
         # previous boundary's side-stream inputs were joined after its sublayer and can be released.
         stream._dsv41_mhc_pending = None
@@ -455,6 +539,7 @@ def wrap_shifted_post_pre(orig):
             x, residual, post_layer_mix, comb_res_mix, fn, hc_scale, hc_base, rms_eps, hc_pre_eps,
             hc_sinkhorn_eps, hc_post_mult_value, sinkhorn_repeat, pre_mix, norm_weight, norm_eps,
             capture_aux, stream,
+            **({} if dsv41_oblit is None else {"oblit": dsv41_oblit}),  # r2-oblit
         )
 
     mhc_shifted_post_pre._dsv41_mhc_overlap = True

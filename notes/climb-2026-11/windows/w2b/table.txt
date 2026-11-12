@@ -1,0 +1,8 @@
+c1 control | G1 123.655 code 125.11 prose 89.72 math 156.14 digest 2f7fdccbd388225a reps_identical True | exact - | det - | G4 min 54.85 mean 69.97
+g08 DSV41_DTGRAPH=1 | G1 125.474 code 126.86 prose 91.12 math 158.44 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF | G4 min 55.86 mean 71.73
+p5 DSV41_DTGRAPH=1;DSV41_L2_PREFETCH_R1_SHW2=1;DSV41_L2_PREFETCH_R1_KVSRC=1;DSV41_IDXPAR=1;DSV41_MHC_OVERLAP_DRAFT=1 | G1 126.270 code 127.59 prose 91.74 math 159.48 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF | G4 min 57.01 mean 74.39
+c2 control | G1 123.455 code 124.83 prose 89.63 math 155.91 digest 2f7fdccbd388225a reps_identical True | exact - | det - | -
+p5b DSV41_DTGRAPH=1;DSV41_L2_PREFETCH_R1_SHW2=1;DSV41_L2_PREFETCH_R1_KVSRC=1;DSV41_IDXPAR=1;DSV41_MHC_OVERLAP_DRAFT=1 | G1 126.266 code 127.63 prose 91.67 math 159.50 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+g08b DSV41_DTGRAPH=1 | G1 125.380 code 126.72 prose 90.90 math 158.52 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+g08s DSV41_DTGRAPH=1;DSV41_L2_PREFETCH_R1_SHW2=1 | G1 125.488 code 126.93 prose 90.97 math 158.56 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+c3 control | G1 123.812 code 125.23 prose 89.82 math 156.38 digest 2f7fdccbd388225a reps_identical True | exact - | det - | -

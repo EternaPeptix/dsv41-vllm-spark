@@ -72,6 +72,8 @@ _EXPERT_SCALE_RE = re.compile(r"\.experts\.\d+\.w[123]\.scale$")
 _MTP_NAME_RE = re.compile(r"mtp\.\d+\.")
 # g130 boundary (a), default off: unset = dsv41_boundary.py is never imported.
 _DSV41_CTXKV_FOLD = os.environ.get("DSV41_CTXKV_FOLD", "0").strip().lower() not in ("", "0", "off")
+# climb-r1 r1-drafter G14, default off: unset = dsv41_drafter_sched.py is never imported.  # dsv41-r1-drafter
+_DSV41_MHC_OVERLAP_DRAFT = os.environ.get("DSV41_MHC_OVERLAP_DRAFT", "0").strip().lower() not in ("", "0", "off", "false", "no")  # dsv41-r1-drafter
 
 
 class DSparkDeepseekV4Model(nn.Module):
@@ -126,6 +128,10 @@ class DSparkDeepseekV4Model(nn.Module):
         run_gemm_rs = maybe_init_gemm_rs(
             current_vllm_config, self.use_sequence_parallel
         )
+        _dsv41_mhc_kw: dict = {}  # dsv41-r1-drafter
+        if _DSV41_MHC_OVERLAP_DRAFT:  # dsv41-r1-drafter
+            from .dsv41_drafter_sched import draft_mhc_kwargs  # dsv41-r1-drafter
+            _dsv41_mhc_kw = draft_mhc_kwargs(current_vllm_config)  # dsv41-r1-drafter
         self.layers = nn.ModuleList(
             [
                 DeepseekV4DecoderLayer(
@@ -133,6 +139,7 @@ class DSparkDeepseekV4Model(nn.Module):
                     prefix=maybe_prefix(prefix, f"layers.{self.num_hidden_layers + i}"),
                     topk_indices_buffer=self.topk_indices_buffer,
                     run_gemm_rs=run_gemm_rs,
+                    **_dsv41_mhc_kw,  # dsv41-r1-drafter
                 )
                 for i in range(self.num_dspark_layers)
             ]

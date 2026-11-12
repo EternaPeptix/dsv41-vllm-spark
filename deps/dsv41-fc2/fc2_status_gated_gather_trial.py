@@ -12,6 +12,10 @@ from __future__ import annotations
 import math
 import torch
 from vllm.triton_utils import tl, triton
+_DSV41_GLUE_PDL = __import__('os').environ.get('DSV41_GLUE_PDL', '0').strip().lower() not in ('', '0', 'off')  # r1-pdl
+if _DSV41_GLUE_PDL:  # r1-pdl
+    from vllm.triton_utils import dsv41_glue_pdl as _dsv41_glue_pdl  # r1-pdl
+    _DSV41_GLUE_PDL = _dsv41_glue_pdl.enabled('gather')  # r1-pdl
 
 
 @triton.jit
@@ -50,6 +54,9 @@ def _gated_gather(
                  accumulator.to(output_tensor.dtype.element_ty))
 
 
+_DSV41_FC2_GATHER_ADD = __import__("os").environ.get("DSV41_FC2_GATHER_ADD", "0").strip() == "1"  # r2-moeback-g25
+
+
 @torch.no_grad()
 def gated_gather(input_tensor, topk_ids, topk_weights, inv_perm, expert_map,
                  output, status, *, experimental: bool = False):
@@ -74,7 +81,15 @@ def gated_gather(input_tensor, topk_ids, topk_weights, inv_perm, expert_map,
     block_d = math.gcd(input_tensor.shape[1], 1024)
     if block_d == 0:
         raise ValueError("hidden dimension must be positive")
+    if _DSV41_FC2_GATHER_ADD:  # r2-moeback-g25
+        from vllm.model_executor.layers.fused_moe.runner import dsv41_moe_fold as _g25  # r2-moeback-g25
+        _shared = _g25.take(output)  # r2-moeback-g25
+        if _shared is not None:  # r2-moeback-g25
+            return _g25.launch_gather_add((triton.cdiv(input_tensor.shape[1], block_d), min(n, 1024)), n, input_tensor, topk_ids, topk_weights, inv_perm, output, status, _shared, block_d)  # r2-moeback-g25
     grid = (triton.cdiv(input_tensor.shape[1], block_d), min(n, 1024))
+    if _DSV41_GLUE_PDL:  # r1-pdl
+        _dsv41_glue_pdl.gated_gather(grid=grid, n=n, input_tensor=input_tensor, topk_ids=topk_ids, topk_weights=topk_weights, inv_perm=inv_perm, output=output, status=status, block_d=block_d)  # r1-pdl
+        return output  # r1-pdl
     _gated_gather[grid](n, input_tensor, input_tensor.stride(0), input_tensor.stride(1),
                         topk_ids, topk_ids.stride(0), topk_ids.stride(1),
                         topk_weights, topk_weights.stride(0), topk_weights.stride(1),

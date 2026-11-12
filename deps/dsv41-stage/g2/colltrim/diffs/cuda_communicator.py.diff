@@ -1,0 +1,15 @@
+--- base/cuda_communicator.py.52fc8cf5	2026-10-26 06:14:06
++++ site/vllm/distributed/device_communicators/cuda_communicator.py	2026-10-26 06:30:18
+@@ -493,6 +493,12 @@
+         if rdma_comm is not None:
+             input_c = input_.contiguous()
+             if rdma_comm.should_gather(input_c):
++                # g2 colltrim (a), DSV41_RDMA_AG_COLS=1: the kernel writes each rank's slice
++                # straight into the concatenated tensor (no staging tensor, no movedim copy).
++                if dim != 0 and getattr(rdma_comm, "ag_cols", False):
++                    out = rdma_comm.all_gather_cols(input_c, dim)
++                    if out is not None:
++                        return out
+                 # [world, *shape] -> concat along `dim`, same layout as the PyNccl path.
+                 input_size = input_c.size()
+                 stacked = rdma_comm.all_gather_stacked(input_c)

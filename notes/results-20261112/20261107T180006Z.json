@@ -1,0 +1,97 @@
+{
+ "verdict": "PASS",
+ "failed_step": null,
+ "launcher": "fda6d05a",
+ "instance": "dsv41-tp8 rank0 vibe-ds41f-promote",
+ "utc": "20261107T180006Z",
+ "label": "gate",
+ "av_pin": "/home/jeweled/dsv41-opt-20261021/pins/av-pin-k5-g3FU.json",
+ "raw_dir": "/home/jeweled/dsv41-bench/gate/runs/fda6d05a/20261107T180006Z",
+ "steps": [
+  {
+   "name": "refuse_if_busy",
+   "verdict": "PASS",
+   "seconds": 5.1,
+   "requests_sent": 0,
+   "requests_finished": 0,
+   "foreign": false,
+   "note": "idle; launcher fda6d05a; instance 'dsv41-tp8 rank0 vibe-ds41f-promote'; AV /home/jeweled/dsv41-opt-20261021/pins/av-pin-k5-g3FU.json"
+  },
+  {
+   "name": "exact.py",
+   "verdict": "PASS",
+   "seconds": 11.6,
+   "requests_sent": 6,
+   "requests_finished": 6,
+   "foreign": false,
+   "note": "combined ec2f4437f8e1ed09 (anchor ec2f4437f8e1ed09)"
+  },
+  {
+   "name": "g1_one_pass",
+   "verdict": "PASS",
+   "seconds": 28.0,
+   "requests_sent": 3,
+   "requests_finished": 3,
+   "foreign": false,
+   "note": "G1 118.93 tok/s; digest a05417eb07bc0f52 vs previous PASS: none; code:20e3a46d,math:adffacdf,prose:03f7d6fe",
+   "digest": "a05417eb07bc0f52",
+   "g1": "118.93"
+  },
+  {
+   "name": "probe_1m",
+   "verdict": "PASS",
+   "seconds": 176.5,
+   "requests_sent": 3,
+   "requests_finished": 3,
+   "foreign": false,
+   "note": "TTFT 169.07s for 1024611 prompt tokens (good class, max 220s); MemAvailable min 9.2 GB"
+  },
+  {
+   "name": "gsm8k_200",
+   "verdict": "PASS",
+   "seconds": 200.4,
+   "requests_sent": 200,
+   "requests_finished": 200,
+   "foreign": false,
+   "note": "accuracy 195/200 (min 194; ref 196, misses 93,100,119,184); wrong: [(93, 36.0, 11.0), (100, 175.0, 705.0), (119, 95200.0, None), (182, 23.0, None), (184, 25.0, None)]"
+  },
+  {
+   "name": "longctx",
+   "verdict": "PASS",
+   "seconds": 156.7,
+   "requests_sent": 24,
+   "requests_finished": 24,
+   "foreign": false,
+   "note": "LONGCTX PASS needle=60/60 copy_mean=1.000 gate(<= 128k: needle>=0.9, copy>=0.9) fails=none wall=157s"
+  },
+  {
+   "name": "kl_verify",
+   "verdict": "PASS",
+   "seconds": 0.2,
+   "requests_sent": 0,
+   "requests_finished": 0,
+   "foreign": false,
+   "note": "manifest sha 0917cafcf33722cc; tf positions 294746; OK"
+  },
+  {
+   "name": "kl_smoke",
+   "verdict": "PASS",
+   "seconds": 2.0,
+   "requests_sent": 3,
+   "requests_finished": 3,
+   "foreign": false,
+   "note": "  tf n=2048: 1.33s (1,539 pos/s), entries/pos 21 (K=20), pos1 y=3465 lp=-6.9880 rank=80 top1=5:-1.4880, mean N"
+  },
+  {
+   "name": "kl_capture_small",
+   "verdict": "PASS",
+   "seconds": 47.7,
+   "requests_sent": 80,
+   "requests_finished": 80,
+   "foreign": false,
+   "note": "label gate-fda6d05a-20261107T180006Z, sets tools,math, 80 sequences; baseline",
+   "kl_label": "gate-fda6d05a-20261107T180006Z"
+  }
+ ],
+ "total_seconds": 628.2
+}

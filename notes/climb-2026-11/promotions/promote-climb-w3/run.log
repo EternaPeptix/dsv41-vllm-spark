@@ -1,0 +1,21 @@
+20:27:59 [promote-climb-w3] editing launcher on 8/8: DSV41_SKINNY_V2=1 DSV41_ATTNOUT_OP=rope,rq DSV41_DRAFT_MOE_G17=1 DSV41_FC2_GATHER_ADD=1 DSV41_MOE_ROUTEPREP=1
+20:28:00 [promote-climb-w3]   spark-one launcher -> b22e4aa9
+20:28:00 [promote-climb-w3]   spark-two launcher -> b22e4aa9
+20:28:01 [promote-climb-w3]   spark-three launcher -> b22e4aa9
+20:28:02 [promote-climb-w3]   spark-four launcher -> b22e4aa9
+20:28:03 [promote-climb-w3]   spark-five launcher -> b22e4aa9
+20:28:04 [promote-climb-w3]   spark-six launcher -> b22e4aa9
+20:28:05 [promote-climb-w3]   spark-seven launcher -> b22e4aa9
+20:28:05 [promote-climb-w3]   spark-eight launcher -> b22e4aa9
+20:28:05 [promote-climb-w3] new launcher b22e4aa9 on 8/8 (was fda6d05a); diff:
+105a106,110
+> export DSV41_MOE_ROUTEPREP=${DSV41_MOE_ROUTEPREP:-1}  # climb-w3: climb W3/W3b: skinny v2 + attnout rope,rq + draft MoE G17 + FC2 gather-add + MoE route-prep; W3b 5-lever set +2.2% G1, exact
+> export DSV41_FC2_GATHER_ADD=${DSV41_FC2_GATHER_ADD:-1}  # climb-w3: climb W3/W3b: skinny v2 + attnout rope,rq + draft MoE G17 + FC2 gather-add + MoE route-prep; W3b 5-lever set +2.2% G1, exact
+> export DSV41_DRAFT_MOE_G17=${DSV41_DRAFT_MOE_G17:-1}  # climb-w3: climb W3/W3b: skinny v2 + attnout rope,rq + draft MoE G17 + FC2 gather-add + MoE route-prep; W3b 5-lever set +2.2% G1, exact
+> export DSV41_ATTNOUT_OP=${DSV41_ATTNOUT_OP:-rope,rq}  # climb-w3: climb W3/W3b: skinny v2 + attnout rope,rq + draft MoE G17 + FC2 gather-add + MoE route-prep; W3b 5-lever set +2.2% G1, exact
+> export DSV41_SKINNY_V2=${DSV41_SKINNY_V2:-1}  # climb-w3: climb W3/W3b: skinny v2 + attnout rope,rq + draft MoE G17 + FC2 gather-add + MoE route-prep; W3b 5-lever set +2.2% G1, exact
+20:28:08 [claude-promote-climb-w3] preflight: site manifest a3f46a2d0315 and launcher b22e4aa9 identical on 8/8
+20:30:59 [claude-promote-climb-w3] HEALTHY: /health 200 + startup complete at +153s after systemd-run (downtime 170s)
+20:35:01 [promote-climb-w3] verify: G1 128.855 code 130.10 prose 93.31 math 163.16 digest 2f7fdccbd388225a | exact ec2f4437f8e1ed09 | det ALL==REF
+20:35:01 [promote-climb-w3] PROMOTED: launcher b22e4aa9
+20:35:03 [promote-climb-w3] lock released

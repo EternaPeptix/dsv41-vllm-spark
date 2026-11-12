@@ -1,0 +1,152 @@
+{
+ "name": "r2-skinny",
+ "levers": [
+  "G10 (dense:D3) skinny_mx v2 for the qkv_a shard",
+  "G09 part D2 (dense:D2) MXFP8 quant fused into the skinny qkv_a prologue"
+ ],
+ "flags": [
+  {
+   "name": "DSV41_SKINNY_V2",
+   "default": "0",
+   "on_value": "1 | pdl",
+   "meaning": "G10: qkv_a shard GEMV through skinny_mx_v2_ext.so (same per-output op order as skinny_mx_ext.so, latency-restructured); pdl = launched with programmatic stream serialization so its weight loads overlap the producer's tail. Per-layer, per-M bitwise self-check against the live chain at the first eager build; any mismatching M stays on the live kernel."
+  },
+  {
+   "name": "DSV41_SKINNY_QFUSE",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "G09/D2 (needs DSV41_SKINNY_V2=1|pdl): the qkv_a input MXFP8 quant (MXFP8QuantizeSwizzled grid 128 x 640) is done inside the v2 prologue with FlashInfer's op sequence; the quant kernel disappears. Self-checked byte for byte against the live quant (also pins the FTZ mode of amax*(1/448)); mismatch -> stays off."
+  },
+  {
+   "name": "DSV41_SKINNY_V2_GRID",
+   "default": "0",
+   "on_value": "e.g. 56 | 75 (timing sweeps only)",
+   "meaning": "v2 grid; 0 = #SMs like v1. Exact for any grid with ceil(224/grid) <= 8."
+  },
+  {
+   "name": "DSV41_SKINNY_V2_LIB",
+   "default": "/home/jeweled/dsv41-r2/skinny_mx_v2/build",
+   "on_value": "dir",
+   "meaning": "location of skinny_mx_v2_ext*.so"
+  },
+  {
+   "name": "DSV41_SKINNY_V2_CHECK",
+   "default": "1",
+   "on_value": "0 (unit tests only)",
+   "meaning": "0 skips the build-time bitwise self-check; never in serving"
+  }
+ ],
+ "files": [
+  {
+   "path": "models/deepseek_v41/nvidia/dsv41_r3_dense.py",
+   "base_sha256": "1f1c0456e7b515fa4166b00bf18360547e9a29f6b9d84c64e4b607e2cc8a9193",
+   "base_sha256_accepted": [
+    "1f1c0456e7b515fa4166b00bf18360547e9a29f6b9d84c64e4b607e2cc8a9193"
+   ],
+   "action": "patch",
+   "base_sha256_after_round1": "1f1c0456e7b515fa4166b00bf18360547e9a29f6b9d84c64e4b607e2cc8a9193",
+   "note": "no round-1 kit (r1-attn, r1-pdl, r1-pf installers as of 2026-11-08 06:40 MST) patches this file; tests/test_install.py re-checks"
+  },
+  {
+   "path": "models/deepseek_v41/nvidia/dsv41_r2_skinny.py",
+   "base_sha256": null,
+   "action": "new",
+   "sha256": "5010c4e90d6abcac952bc9d5c9d9bc572bb6a6431481e59680b7808e980adae4"
+  },
+  {
+   "path": "$HOME/dsv41-r2/skinny_mx_v2/build/skinny_mx_v2_ext.so",
+   "base_sha256": null,
+   "sha256": "b3af28da9120e5efe1493814768fbf42a5d7194e343a5b9369e3214d9f1f9a92",
+   "action": "new",
+   "note": "built 2026-11-08 15:15Z on spark-eight (CLUSTER_LOCK free), venv vllm032 torch 2.13.0+cu130, nvcc 13.0.88, sm_121 cubin only, -O3 -lineinfo -Xptxas=-v, no fast-math; ptxas: 0 spill stores/loads, 0 stack for all 34 kernels (build.log). CPU-only import check OK. install.py ships exactly this binary (refuses any other sha).",
+   "source": "prebuilt/skinny_mx_v2_ext.so"
+  },
+  {
+   "path": "$HOME/dsv41-r2/skinny_mx_v2/skinny_mx_v2.cu",
+   "base_sha256": null,
+   "action": "new",
+   "sha256": "48a18b92cc2a04e380701622c39c1db13338333cf324cdda7eaf23e5db51ca50"
+  },
+  {
+   "path": "$HOME/dsv41-r2/skinny_mx_v2/build.py",
+   "base_sha256": null,
+   "action": "new",
+   "sha256": "d12de6ff09c2e2a7f7a1fe81ac8465966be634831d2e18089c7fe0baa3602f8c"
+  }
+ ],
+ "install": "python3 install.py install",
+ "depends_on": [],
+ "conflicts_with": [],
+ "expected_gain_pct": {
+  "low": 0.5,
+  "central": 1.2,
+  "high": 1.9
+ },
+ "window_arms": [
+  {
+   "name": "control",
+   "env": {}
+  },
+  {
+   "name": "T-v2",
+   "env": {
+    "DSV41_SKINNY_V2": "1"
+   }
+  },
+  {
+   "name": "T-v2pdl",
+   "env": {
+    "DSV41_SKINNY_V2": "pdl"
+   }
+  },
+  {
+   "name": "T-qfuse",
+   "env": {
+    "DSV41_SKINNY_V2": "pdl",
+    "DSV41_SKINNY_QFUSE": "1"
+   },
+   "note": "compare against a control with the same DSV41_SKINNY_V2 value; use V2=1 if pdl is not promoted"
+  }
+ ],
+ "device_checks": [
+  "BEFORE ANY WINDOW ARM (lead, on a stopped node, e.g. spark-eight): bash scripts/run_device_test.sh spark-eight 7 -> device_test.py --model ~/models/dsv41/official-fp8 --layers 0,13,39 with prebuilt/skinny_mx_v2_ext.so (sha256 checked against this file), sections Q (exhaustive quant, both FTZ modes, live quant in <=384-row chunks = 4T/SF variant), G (bitwise M=1..8 x rand/hostile/3 real shards x random/postnorm/hostile/zeros/ckpt-derived acts x 8 grids x pdl off/on, + fused), C (graph replays incl. PDL after a memcpy node), X (forced mismatch), T (timing); exit 0 required; ~3-5 min",
+  "compile log (build.log): ptxas -v 0 spill stores/loads, 0 stack frame for all 32 skinny_v2_kernel<M,{5,8},{0,1}> + quant_debug; regs M<=6 MAXR5: A8 95-156, QF 95-143 (v1: 64-96)",
+  "after boot, every rank log: 'DSV41_SKINNY_V2=<mode> active: N=224 K=5120, a8 M=[1..8], qfuse M=[...] (ftz=X)' and no 'kept live' / 'disabled' warnings",
+  "flags-off boot after install: exact.py == ec2f4437f8e1ed09, G1 outputs_digest == 2f7fdccbd388225a",
+  "each T arm: exact.py, G1 digest and the 9 long-prompt cases identical to control",
+  "nsys (optional): skinny_mx_kernel -> skinny_v2_kernel<M,5,false|true>; with QFUSE the grid-128/block-640 MXFP8QuantizeSwizzled count drops 43 -> 0 per step"
+ ],
+ "lever_gains_pct": {
+  "G10 (DSV41_SKINNY_V2=1)": {
+   "low": 0.2,
+   "central": 0.7,
+   "high": 1.3
+  },
+  "G10 pdl increment (DSV41_SKINNY_V2=pdl vs 1)": {
+   "low": 0.05,
+   "central": 0.12,
+   "high": 0.18
+  },
+  "G09 D2 (DSV41_SKINNY_QFUSE=1 on top of V2)": {
+   "low": 0.3,
+   "central": 0.44,
+   "high": 0.54
+  },
+  "D2(ii) woar epilogue": "skipped (not this kit's kernel; Triton reduce epilogue is not trivially exact)"
+ },
+ "live_refs": {
+  "skinny_mx.cu_sha256": "0cf2d309216e21a3afbd8efc312137633ddc1204b9533a13601c0836f0be3653",
+  "skinny_mx_ext.so_sha256": "c054de3ac7f13f8038e5fcade8dea0d18756e13d88f13ce2dcc46bc91457dadc",
+  "skinny_mx_ext.so_md5": "d9f28f0df4d6161506c62ccaad96de26",
+  "launcher_sha8": "fda6d05a (brief); 08a249da live at 2026-11-08 15:18Z, base files unchanged on 8/8",
+  "flashinfer": "0.7.0.post1 (cute-dsl MXFP8QuantizeSwizzledKernel)"
+ },
+ "compiled": {
+  "so_sha256": "b3af28da9120e5efe1493814768fbf42a5d7194e343a5b9369e3214d9f1f9a92",
+  "host": "spark-eight",
+  "utc": "2026-11-08T15:15:58Z",
+  "toolchain": "nvcc 13.0.88, torch 2.13.0+cu130",
+  "spills": 0,
+  "device_test": "NOT RUN (needs a stopped node; lead runs scripts/run_device_test.sh before any arm)"
+ }
+}

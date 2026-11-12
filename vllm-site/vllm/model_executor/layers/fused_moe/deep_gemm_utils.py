@@ -12,6 +12,10 @@ import torch
 import vllm.model_executor.layers.fused_moe.modular_kernel as mk
 from vllm.model_executor.layers.fused_moe.utils import count_expert_num_tokens
 from vllm.triton_utils import tl, triton
+_DSV41_GLUE_PDL = __import__('os').environ.get('DSV41_GLUE_PDL', '0').strip().lower() not in ('', '0', 'off')  # r1-pdl
+if _DSV41_GLUE_PDL:  # r1-pdl
+    from vllm.triton_utils import dsv41_glue_pdl as _dsv41_glue_pdl  # r1-pdl
+    _DSV41_GLUE_PDL = _dsv41_glue_pdl.enabled('fp')  # r1-pdl
 from vllm.utils.deep_gemm import get_mk_alignment_for_contiguous_layout
 from vllm.utils.math_utils import round_up
 
@@ -503,6 +507,13 @@ if _DSV41_FP_MODE not in ("0", "1", "verify"):
     raise ValueError(f"DSV41_MOE_FUSED_PERMUTE must be 0|1|verify, got {_DSV41_FP_MODE!r}")
 _DSV41_FP_SLOTS = 1024  # max M * topk handled by one plan program (M32 path: M <= 96 -> 576)
 _DSV41_FP_FILL_ROWS = 1024
+_R2DM_FC1, _R2DM_PERM = False, ""  # G17 DSV41_DRAFT_MOE_G17, default off (experts/dsv41_r2_draftmoe.py)  # r2-draftmoe
+if os.environ.get("DSV41_DRAFT_MOE_G17", "0").strip().lower() not in ("", "0", "off", "false"):  # r2-draftmoe
+    from vllm.model_executor.layers.fused_moe.experts import dsv41_r2_draftmoe as _r2dm  # r2-draftmoe
+    _R2DM_FC1, _R2DM_PERM = _r2dm.FC1, _r2dm.PERM  # r2-draftmoe
+_DSV41_RP = os.environ.get("DSV41_MOE_ROUTEPREP", "0").strip().lower() not in ("", "0", "off", "false")  # r2-moefront
+if _DSV41_RP:  # r2-moefront
+    from vllm.model_executor.layers.fused_moe import dsv41_routeprep as _dsv41_rp  # r2-moefront
 
 
 @triton.jit
@@ -634,6 +645,9 @@ def dsv41_fused_permute(aq, aq_scale, topk_ids, local_num_experts, aq_out, M_sum
     layout = torch.empty((M_sum,), device=device, dtype=torch.int32)
     inv_perm = torch.empty(topk_ids.shape, device=device, dtype=torch.int32)
     cursor = torch.empty((E,), device=device, dtype=torch.int32)
+    if _DSV41_GLUE_PDL:  # r1-pdl
+        _dsv41_glue_pdl.fused_permute(topk_ids=topk_ids, cursor=cursor, layout=layout, sfp=sfp, M=M, M_sum=M_sum, mn_aligned=mn_aligned, E=E, topk=topk, align_used=align_used, packs=packs, _DSV41_FP_SLOTS=_DSV41_FP_SLOTS, _DSV41_FP_FILL_ROWS=_DSV41_FP_FILL_ROWS, aq=aq, aq_out=aq_out, aq_scale=aq_scale, inv_perm=inv_perm, H=H, sf_k=sf_k)  # r1-pdl
+        return aq_out, sfp, layout, inv_perm, cursor  # r1-pdl
     _dsv41_fp_plan_kernel[(triton.cdiv(M_sum, _DSV41_FP_FILL_ROWS),)](
         topk_ids, topk_ids.stride(0), topk_ids.stride(1), cursor, layout, sfp, M, M_sum, mn_aligned,
         E=E, TOPK=topk, ALIGN=align_used, PACKS=packs, SLOTS=_DSV41_FP_SLOTS,
@@ -849,6 +863,8 @@ def deepgemm_moe_permute(
         expert_tokens_meta=expert_tokens_meta,
     )
 
+    if _DSV41_RP and isinstance(aq_scale, _dsv41_rp.Deferred):  # r2-moefront
+        return _dsv41_rp.fused_permute(aq, aq_scale, topk_ids, local_num_experts, expert_map, expert_tokens_meta, aq_out, M_sum, align_used, block_k, use_psum_layout, return_expert_ends)  # r2-moefront
     # g3 mfront (DSV41_MOE_FUSED_PERMUTE): fused plan + scatter on the qualified M32 geometry.
     _fp = dsv41_fp_eligible(aq, aq_scale, topk_ids, local_num_experts, expert_map, expert_tokens_meta,
                             block_k, use_psum_layout, align_used)
@@ -859,6 +875,16 @@ def deepgemm_moe_permute(
             return f_out, f_sfp, f_layout, f_inv, align_used, f_ends
         return f_out, f_sfp, f_layout, f_inv, align_used
 
+    # G17 perm: the same two kernels for the drafter geometry (E 128, top-3, M32 path).  # r2-draftmoe
+    _r2dm_fp = bool(_R2DM_PERM) and _r2dm.perm_eligible(  # r2-draftmoe
+        aq, aq_scale, topk_ids, local_num_experts, expert_map, expert_tokens_meta, block_k,  # r2-draftmoe
+        use_psum_layout, align_used, _DSV41_FP_SLOTS)  # r2-draftmoe
+    if _r2dm_fp and _R2DM_PERM == "1":  # r2-draftmoe
+        f_out, f_sfp, f_layout, f_inv, f_ends = dsv41_fused_permute(  # r2-draftmoe
+            aq, aq_scale, topk_ids, local_num_experts, aq_out, M_sum, align_used)  # r2-draftmoe
+        if return_expert_ends:  # r2-draftmoe
+            return f_out, f_sfp, f_layout, f_inv, align_used, f_ends  # r2-draftmoe
+        return f_out, f_sfp, f_layout, f_inv, align_used  # r2-draftmoe
     expert_start_loc = torch.empty(
         (local_num_experts), device=device, dtype=torch.int32
     )
@@ -925,6 +951,9 @@ def deepgemm_moe_permute(
         _dsv41_fp_verify(aq, aq_scale, topk_ids, local_num_experts, M_sum, align_used,
                          (aq_out, aq_scale_out, grouped_layout, inv_perm, expert_start_loc))
 
+    if _r2dm_fp and _R2DM_PERM == "verify":  # r2-draftmoe
+        _dsv41_fp_verify(aq, aq_scale, topk_ids, local_num_experts, M_sum, align_used,  # r2-draftmoe
+                         (aq_out, aq_scale_out, grouped_layout, inv_perm, expert_start_loc))  # r2-draftmoe
     if return_expert_ends:
         return aq_out, aq_scale_out, grouped_layout, inv_perm, align_used, expert_start_loc
     return aq_out, aq_scale_out, grouped_layout, inv_perm, align_used

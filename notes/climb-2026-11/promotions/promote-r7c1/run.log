@@ -1,0 +1,65 @@
+20:09:02 [promote-r7c1] installing r7-comm2 overlay on 8/8 (install8-r7.sh install)
+== spark-one
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/models/deepseek_v41/nvidia/dsv41_oblit.py: already patched (8e8596d5cb93d486)
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/distributed/device_communicators/rdma_all_reduce.py: already patched (b764fb042563026d)
+/home/jeweled/dsv41-stage/g130/rdma/build/rdma_ar_ext.so: untouched (14d049dda41a2a8f)
+== spark-two
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/models/deepseek_v41/nvidia/dsv41_oblit.py: already patched (8e8596d5cb93d486)
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/distributed/device_communicators/rdma_all_reduce.py: already patched (b764fb042563026d)
+/home/jeweled/dsv41-stage/g130/rdma/build/rdma_ar_ext.so: untouched (14d049dda41a2a8f)
+== spark-three
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/models/deepseek_v41/nvidia/dsv41_oblit.py: already patched (8e8596d5cb93d486)
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/distributed/device_communicators/rdma_all_reduce.py: already patched (b764fb042563026d)
+/home/jeweled/dsv41-stage/g130/rdma/build/rdma_ar_ext.so: untouched (14d049dda41a2a8f)
+== spark-four
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/models/deepseek_v41/nvidia/dsv41_oblit.py: already patched (8e8596d5cb93d486)
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/distributed/device_communicators/rdma_all_reduce.py: already patched (b764fb042563026d)
+/home/jeweled/dsv41-stage/g130/rdma/build/rdma_ar_ext.so: untouched (14d049dda41a2a8f)
+== spark-five
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/models/deepseek_v41/nvidia/dsv41_oblit.py: already patched (8e8596d5cb93d486)
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/distributed/device_communicators/rdma_all_reduce.py: already patched (b764fb042563026d)
+/home/jeweled/dsv41-stage/g130/rdma/build/rdma_ar_ext.so: untouched (14d049dda41a2a8f)
+== spark-six
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/models/deepseek_v41/nvidia/dsv41_oblit.py: already patched (8e8596d5cb93d486)
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/distributed/device_communicators/rdma_all_reduce.py: already patched (b764fb042563026d)
+/home/jeweled/dsv41-stage/g130/rdma/build/rdma_ar_ext.so: untouched (14d049dda41a2a8f)
+== spark-seven
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/models/deepseek_v41/nvidia/dsv41_oblit.py: already patched (8e8596d5cb93d486)
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/distributed/device_communicators/rdma_all_reduce.py: already patched (b764fb042563026d)
+/home/jeweled/dsv41-stage/g130/rdma/build/rdma_ar_ext.so: untouched (14d049dda41a2a8f)
+== spark-eight
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/models/deepseek_v41/nvidia/dsv41_oblit.py: already patched (8e8596d5cb93d486)
+/home/jeweled/venvs/vllm032/lib/python3.12/site-packages/vllm/distributed/device_communicators/rdma_all_reduce.py: already patched (b764fb042563026d)
+/home/jeweled/dsv41-stage/g130/rdma/build/rdma_ar_ext.so: untouched (14d049dda41a2a8f)
+spark-one    r7.so b79ab9606c76d3a4 rdma_all_reduce.py b764fb042563026d dsv41_oblit.py 8e8596d5cb93d486 live.so 14d049dda41a2a8f OK
+spark-two    r7.so b79ab9606c76d3a4 rdma_all_reduce.py b764fb042563026d dsv41_oblit.py 8e8596d5cb93d486 live.so 14d049dda41a2a8f OK
+spark-three  r7.so b79ab9606c76d3a4 rdma_all_reduce.py b764fb042563026d dsv41_oblit.py 8e8596d5cb93d486 live.so 14d049dda41a2a8f OK
+spark-four   r7.so b79ab9606c76d3a4 rdma_all_reduce.py b764fb042563026d dsv41_oblit.py 8e8596d5cb93d486 live.so 14d049dda41a2a8f OK
+spark-five   r7.so b79ab9606c76d3a4 rdma_all_reduce.py b764fb042563026d dsv41_oblit.py 8e8596d5cb93d486 live.so 14d049dda41a2a8f OK
+spark-six    r7.so b79ab9606c76d3a4 rdma_all_reduce.py b764fb042563026d dsv41_oblit.py 8e8596d5cb93d486 live.so 14d049dda41a2a8f OK
+spark-seven  r7.so b79ab9606c76d3a4 rdma_all_reduce.py b764fb042563026d dsv41_oblit.py 8e8596d5cb93d486 live.so 14d049dda41a2a8f OK
+spark-eight  r7.so b79ab9606c76d3a4 rdma_all_reduce.py b764fb042563026d dsv41_oblit.py 8e8596d5cb93d486 live.so 14d049dda41a2a8f OK
+VERIFY8_R7 PASS
+20:09:11 [promote-r7c1] overlay installed + verified on 8/8
+20:09:11 [promote-r7c1] editing launcher on 8/8: RDMA_AR_EXT=/home/jeweled/dsv41-stage/r7comm2/build/rdma_ar_ext.so DSV41_RDMA_TRIM=1
+20:09:11 [promote-r7c1]   spark-one launcher -> 58899745
+20:09:12 [promote-r7c1]   spark-two launcher -> 58899745
+20:09:12 [promote-r7c1]   spark-three launcher -> 58899745
+20:09:12 [promote-r7c1]   spark-four launcher -> 58899745
+20:09:13 [promote-r7c1]   spark-five launcher -> 58899745
+20:09:13 [promote-r7c1]   spark-six launcher -> 58899745
+20:09:14 [promote-r7c1]   spark-seven launcher -> 58899745
+20:09:15 [promote-r7c1]   spark-eight launcher -> 58899745
+20:09:15 [promote-r7c1] new launcher 58899745 on 8/8 (was b1306620); diff:
+104c104
+< export RDMA_AR_EXT=${RDMA_AR_EXT:-$HOME/dsv41-stage/g130/rdma/build/rdma_ar_ext.so} RDMA_AR_SPLIT_POST=${RDMA_AR_SPLIT_POST:-1} RDMA_AR_PUB_V1=${RDMA_AR_PUB_V1:-1} RDMA_AR_PUB_V2=${RDMA_AR_PUB_V2:-1} RDMA_AR_HYG_PROXY=${RDMA_AR_HYG_PROXY:-1} RDMA_AR_HYG_POLL=${RDMA_AR_HYG_POLL:-1}
+---
+> export RDMA_AR_EXT=${RDMA_AR_EXT:-/home/jeweled/dsv41-stage/r7comm2/build/rdma_ar_ext.so} RDMA_AR_SPLIT_POST=${RDMA_AR_SPLIT_POST:-1} RDMA_AR_PUB_V1=${RDMA_AR_PUB_V1:-1} RDMA_AR_PUB_V2=${RDMA_AR_PUB_V2:-1} RDMA_AR_HYG_PROXY=${RDMA_AR_HYG_PROXY:-1} RDMA_AR_HYG_POLL=${RDMA_AR_HYG_POLL:-1}  # r7c1: r8 comm2fix C1 RDMA_TRIM +0.74% G1 131.65 vs 130.68 bit-exact digest 2f7fdcc exact ec2f4437 det ALLREF (was $HOME/dsv41-stage/g130/rdma/build/rdma_ar_ext.so)
+105a106
+> export DSV41_RDMA_TRIM=${DSV41_RDMA_TRIM:-1}  # r7c1: r8 comm2fix C1 RDMA_TRIM +0.74% G1 131.65 vs 130.68 bit-exact digest 2f7fdcc exact ec2f4437 det ALLREF
+20:09:16 [claude-promote-r7c1] preflight: site manifest e5521994fea6 and launcher 58899745 identical on 8/8
+20:12:05 [claude-promote-r7c1] HEALTHY: /health 200 + startup complete at +154s after systemd-run (downtime 168s)
+20:16:04 [promote-r7c1] verify: G1 131.681 code 132.81 prose 96.52 math 165.71 digest 2f7fdccbd388225a | exact ec2f4437f8e1ed09 | det ALL==REF
+20:16:04 [promote-r7c1] G1 floor OK: 131.681 >= 131.1 (TRIM active)
+20:16:04 [promote-r7c1] PROMOTED: launcher 58899745
+20:16:04 [promote-r7c1] lock released

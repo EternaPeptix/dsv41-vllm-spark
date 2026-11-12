@@ -1,0 +1,13 @@
+c1 RDMA_AR_AUDIT=200 | G1 130.342 code 131.62 prose 95.50 math 163.91 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+e1 RDMA_AR_AUDIT=200;DSV41_STEP_COLEMB=1 | G1 130.635 code 131.89 prose 95.69 math 164.32 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF | -
+c3 RDMA_AR_AUDIT=200 | G1 130.371 code 131.61 prose 95.52 math 163.98 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+cmpp1 RDMA_AR_AUDIT=200;DSV41_PRIO_CMP=prio | G1 130.444 code 131.63 prose 95.56 math 164.15 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF | -
+c4 RDMA_AR_AUDIT=200 | G1 130.329 code 131.53 prose 95.42 math 164.03 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+p1 RDMA_AR_AUDIT=200;DSV41_STEP_ENGRAM_PACK=all | G1 130.447 code 131.68 prose 95.53 math 164.13 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF | -
+c5 RDMA_AR_AUDIT=200 | G1 130.304 code 131.55 prose 95.50 math 163.86 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+e2 RDMA_AR_AUDIT=200;DSV41_STEP_COLEMB=1 | G1 130.425 code 131.68 prose 95.60 math 164.00 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF | -
+c7 RDMA_AR_AUDIT=200 | G1 130.345 code 131.50 prose 95.47 math 164.06 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+cmpp2 RDMA_AR_AUDIT=200;DSV41_PRIO_CMP=prio | G1 130.444 code 131.69 prose 95.59 math 164.05 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF | -
+c8 RDMA_AR_AUDIT=200 | G1 130.289 code 131.51 prose 95.53 math 163.83 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+p2 RDMA_AR_AUDIT=200;DSV41_STEP_ENGRAM_PACK=all | G1 128.643 code 130.52 prose 94.07 math 161.34 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF | -
+c9 RDMA_AR_AUDIT=200 | G1 130.320 code 131.54 prose 95.47 math 163.95 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -

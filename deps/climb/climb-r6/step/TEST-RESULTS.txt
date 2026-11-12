@@ -1,0 +1,47 @@
+# r6-step test results, step:fix rerun (2026-11-09T10:07Z; module dsv41_step.py ebe2f7bb). Nothing below ran on a GPU; no serving arm ran.
+# The pre-fix record (module 66d697b9, 28 tests) is kept in prev/TEST-RESULTS.txt.r1.
+
+## 1. CPU tests: tests/test_step.py   (full log: tests/run.txt)
+# where: Mac Studio 512S1, ~/climb-r6/step-kit (rsync of this folder), python 3.13.13 / torch 2.11.0 CPU, pytest 9.2.0 from ~/climb-r1/pydeps
+# command: STEP_R5=~/climb-r6/climb-r5 PYTHONPATH=~/climb-r1/pydeps ~/exo-venv313/bin/python3 -m pytest -v -p no:cacheprovider tests/test_step.py
+30 passed (the 28 earlier tests + test_c4_audit_serves_stock_y[False|True], new for the audit fix)
+
+## 2. exhaustive AR-map test: STEP_SLOW=1 ... -k exhaustive  (all 65536 bf16 patterns x owner {0,3,7} x masked partial {+0,-0})
+1 passed
+
+## 3. device_test.py --cpu-selftest (512S1, exo-venv313)
+SUMMARY: 11 checks (6 mutants), 0 failed
+  - C3a mutant-id vectors: the correct lookup passes, and the map / shard / invalid mutants are each caught at all 26 served T (T=1 included)
+  - C3b PACK=all harness (the kit's _wrap_wkv/wkv_first/wkv_second, stand-in bf16 matmul for the GEMM, quick T set, ranks 0/3/7):
+    60 kit-vs-stock gates pass, 20 mutants (layer 14 fed layer 1's rows; layer 14's GEMM with layer 1's weights) all caught
+
+## 4. tools/serving_layers_cpu_check.py on spark-eight   (output: tools/spark8_checks.out)
+# ~/climb-scratch/r6-step, mandatory env (vllm032 venv, CUDA_HOME), CUDA_VISIBLE_DEVICES= (no CUDA runtime, no GPU use), nice 19,
+# PYTHONDONTWRITEBYTECODE=1 / -B, CLUSTER_LOCK absent on spark-one and spark-eight; reads the real checkpoint ~/models/dsv41/official-fp8
+SUMMARY: 24 checks (1 mutants), 0 failed
+  - device_test.serving_linear (the E0 builder) on the live vllm032 package: mtp.0.main_proj and layers.{1,14}.engram.wkv rank slices 0 and 7
+    -> ModelOptLinearMethod(kMxfp8Static, 32x32), default FormatScheme; live select_linear_kernel -> FlashInferCutlassMxfp8LinearKernel
+  - processed scale == swizzle_mxfp8_scale(repeat_interleave(raw e8m0 block scale, 32, 0)), 1-D; r4.rowmajor_scale recovers [N, K/32]
+  - the live r4.ColSplit builds on the serving main_proj for all 8 ranks, weight slice and swizzled scale exact
+  - the raw checkpoint scale (the old device-test input) still raises RuntimeError('unrecognised MXFP8 weight/scale layout') -> CAUGHT
+
+## 5. tools/compile_check.py on spark-eight (same env and rules; TRITON_CACHE_DIR inside ~/climb-scratch/r6-step, deleted afterwards)
+PASS colemb lookup (int16 copy, N=640): 48 SASS instrs; fp-class opcodes []
+PASS device_test AR emulator (FADD no FTZ, F2FP): 1720 SASS instrs; fp-class opcodes ['F2FP.BF16.F32.PACK_AB', 'FADD']
+ALL PASS
+
+## 6. t2 trace measurement (512S1, python3): scripts/engwait.py on ~/climb-traces/t2/prod/q{0,4}.{1,2,3}.sqlite -> scripts/engwait_t2.txt
+ALL: 360 forwards; layer 14's Engram lookup ends 379.1 us (min) / 405.9 (p10) / 509.5 (p50) before layer 1's rows AG starts; never after it
+
+## 7. read-only checks this pass
+- CLUSTER_LOCK absent on spark-one (via Tailscale) and spark-eight before each spark-eight run
+- live vllm032 sources read on spark-eight: deepseek_v41/quant_config.py (32x32 ue8m0 -> ModelOptLinearMethod), modelopt.py
+  (KMxfp8Static scale loader repeat_interleave, select_linear_kernel, process_weights_after_loading), kernels/linear/mxfp8/flashinfer.py,
+  kernels/linear/__init__.py (_POSSIBLE_MXFP8_KERNELS order; CuTe-DSL needs sm_100 family), linear.py:417 / :610 (forward GEMM calls)
+- checkpoint safetensors headers: mtp.0.main_proj F8_E4M3 [5120,15360] + F8_E8M0 [160,480]; layers.{1,14}.engram.wkv F8_E4M3 [25600,6144] + F8_E8M0 [800,192]
+
+## 8. NOT run (and why)
+- device_test.py GPU parts (E0 GEMM gates, C3a full table, C3b incl. the PACK=all serving-wkv test, C4 + mutants): need a stopped node; serving is live (read-only rule).
+- the serving-time COLEMB full-table proof on the real 8-rank AR and the C4 audit: they run only inside a serving arm.
+- any install on a Spark, any C-T-C-T arm, exact.py / G1 digest / det: window-only.
+- an import of the patched engram.py / dsv41_r4_small.py inside the real vllm package (AST-checked and compiled, not imported).

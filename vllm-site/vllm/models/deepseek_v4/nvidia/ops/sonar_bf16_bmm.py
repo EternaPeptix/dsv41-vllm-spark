@@ -32,6 +32,10 @@ import torch
 
 from vllm.logger import init_logger
 from vllm.triton_utils import tl, triton
+_DSV41_GLUE_PDL = __import__('os').environ.get('DSV41_GLUE_PDL', '0').strip().lower() not in ('', '0', 'off')  # r1-pdl
+if _DSV41_GLUE_PDL:  # r1-pdl
+    from vllm.triton_utils import dsv41_glue_pdl as _dsv41_glue_pdl  # r1-pdl
+    _DSV41_GLUE_PDL = _dsv41_glue_pdl.enabled('woa')  # r1-pdl
 
 logger = init_logger(__name__)
 
@@ -135,6 +139,9 @@ def grouped_bmm(
     splits = _splits_for(m)
     fp8w = weight.dtype == torch.float8_e4m3fn
     partial = torch.empty((splits, groups, m, n), device=a.device, dtype=torch.float32)
+    if _DSV41_GLUE_PDL:  # r1-pdl
+        _dsv41_glue_pdl.wo_a(a=a, weight=weight, weight_scale=weight_scale, partial=partial, out=out, m=m, groups=groups, n=n, k=k, splits=splits, fp8w=fp8w)  # r1-pdl
+        return  # r1-pdl
     _sm120_wo_a_partial[(triton.cdiv(n, 64), groups * triton.cdiv(m, 16), splits)](
         a,
         weight,
@@ -210,7 +217,8 @@ def _fp8_copy(wo_a, grouped_weight: torch.Tensor):
     return res
 
 
-def try_project(o_proj_input: torch.Tensor, wo_a, grouped_weight: torch.Tensor, z: torch.Tensor) -> bool:
+def try_project(o_proj_input: torch.Tensor, wo_a, grouped_weight: torch.Tensor, z: torch.Tensor,  # r2-attnout
+                r2ao=None) -> bool:  # r2-attnout
     """Run the skinny kernel if the call qualifies; return False to fall back."""
     global _logged
     tokens = o_proj_input.shape[0]
@@ -239,5 +247,7 @@ def try_project(o_proj_input: torch.Tensor, wo_a, grouped_weight: torch.Tensor, 
             "DSV41 sonar o_proj enabled: mode=%s weight=%s M=[%d,%d] G=%d N=%d K=%d",
             MODE, weight.dtype, MIN_M, MAX_M, grouped_weight.shape[0], n, k,
         )
+    if r2ao is not None:  # r2-attnout
+        return r2ao.run(o_proj_input, weight, scale, z)  # r2-attnout
     grouped_bmm(o_proj_input, weight, z, scale)
     return True

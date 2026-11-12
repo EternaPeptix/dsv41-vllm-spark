@@ -1,0 +1,96 @@
+# r5-prio test results (2026-11-09T06:04:18Z, Mac Studio 512S1, python/torch 3.13.13 2.11.0; pytest 9.2.0 from ~/climb-r1/pydeps)
+# kit shas: attention.py 434905c2ddda2f4e  dsv41_r3_dense.py 602c6ef71e7985cd  shared_experts.py 3e51975a89393fd0  engram.py c8170bd9355f7c7f  model.py 6d34ceb74185efd3  dsv41_prio.py 30a0cbbb1cbef1c8
+# command: cd ~/climb-r5/prio-kit && PYTHONPATH=~/climb-r1/pydeps ~/exo-venv313/bin/python3 -m pytest -v tests/test_prio.py
+
+tests/test_prio.py::test_anchor_counts_and_shas PASSED
+tests/test_prio.py::test_flag_off_is_ast_identical PASSED
+tests/test_prio.py::test_flag_lines_default_off PASSED
+tests/test_prio.py::test_cmp_flag_off_matches_live[1-None] PASSED
+tests/test_prio.py::test_cmp_flag_off_matches_live[1-fused] PASSED
+tests/test_prio.py::test_cmp_flag_off_matches_live[1-declines] PASSED
+tests/test_prio.py::test_cmp_flag_off_matches_live[4-None] PASSED
+tests/test_prio.py::test_cmp_flag_off_matches_live[4-fused] PASSED
+tests/test_prio.py::test_cmp_flag_off_matches_live[4-declines] PASSED
+tests/test_prio.py::test_cmp_flag_off_matches_live[8-None] PASSED
+tests/test_prio.py::test_cmp_flag_off_matches_live[8-fused] PASSED
+tests/test_prio.py::test_cmp_flag_off_matches_live[8-declines] PASSED
+tests/test_prio.py::test_cmp_flag_off_matches_live[9-None] PASSED
+tests/test_prio.py::test_cmp_flag_off_matches_live[9-fused] PASSED
+tests/test_prio.py::test_cmp_flag_off_matches_live[9-declines] PASSED
+tests/test_prio.py::test_cmp_prio[1-None] PASSED
+tests/test_prio.py::test_cmp_prio[1-fused] PASSED
+tests/test_prio.py::test_cmp_prio[1-declines] PASSED
+tests/test_prio.py::test_cmp_prio[2-None] PASSED
+tests/test_prio.py::test_cmp_prio[2-fused] PASSED
+tests/test_prio.py::test_cmp_prio[2-declines] PASSED
+tests/test_prio.py::test_cmp_prio[4-None] PASSED
+tests/test_prio.py::test_cmp_prio[4-fused] PASSED
+tests/test_prio.py::test_cmp_prio[4-declines] PASSED
+tests/test_prio.py::test_cmp_prio[6-None] PASSED
+tests/test_prio.py::test_cmp_prio[6-fused] PASSED
+tests/test_prio.py::test_cmp_prio[6-declines] PASSED
+tests/test_prio.py::test_cmp_prio[8-None] PASSED
+tests/test_prio.py::test_cmp_prio[8-fused] PASSED
+tests/test_prio.py::test_cmp_prio[8-declines] PASSED
+tests/test_prio.py::test_cmp_serial[1-None] PASSED
+tests/test_prio.py::test_cmp_serial[1-fused] PASSED
+tests/test_prio.py::test_cmp_serial[4-None] PASSED
+tests/test_prio.py::test_cmp_serial[4-fused] PASSED
+tests/test_prio.py::test_cmp_serial[8-None] PASSED
+tests/test_prio.py::test_cmp_serial[8-fused] PASSED
+tests/test_prio.py::test_cmp_fallbacks[prio] PASSED
+tests/test_prio.py::test_cmp_fallbacks[serial] PASSED
+tests/test_prio.py::test_cmp_unknown_mode_is_off PASSED
+tests/test_prio.py::test_cmp_prio_mutant_missing_join_is_caught PASSED
+tests/test_prio.py::test_cmp_exception_restores_stream PASSED
+tests/test_prio.py::test_shared_stream[False] PASSED
+tests/test_prio.py::test_shared_stream[True] PASSED
+tests/test_prio.py::test_shared_flag_off_matches_live PASSED
+tests/test_prio.py::test_shared_refuses_reducing_mlp PASSED
+tests/test_prio.py::test_shared_mutant_missing_wait_is_caught PASSED
+tests/test_prio.py::test_engram_flag_off_matches_live PASSED
+tests/test_prio.py::test_engram_hoist PASSED
+tests/test_prio.py::test_engram_hoist_kernel_set_matches_live PASSED
+tests/test_prio.py::test_engram_hoist_skips[too_many_tokens] PASSED
+tests/test_prio.py::test_engram_hoist_skips[sp] PASSED
+tests/test_prio.py::test_engram_unconsumed_hoist_is_flushed_and_lever_off PASSED
+tests/test_prio.py::test_engram_install_refusals PASSED
+tests/test_prio.py::test_engram_mutant_missing_join_is_caught PASSED
+tests/test_prio.py::test_parse_at PASSED
+tests/test_prio.py::test_installer_roundtrip PASSED
+tests/test_prio.py::test_installer_refuses_wrong_base_atomically PASSED
+tests/test_prio.py::test_installer_uninstall_refuses_edited PASSED
+tests/test_prio.py::test_compose_check PASSED
+tests/test_prio.py::test_device_test_cpu_selftest PASSED
+============================== 60 passed in 2.09s ==============================
+cpu-selftest: OK
+
+# kit-mutation check (each mutation applied to a copy of dsv41_prio.py; the behaviour tests must fail):
+mutation [s/    EH.side.wait_stream(main)/    pass  # MUT/] applied 1x: 3 failed, 48 passed, 9 deselected in 1.50s
+mutation [s/        tok.done.record(tok.main)/        pass  # MUT/] applied 1x: 6 failed, 45 passed, 9 deselected in 1.50s
+mutation [s/        ARM.hi.wait_stream(ARM.main)/        pass  # MUT/] applied 1x: 15 failed, 36 passed, 9 deselected in 1.59s
+mutation [s/    main.wait_event(rec.done)  # join/    pass  # MUT join/] applied 1x: 3 failed, 48 passed, 9 deselected in 1.49s
+
+# device_test.py --cpu-selftest also ran on this Mac (python3): cpu-selftest: OK
+
+# NOT RUN: device_test.py on a GPU (T0-T4). No GPU was available to this role and the cluster is read-only;
+# the lead runs it on a stopped spark-eight with the mandatory env (README section 6). No serving arm was run.
+
+# ---------------------------------------------------------------------------------------------------------------
+# FIX PASS (prio:fix, after review B1) 2026-11-09T06:40:09Z, Mac Studio 512S1, python/torch 3.13.13 2.11.0,
+# run in a temporary directory /tmp/r5prio-fix.* (deleted afterwards)
+# command: PYTHONPATH=~/climb-r1/pydeps ~/exo-venv313/bin/python3 -m pytest -v tests/test_prio.py
+67 passed in 2.09s   (the 60 above + 7 new B1 tests:)
+tests/test_prio.py::test_device_test_b1_serving_qkv_gemm_must_be_v2[build_none] PASSED
+tests/test_prio.py::test_device_test_b1_serving_qkv_gemm_must_be_v2[build_raised] PASSED
+tests/test_prio.py::test_device_test_b1_serving_qkv_gemm_must_be_v2[partial_m] PASSED
+tests/test_prio.py::test_device_test_b1_serving_qkv_gemm_must_be_v2[v2_off] PASSED
+tests/test_prio.py::test_device_test_b1_serving_qkv_gemm_must_be_v2[not_skinny] PASSED
+tests/test_prio.py::test_device_test_b1_good_v2_passes PASSED
+tests/test_prio.py::test_device_test_b1_no_v1_fallback_note PASSED
+device_test.py --cpu-selftest: OK   (512S1 and this Mac; now also asserts every degraded B1 case fails)
+# B1 harness mutant: the pre-fix device_test.py swapped in -> pytest -k device_test: 7 failed, 1 passed
+#   (only the plain cpu-selftest test passes on the old file; every B1 test catches the old note-and-continue path)
+# kit shas unchanged by the fix (patched/ and files/ re-hashed against KIT.json: 6/6 True); device_test.py da79961d55cdf4eb
+# NOT RUN (unchanged): device_test.py T0-T4 on a GPU; any serving arm. The new T2 serving-op checks (v2 build,
+#   ok_a8 covers M=1..QKV_MAX_M, skinny_v2_a8 launched once per call at every served M) only run on the device.

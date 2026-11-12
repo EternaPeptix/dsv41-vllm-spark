@@ -1,0 +1,18 @@
+17:30:53 [promote-r8w1-cc] editing launcher on 8/8: DSV41_STEP_COLEMB=1 DSV41_PRIO_CMP=prio
+17:30:53 [promote-r8w1-cc]   spark-one launcher -> b1306620
+17:30:53 [promote-r8w1-cc]   spark-two launcher -> b1306620
+17:30:54 [promote-r8w1-cc]   spark-three launcher -> b1306620
+17:30:54 [promote-r8w1-cc]   spark-four launcher -> b1306620
+17:30:55 [promote-r8w1-cc]   spark-five launcher -> b1306620
+17:30:55 [promote-r8w1-cc]   spark-six launcher -> b1306620
+17:30:56 [promote-r8w1-cc]   spark-seven launcher -> b1306620
+17:30:56 [promote-r8w1-cc]   spark-eight launcher -> b1306620
+17:30:56 [promote-r8w1-cc] new launcher b1306620 on 8/8 (was 4f3cc1c6); diff:
+105a106,107
+> export DSV41_PRIO_CMP=${DSV41_PRIO_CMP:-prio}  # r8w1-cc: r8-w1: COLEMB +0.14% + CMPPRIO +0.085% G1, both reps above noise, bit-exact
+> export DSV41_STEP_COLEMB=${DSV41_STEP_COLEMB:-1}  # r8w1-cc: r8-w1: COLEMB +0.14% + CMPPRIO +0.085% G1, both reps above noise, bit-exact
+17:30:57 [claude-promote-r8w1-cc] preflight: site manifest 25de87755976 and launcher b1306620 identical on 8/8
+17:33:46 [claude-promote-r8w1-cc] HEALTHY: /health 200 + startup complete at +153s after systemd-run (downtime 168s)
+17:37:45 [promote-r8w1-cc] verify: G1 130.643 code 131.88 prose 95.61 math 164.44 digest 2f7fdccbd388225a | exact ec2f4437f8e1ed09 | det ALL==REF
+17:37:46 [promote-r8w1-cc] PROMOTED: launcher b1306620
+17:37:46 [promote-r8w1-cc] lock released

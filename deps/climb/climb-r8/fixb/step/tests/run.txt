@@ -1,0 +1,46 @@
+2026-11-09T10:07:42Z
+platform darwin -- Python 3.13.13, pytest-9.2.0, pluggy-1.7.0 -- /Users/jeweled/exo-venv313/bin/python3
+tests/test_step.py::test_base_shas_match_kit PASSED                      [  3%]
+tests/test_step.py::test_anchors_apply_roundtrip_compile[models/deepseek_v41/common/engram.py-base/live/engram.py] PASSED [  6%]
+tests/test_step.py::test_anchors_apply_roundtrip_compile[models/deepseek_v41/common/engram.py-base/r5/engram.py] PASSED [ 10%]
+tests/test_step.py::test_anchors_apply_roundtrip_compile[models/deepseek_v41/nvidia/dsv41_r4_small.py-base/live/dsv41_r4_small.py] PASSED [ 13%]
+tests/test_step.py::test_flag_off_is_ast_identical[models/deepseek_v41/common/engram.py-base/live/engram.py] PASSED [ 16%]
+tests/test_step.py::test_flag_off_is_ast_identical[models/deepseek_v41/common/engram.py-base/r5/engram.py] PASSED [ 20%]
+tests/test_step.py::test_flag_off_is_ast_identical[models/deepseek_v41/nvidia/dsv41_r4_small.py-base/live/dsv41_r4_small.py] PASSED [ 23%]
+tests/test_step.py::test_install_cycle[live] PASSED                      [ 26%]
+tests/test_step.py::test_install_cycle[r5] PASSED                        [ 30%]
+tests/test_step.py::test_refuses_foreign PASSED                          [ 33%]
+tests/test_step.py::test_compose_with_r5_prio_both_orders PASSED         [ 36%]
+tests/test_step.py::test_canon_bits_exhaustive_vs_ar_emulation PASSED    [ 40%]
+tests/test_step.py::test_identity_map_mutant_is_caught PASSED            [ 43%]
+tests/test_step.py::test_build_coltable_full_table_and_lookup PASSED     [ 46%]
+tests/test_step.py::test_build_detects_unmapped_ar PASSED                [ 50%]
+tests/test_step.py::test_packed_rows_gather_layout PASSED                [ 53%]
+tests/test_step.py::test_packed_cols_gather_layout PASSED                [ 56%]
+tests/test_step.py::test_engram_pack_sequence[look] PASSED               [ 60%]
+tests/test_step.py::test_engram_pack_sequence[all] PASSED                [ 63%]
+tests/test_step.py::test_engram_pack_skips_large_T_and_hoist_degrades_all PASSED [ 66%]
+tests/test_step.py::test_engram_pack_under_r5_hoist_order PASSED         [ 70%]
+tests/test_step.py::test_c4_happens_before[None] PASSED                  [ 73%]
+tests/test_step.py::test_c4_happens_before[no_join] PASSED               [ 76%]
+tests/test_step.py::test_c4_happens_before[aux_write] PASSED             [ 80%]
+tests/test_step.py::test_c4_happens_before[no_screen_wait] PASSED        [ 83%]
+tests/test_step.py::test_c4_drop_when_not_consumed_joins PASSED          [ 86%]
+tests/test_step.py::test_c4_take_rejects_wrong_operand PASSED            [ 90%]
+tests/test_step.py::test_c4_audit_serves_stock_y[False] PASSED           [ 93%]
+tests/test_step.py::test_c4_audit_serves_stock_y[True] PASSED            [ 96%]
+tests/test_step.py::test_flags_parse PASSED                              [100%]
+============================== 30 passed in 2.73s ==============================
+1 passed, 29 deselected in 7.27s
+PASS  cpu canon -0 row -> +0  
+PASS  cpu canon NaN -> 0x7FFF  
+CAUGHT  mutant cpu table without map  
+PASS  cpu rows pack  
+CAUGHT  mutant cpu rows halves swapped  
+PASS  cpu C3a mutant-id vectors: the correct lookup passes at every T  
+CAUGHT  mutant cpu C3a map mutant caught at all 26 served T  missed at []
+CAUGHT  mutant cpu C3a shard mutant caught at all 26 served T  missed at []
+CAUGHT  mutant cpu C3a invalid mutant caught at all 26 served T  missed at []
+PASS  cpu C3b PACK=all harness (stand-in GEMM): 60 kit-vs-stock gates pass  
+CAUGHT  mutant cpu C3b PACK=all harness: 20 mutants (2 per T) all caught  
+SUMMARY: 11 checks (6 mutants), 0 failed

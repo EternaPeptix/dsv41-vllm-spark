@@ -1,0 +1,70 @@
+r2-draftmoe compile log (2026-11-08)
+
+STATUS: NOT COMPILED BY ME. The cluster lock was held for the whole build session:
+  spark-one:~/dsv41-opt-20261021/CLUSTER_LOCK  token=claude-w1b-20261108T124446Z (start 12:44:47Z, eta 16:44:47Z)
+  then                                          token=claude-w1c-20261108T134808Z (start 13:48:09Z, eta 17:48:09Z)
+Brief rule 4: never compile while a measurement window runs, so no nvcc / Triton compile was started on spark-eight.
+No compile is needed for correctness: with the binaries absent, DeepGEMM JIT-compiles the new instance at first use
+(boot warm-up/capture for the M32 one), exactly as the drafter's current N768 instance was built. `install.py prejit`
+builds them ahead of time on each node during the window.
+
+What has to be compiled
+-----------------------
+1. M32 drafter FC1, N 576 (cache ~/dsv41-stage/g130/fc1/jit/deal-base/cache, include tree trees/deal-base):
+   kernel.cu = the live drafter entry .38370f025fa32d286ae7c509391f8b1a (sha ed151295..., N768, kNumGroups 128,
+   BLOCK 32x64x128, 7 stages, swizzle 128/128/128, 128+256 threads, 48 SMs, kBIsFP4, kEpiSubM 32, split-K 1)
+   with the single line "        0, 768, 5120," -> "        0, 576, 5120,"  (sha fe5bee03...).
+   DeepGEMM cache key (tools/djkey.py, FNV-1a x2 over cutlass-421 + nvcc --version + flags + include hashes):
+   15880fe86194f0cd52e055d46b8c154f
+2. 128-row drafter FC1, N 576 (cache ~/.cache/vllm/deep_gemm/cache, include vllm/third_party/deep_gemm/include):
+   kernel.cu = live .5559d05917b5ddb32bdf764a8f6c15b2 (N768, groups 128, BLOCK 128x128x128, 2 stages) with the same
+   one-line change (sha 6a9ee0f9...). Key 3a6d4662641d78cb41691c5a89306f93. Used only by drafter calls with
+   M > 160 (prefill-sized); none happened at the 13:17 boot (that entry's .committed mtime is 10-29).
+2b. 128-row drafter FC1, N 576, second tile config (added in the fix pass, 2026-11-08 ~14:50Z): the live default cache
+   also holds .2201c753bd89df488de6d5c86e83e112 (N768, groups 128, BLOCK 128x64x128, 3 stages; kernel.cu sha
+   301a0d1e...). Same one-line change -> kernel.cu sha fc936b78..., key 5a63770a66faeaa4f1203886b22d547d.
+nvcc flags (from the source entries' meta.json, identical to ops/build-deal.sh FL):
+   --cubin --gpu-architecture=sm_120f -O3 --compiler-options=-O3 --ptxas-options=--register-usage-level=10
+   -std=c++20 --compiler-options=-fPIC --compiler-options=-fconcepts --expt-relaxed-constexpr --expt-extended-lambda
+   --diag-suppress=39,161,174,177,186,940 --compiler-options=-Wno-deprecated-declarations,-Wno-abi
+   --include-path <tree>/include ; nvcc 13.0 V13.0.88 (/usr/local/cuda/bin/nvcc), checked against meta.json by prejit.
+3. Triton: _dsv41_fp_plan_kernel / _dsv41_fp_scatter_kernel get new constexpr specialisations (E=128, TOPK=3,
+   E_PAD=256, PACKS=10). Live source, unchanged; Triton JIT-compiles them at the first drafter call (boot).
+
+Key-function verification (read-only, python -I on spark-one, nothing written; 2026-11-08 ~13:20Z)
+---------------------------------------------------------------------------------------------------
+deal-base cache, every live entry reproduced by djkey (include trees/deal-base/include, flags/version from meta):
+  38370f025fa32d286ae7c509391f8b1a == 38370f025fa32d286ae7c509391f8b1a   (drafter FC1 N768 E128)
+  c22b8395e60dcec12ac1b8ec54387aa2 == c22b8395e60dcec12ac1b8ec54387aa2   (drafter FC2 E128)
+  d943459f0695b0d65cd41905ef259871 == d943459f0695b0d65cd41905ef259871   (target FC1 N576 E384, deal)
+  b384fe9bd0f290b740a467a6ac044821 == b384fe9bd0f290b740a467a6ac044821   (transpose_and_pack 40)
+  d4c37c50ff509f4a3690ea2cd19b2e25 == d4c37c50ff509f4a3690ea2cd19b2e25   (transpose_and_pack 3)
+  NEW576_E128 -> 15880fe86194f0cd52e055d46b8c154f
+default cache (~/.cache/vllm/deep_gemm/cache): all 9 sm120_m_grouped_fp8_fp4 entries reproduced (True x9).
+Analogy check of the "only N changes" assumption: the same one-line 768 -> 576 edit applied to the TARGET's 128-row
+N768 entry (0e915d63..., groups 384) gives ec8c0dc58892ba10744e5e0b1c8afe7e, which IS the live target compact
+128-row entry that DeepGEMM itself JIT-compiled. So for the target, DeepGEMM's heuristic picked the same tile config
+for N 576 as for N 768; the drafter keys above assume the same holds for kNumGroups 128. If it does not, the runtime
+simply JITs a different key (one cold compile) and the prebuilt entry is unused; exactness does not depend on the
+tile config (EXACTNESS.md section 2).
+
+To do in the window (CPU only, nice 19, CUDA_VISIBLE_DEVICES empty, ~1-3 min per kernel):
+  python3 install.py prejit        # per node, after install; refuses on any sha/key/compiler mismatch
+  python3 install.py prejit-status
+  then (optional, evidence) on spark-eight:  cuobjdump -sass <new>/kernel.cubin vs the 38370f02 cubin: expect the
+  same instruction sequence (HMMA/QMMA count, loop structure) with only N-derived immediates different.
+After the first boot with the flag on, record `install.py prejit-status` cubin sha256 into KIT.json prejit.*.cubin_sha256
+so later installs can verify byte-identical builds across nodes.
+
+Fix pass (2026-11-08 ~14:50Z): read-only key computation on spark-eight
+------------------------------------------------------------------------
+spark-one was unreachable (ssh: host down) at that time; spark-eight was reachable and had no CLUSTER_LOCK. Nothing was
+compiled or written there: tools/djkey.py was piped over stdin into `nice -n 19 ~/venvs/vllm032/bin/python -I -`,
+which only read ~/.cache/vllm/deep_gemm/cache and vllm/third_party/deep_gemm/include.
+  src 2201c753 selfkey True  src kernel.cu 301a0d1e  -> new kernel.cu fc936b78  new key 5a63770a66faeaa4f1203886b22d547d (absent)
+  src 5559d059 selfkey True  src kernel.cu d88102be  -> new kernel.cu 6a9ee0f9  new key 3a6d4662 == KIT.json   (absent)
+  src 4ea90a59 selfkey True  (target 128x64 N768 E384) -> 8135464c == the LIVE target-compact entry (present)
+  src 0e915d63 selfkey True  (target 128x128 N768 E384) -> ec8c0dc5 == the LIVE target-compact entry (present)
+So both 128-row tile configs map N768 -> N576 one to one on the target, which supports the analogy for the drafter.
+Cubins of identical kernel.cu differ between nodes (5559d059: 84ecdc26 on spark-one per the build pass, 5cc4cce7 on
+spark-eight), so cubin shas are recorded per node and never used as an install gate.

@@ -1,0 +1,68 @@
+{
+  "name": "r1-eager",
+  "levers": [
+    "G08 (host:H1 + spec:C4) dtgraph: drafter->target eager glue as per-step CUDA graphs",
+    "G22 (spec:C11): SKIPPED"
+  ],
+  "flags": [
+    {
+      "name": "DSV41_DTGRAPH",
+      "default": "",
+      "on_value": "1",
+      "meaning": "Capture the drafter->target glue (prepare_inputs .. model_state.prepare_attn: fused AV, expand_idx, pos/seq_lens, combine, live cap, block tables, slot mappings, token->req map, indexer/paged-MQA/ring/SWA metadata) into a CUDA graph every step and launch it once on the main stream. Tokens: 1|dt, update (cudaGraphExecUpdate into a per-(segment,slot) exec instead of instantiating each step), warm=N (eager runs per (num_reqs,num_tokens,graph tokens) before capture, default 2), seg=N (max segments per region, default 4), log=N (stats every N regions, default 5000). 'td' is refused (not exact). Unknown tokens fail the import (boot fails closed)."
+    }
+  ],
+  "files": [
+    {
+      "path": "vllm/v1/worker/gpu/model_runner.py",
+      "base_sha256": "efb031733472a4769038668e4e04742f2156f90a582bbaaf474618f2ae3148cc",
+      "action": "patch",
+      "result_sha256": "aa3e9d9e57462c40f8e42022ce291752c0fd673106ee20a1a134c4de56421a0a"
+    },
+    {
+      "path": "vllm/v1/worker/gpu/dsv41_dtgraph.py",
+      "base_sha256": null,
+      "action": "new",
+      "result_sha256": "5afb75d429763256ee1a119af574718460d833f8207fa325dd2be1dbf0f6f566"
+    }
+  ],
+  "install": "python3 install.py install",
+  "depends_on": [],
+  "conflicts_with": [
+    "any kit that edits model_runner.py execute_model around 'assert batch_req_state is not None' / 'input_ids = input_batch.input_ids' or appends to its end; any lever that runs the step-N+1 prep on a side stream (G22/C11, H4b) - DTGRAPH latches off on the stream switch, so it is safe but the two do not stack"
+  ],
+  "expected_gain_pct": {
+    "low": 0.0,
+    "central": 0.15,
+    "high": 0.26
+  },
+  "window_arms": [
+    {
+      "name": "dtg",
+      "env": "DSV41_DTGRAPH=1"
+    },
+    {
+      "name": "dtg-update",
+      "env": "DSV41_DTGRAPH=update"
+    }
+  ],
+  "device_checks": [
+    "Boot with DSV41_DTGRAPH=1: rank0.log shows 'DSV41_DTGRAPH armed' once per rank after the first decode steps, and no 'DSV41_DTGRAPH disabled' / 'exception inside the glue region'.",
+    "Flags-off relaunch first: exact.py combined ec2f4437f8e1ed09 and G1 outputs_digest 2f7fdccbd388225a (the patch must be inert).",
+    "Flag on: exact.py ec2f4437f8e1ed09, G1 digest 2f7fdccbd388225a on 2 reps, the 9 long-prompt hashes.",
+    "Stats line (DSV41_DTGRAPH=1,log=500 in a probe arm): segments/region close to 1.0 in steady decode; hazards should be only rare h2d_blocking (SWAM table build) or triton_compile early on. A steady hazard means a glue op the region cannot hold - report it.",
+    "nsys (one rank, 60 steps): between the drafter graph end and the target graph start, ~24 of the ~34 eager kernels now sit inside one small graph (cudaGraphLaunch correlation) with ~0.5 us gaps; the remaining eager ops are the sample_tokens tail (index_put, AV D2D/D2H on s68), embedding + ar_kernel_pl + D2D and _gather_lookback. Pre-region (DT) idle should fall from ~100 us to ~45-55 us per step.",
+    "CPU lead (nsys cudaGraphLaunch API end -> first kernel of the target graph) stays >= 5 ms: the per-step capture + instantiate + Python dispatch costs host time (expected 0.5-2 ms).",
+    "dtg-update arm only: no 'update path disabled' warning; stats 'update failures' small (topology changes only)."
+  ],
+  "skipped": [
+    {
+      "lever": "G22 / spec:C11",
+      "reason": "Needs the draft KV group to read private slot_mappings / input_block_tables (dflash/speculator.py:429-436 writes block_tables.slot_mappings[gid], and the drafter shares BlockTables, spec_decode/speculator.py:298) and the DSpark graphs recaptured on those addresses; both are drafter-owned files this kit may not edit. A runner-only version would race the drafter's KV writes."
+    },
+    {
+      "lever": "G08 target->drafter region ('td')",
+      "reason": "The TD glue takes different code paths while a stream is capturing: dsv41_r4_small.target_logits returns None under capture (dsv41_r4_small.py:835; also :584/:957/:976), the oblit head projection (dsv41_oblit.py:83) and the DSpark main_proj folds (dsv41_boundary.py:269/:498) switch path; capturing it would change arithmetic. It also contains 3 collectives and the s20 AsyncOutput copy. Refused by the flag parser."
+    }
+  ]
+}

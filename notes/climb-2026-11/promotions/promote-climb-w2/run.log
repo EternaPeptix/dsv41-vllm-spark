@@ -1,0 +1,20 @@
+17:05:34 [promote-climb-w2] editing launcher on 8/8: DSV41_DTGRAPH=1 DSV41_L2_PREFETCH_R1_SHW2=1 DSV41_L2_PREFETCH_R1_KVSRC=1 DSV41_IDXPAR=1
+17:05:34 [promote-climb-w2]   spark-one launcher -> dcd09a30
+17:05:54 [promote-climb-w2]   spark-two launcher -> dcd09a30
+17:05:54 [promote-climb-w2]   spark-three launcher -> dcd09a30
+17:05:55 [promote-climb-w2]   spark-four launcher -> dcd09a30
+17:05:55 [promote-climb-w2]   spark-five launcher -> dcd09a30
+17:05:56 [promote-climb-w2]   spark-six launcher -> dcd09a30
+17:05:56 [promote-climb-w2]   spark-seven launcher -> dcd09a30
+17:05:57 [promote-climb-w2]   spark-eight launcher -> dcd09a30
+17:05:57 [promote-climb-w2] new launcher dcd09a30 on 8/8 (was fda6d05a); diff:
+105a106,109
+> export DSV41_IDXPAR=${DSV41_IDXPAR:-1}  # climb-w2: climb W2/W2b: DTGRAPH eager-glue graphs + R1 SHW2/KVSRC prefetch + IDXPAR; W2b 5-lever set +2.1% G1, exact
+> export DSV41_L2_PREFETCH_R1_KVSRC=${DSV41_L2_PREFETCH_R1_KVSRC:-1}  # climb-w2: climb W2/W2b: DTGRAPH eager-glue graphs + R1 SHW2/KVSRC prefetch + IDXPAR; W2b 5-lever set +2.1% G1, exact
+> export DSV41_L2_PREFETCH_R1_SHW2=${DSV41_L2_PREFETCH_R1_SHW2:-1}  # climb-w2: climb W2/W2b: DTGRAPH eager-glue graphs + R1 SHW2/KVSRC prefetch + IDXPAR; W2b 5-lever set +2.1% G1, exact
+> export DSV41_DTGRAPH=${DSV41_DTGRAPH:-1}  # climb-w2: climb W2/W2b: DTGRAPH eager-glue graphs + R1 SHW2/KVSRC prefetch + IDXPAR; W2b 5-lever set +2.1% G1, exact
+17:05:58 [claude-promote-climb-w2] preflight: site manifest 245204482fdf and launcher dcd09a30 identical on 8/8
+17:08:48 [claude-promote-climb-w2] HEALTHY: /health 200 + startup complete at +154s after systemd-run (downtime 169s)
+17:12:51 [promote-climb-w2] verify: G1 126.070 code 127.52 prose 91.40 math 159.29 digest 2f7fdccbd388225a | exact ec2f4437f8e1ed09 | det ALL==REF
+17:12:52 [promote-climb-w2] PROMOTED: launcher dcd09a30
+17:12:52 [promote-climb-w2] lock released

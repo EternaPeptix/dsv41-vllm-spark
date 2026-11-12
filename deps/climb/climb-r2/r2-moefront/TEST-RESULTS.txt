@@ -1,0 +1,200 @@
+# r2-moefront test results (fix round), 2026-11-08T17:17:27Z
+# kit module dsv41_routeprep.py sha256 842f49fb5df830793e02c12ff0195fb853165e90fac35a16ff3f136cf7b0eda7
+# install.py sha256 17b89c2b1d7d002453ab79ba845328993dcfb769b10f1c3f5a9eb6c4f8bbf92f; device_test.py sha256 69b0f0d928dcc2be5c0ab78709fc4363b4cdcf772dedaf262185c63ed3226de2
+
+SUMMARY
+  tests/test_install.py        Mac (Python 3.14.7)            exit 0, ALL PASS (49 checks)
+  tests/test_module.py         512S1 exo-venv313 (torch CPU)  exit 0, ALL PASS
+  tests/test_quant_emul.py     512S1                          exit 0, ALL PASS (10,092,544 element cases + absmax sweeps)
+  tests/test_plan_emul.py      512S1                          exit 0, 690 cases ALL PASS
+  tests/test_device_inputs.py  512S1                          exit 0, ALL PASS
+  tools/compile_check.py       spark-eight, Triton 3.7.1, sm_121, no GPU, CLUSTER_LOCK absent  exit 0, ALL PASS (10 variants)  -> results/compile.log
+  tools/interp_test.py         spark-eight, TRITON_INTERPRET=1, no GPU                          exit 0, 20 cases ALL PASS -> results/interp.log
+  device_test.py               NOT RUN: needs a GPU on a stopped node (lead). Gate before any rp / rp-pdl / rp-pf arm.
+
+NOTE compile run 1 (results/compile.run1.log, 17:14Z) compiled all 10 variants but failed one over-strict check:
+  'no atomics' matched atom.shared.add.u32, the shared-memory histogram of tl.histogram (integer adds into smem,
+  exact and order-free). The check now forbids global atomics/reductions and any shared atomic other than integer add.
+  Run 2 (17:15Z, same kit module 842f49fb) passes. No kernel source change between runs.
+
+== tests/test_install.py
+PASS 1 live base sha model_executor/layers/fused_moe/deep_gemm_utils.py
+PASS 1 live base sha model_executor/layers/fused_moe/experts/deep_gemm_moe.py
+PASS 2 dry: model_executor/layers/fused_moe/dsv41_routeprep.py: would copy 842f49fb5df83079
+PASS 2 dry writes nothing
+PASS 2 install
+PASS 2 status patched x2 + module present
+PASS 2 install idempotent
+PASS 2 backup is the pre-install file deep_gemm_utils.py
+PASS 2 backup is the pre-install file deep_gemm_moe.py
+PASS 2 uninstall restores exact bytes
+PASS 2 uninstall removes the module
+PASS 2 r1-pdl+dry: model_executor/layers/fused_moe/dsv41_routeprep.py: would copy 842f49fb5df83079
+PASS 2 r1-pdl+dry writes nothing
+PASS 2 r1-pdl+install
+PASS 2 r1-pdl+status patched x2 + module present
+PASS 2 r1-pdl+install idempotent
+PASS 2 r1-pdl+backup is the pre-install file deep_gemm_utils.py
+PASS 3 r1-pdl lines kept in deep_gemm_utils.py
+PASS 2 r1-pdl+backup is the pre-install file deep_gemm_moe.py
+PASS 2 r1-pdl+uninstall restores exact bytes
+PASS 2 r1-pdl+uninstall removes the module
+PASS 2 refuses a foreign base and writes nothing
+PASS 3 r1-pdl's deep_gemm_utils anchors still match once after our edits (either install order)
+PASS 4 strip(tagged) == base (deep_gemm_utils.py)
+PASS 4 every inserted statement is gated (deep_gemm_utils.py): 5 tagged lines
+PASS 4 gate expression False for unset/0/off/false/'' (deep_gemm_utils.py)
+PASS 4 strip(tagged) == base (deep_gemm_moe.py)
+PASS 4 every inserted statement is gated (deep_gemm_moe.py): 7 tagged lines
+PASS 4 gate expression False for unset/0/off/false/'' (deep_gemm_moe.py)
+PASS 5 Athena transform_apply on the base DeepGemmFP4Experts.apply
+PASS 5 Athena transform_apply on the patched DeepGemmFP4Experts.apply
+PASS 6 moefront -> draftmoe installs
+PASS 6 status 'patched' x2 with draftmoe on top
+PASS 6 uninstall moefront under draftmoe works and leaves the draftmoe-only bytes
+PASS 6 draftmoe -> moefront installs
+PASS 6 idempotent over draftmoe
+PASS 6 both orders: same file set, draftmoe-stripped files == moefront-only install
+PASS 6 uninstall draftmoe (above us) leaves the moefront-only bytes
+PASS 6 uninstall moefront last restores the starting bytes
+PASS 6 r1-pdl+moefront -> draftmoe installs
+PASS 6 r1-pdl+status 'patched' x2 with draftmoe on top
+PASS 6 r1-pdl+uninstall moefront under draftmoe works and leaves the draftmoe-only bytes
+PASS 6 r1-pdl+draftmoe -> moefront installs
+PASS 6 r1-pdl+idempotent over draftmoe
+PASS 6 r1-pdl+both orders: same file set, draftmoe-stripped files == moefront-only install
+PASS 6 r1-pdl+uninstall draftmoe (above us) leaves the moefront-only bytes
+PASS 6 r1-pdl+uninstall moefront last restores the starting bytes
+PASS 7 uninstall refuses when the 2nd file is foreign and writes nothing (1st file untouched)
+PASS 8 install/status/uninstall under LC_ALL=C PYTHONUTF8=0 restore exact bytes
+ALL PASS
+exit 0
+
+== tests/test_module.py
+PASS env FC1_FRONT='' -> trigger/prefetch (False, 0)
+PASS env FC1_FRONT='0' -> trigger/prefetch (False, 0)
+PASS env FC1_FRONT='pdl' -> trigger/prefetch (True, 0)
+PASS env FC1_FRONT='pf1' -> trigger/prefetch (True, 1)
+PASS env FC1_FRONT='PF4' -> trigger/prefetch (True, 4)
+PASS env FC1_FRONT='pf8' -> trigger/prefetch (True, 8)
+PASS env {'DSV41_MOE_ROUTEPREP': '2'} raises ValueError
+PASS env {'DSV41_MOE_ROUTEPREP': 'verify'} raises ValueError
+PASS env {'DSV41_MOE_ROUTEPREP': '1', 'DSV41_MOE_FC1_FRONT': 'pf3'} raises ValueError
+PASS env {'DSV41_MOE_ROUTEPREP': '1', 'DSV41_MOE_FC1_FRONT': 'early'} raises ValueError
+PASS expects_unquantized_inputs truth table
+PASS front(): fused iff M<=96 with mfront=1 e8m0=True (else the prepare() call)
+PASS front(): fused iff M<=96 with mfront=0 e8m0=True (else the prepare() call)
+PASS front(): fused iff M<=96 with mfront=verify e8m0=True (else the prepare() call)
+PASS front(): fused iff M<=96 with mfront=1 e8m0=False (else the prepare() call)
+PASS front(): every ineligible variant takes the prepare() quant
+PASS fused_permute launch contract (FC1_FRONT=0)
+PASS fused_permute launch contract (FC1_FRONT=pdl)
+PASS fused_permute launch contract (FC1_FRONT=pf2)
+PASS fused_permute: w1_scale too short for pf2 -> PF_KB 0
+PASS fused_permute refuses non-fused geometry and overlapping x / slot rows
+PASS precompile once, 5 SLOTS buckets, same args as the real launch (FC1_FRONT=0)
+PASS precompile once, 5 SLOTS buckets, same args as the real launch (FC1_FRONT=pdl)
+PASS precompile once, 5 SLOTS buckets, same args as the real launch (FC1_FRONT=pf2)
+PASS precompile failure -> fused path OFF for the process, every call takes the prepare() quant
+PASS static check failing -> no precompile, prepare() quant
+ALL PASS
+
+== tests/test_quant_emul.py
+PASS A scale map, every positive bf16 absmax (32640)
+PASS A scale map vs float64 reference (positive)
+PASS A scale map, every negative bf16 absmax (32640)
+PASS A scale map vs float64 reference (negative)
+   reachable scale exponents: 94..247 (154 values; 1/scale normal: True)
+PASS B' IEEE 1/scale is the exact power of two 2^-k for every reachable scale
+PASS B element map, all 65536 bf16 x for each of 154 reachable scales (10092544 cases, 0.1s)
+PASS B element map vs torch c10 e4m3fn reference (7066866 in-domain cases)
+PASS C packed UE8M0 word, every scale in every position + 1e6 random 4-tuples
+PASS D whole rows (1152 rows x 5120, random/hostile): e4m3 bytes
+PASS D whole rows: scale bits
+PASS D absmax order-free (permuted lanes give the same scales)
+PASS D packed words of whole rows
+PASS D vs float64 + torch c10 reference (1152 finite rows)
+ALL PASS (0.8s)
+
+== tests/test_plan_emul.py
+690 cases (M 1..96, 128, 170 x 7 routings + 4 x 40 atomic orders): ALL PASS (5.6s)
+
+== tests/test_device_inputs.py
+PASS Q1: 1394 rows, 154 scales, 55760 groups, emulation live == fused
+PASS Q1 covers every reachable scale (154 of 154)
+PASS Q1 largest scale sweeps all 65280 finite bf16 x (65280)
+PASS Q2: 1632 rows, every finite bf16 absmax, emulation live == fused
+PASS synthetic routings / hostile rows well-formed
+ALL PASS
+
+== results/compile.log (spark-eight)
+# 2026-11-08T17:15:32Z spark-eight; kit module sha256:
+842f49fb5df830793e02c12ff0195fb853165e90fac35a16ff3f136cf7b0eda7  /Users/jeweled/Documents/dsv41-offline/climb-r2/r2-moefront/files/vllm/model_executor/layers/fused_moe/dsv41_routeprep.py
+triton 3.7.1; target GPUTarget(backend='cuda', arch=121, warp_size=32); ptxas /usr/local/cuda/bin/ptxas
+compiled s64_off: ptx 213283 B, cubin 223008 B, regs ?, spills ?, shared 2048
+compiled s1024_off: ptx 250296 B, cubin 282528 B, regs ?, spills ?, shared 2048
+compiled s64_off_i64ids: ptx 213479 B, cubin 223136 B, regs ?, spills ?, shared 2048
+compiled s64_pdl: ptx 213326 B, cubin 223128 B, regs ?, spills ?, shared 2048
+compiled s64_pf2: ptx 220136 B, cubin 228096 B, regs ?, spills ?, shared 2048
+compiled s64_nopdl: ptx 213137 B, cubin 222984 B, regs ?, spills ?, shared 2048
+compiled s1024_pdl: ptx 250339 B, cubin 282656 B, regs ?, spills ?, shared 2048
+compiled s1024_pf4: ptx 259936 B, cubin 289592 B, regs ?, spills ?, shared 2048
+compiled s1024_pf8: ptx 265977 B, cubin 294264 B, regs ?, spills ?, shared 2048
+compiled s256_pf2_i64ids: ptx 224773 B, cubin 236856 B, regs ?, spills ?, shared 2048
+PASS div.rn.f32 present (IEEE absmax/448 and 1/scale): 80 found
+PASS no div.full / div.approx (quant must not use approximate division)
+INFO .ftz f32 ops in the PTX: none
+PASS no fma.rn.f32 (no fused x*inv into anything; enable_fp_fusion=False)
+PASS max/min .f32 are NaN-ignoring (no .NaN modifier)
+PASS 1e-10 floor constant 0f2EDBE6FF present
+PASS 16384.0 (0f46800000) subnormal add present
+PASS 448.0 runtime args used (no hard-coded rounding constant 0f43E00000 required)
+PASS no cvt to e4m3 (encoding is the live integer sequence)
+PASS griddepcontrol.wait in PDL variants
+PASS no griddepcontrol.wait without launch_pdl
+PASS launch_dependents only in pdl/pf variants
+PASS s1024_pf4: prefetch.global.L2 + launch_dependents present
+PASS s1024_pf8: prefetch.global.L2 + launch_dependents present
+PASS s256_pf2_i64ids: prefetch.global.L2 + launch_dependents present
+PASS prefetch.global.L2 only in pf variant
+PASS s64_off: no global atomics/reductions; shared atomics only integer add (histogram): global none, shared ['atom.shared.add.u32']
+PASS s1024_off: no global atomics/reductions; shared atomics only integer add (histogram): global none, shared ['atom.shared.add.u32']
+PASS s64_off_i64ids: no global atomics/reductions; shared atomics only integer add (histogram): global none, shared ['atom.shared.add.u32']
+PASS s64_pdl: no global atomics/reductions; shared atomics only integer add (histogram): global none, shared ['atom.shared.add.u32']
+PASS s64_pf2: no global atomics/reductions; shared atomics only integer add (histogram): global none, shared ['atom.shared.add.u32']
+PASS s64_nopdl: no global atomics/reductions; shared atomics only integer add (histogram): global none, shared ['atom.shared.add.u32']
+PASS s1024_pdl: no global atomics/reductions; shared atomics only integer add (histogram): global none, shared ['atom.shared.add.u32']
+PASS s1024_pf4: no global atomics/reductions; shared atomics only integer add (histogram): global none, shared ['atom.shared.add.u32']
+PASS s1024_pf8: no global atomics/reductions; shared atomics only integer add (histogram): global none, shared ['atom.shared.add.u32']
+PASS s256_pf2_i64ids: no global atomics/reductions; shared atomics only integer add (histogram): global none, shared ['atom.shared.add.u32']
+PASS s64_off: griddepcontrol.wait before the first global load/store
+PASS s64_pdl: griddepcontrol.wait before the first global load/store
+PASS s64_pf2: griddepcontrol.wait before the first global load/store
+PASS s1024_off: griddepcontrol.wait before the first global load/store
+PASS s1024_pf8: griddepcontrol.wait before the first global load/store
+ALL PASS
+compile_check.py exit 0
+
+== results/interp.log (spark-eight)
+PASS interpreter M=1 random
+PASS interpreter M=1 dead
+PASS interpreter M=1 same
+PASS interpreter M=1 hostile
+PASS interpreter M=2 random
+PASS interpreter M=2 dead
+PASS interpreter M=2 same
+PASS interpreter M=2 hostile
+PASS interpreter M=4 random
+PASS interpreter M=4 dead
+PASS interpreter M=4 same
+PASS interpreter M=4 hostile
+PASS interpreter M=6 random
+PASS interpreter M=6 dead
+PASS interpreter M=6 same
+PASS interpreter M=6 hostile
+PASS interpreter M=11 random
+PASS interpreter M=11 dead
+PASS interpreter M=11 same
+PASS interpreter M=11 hostile
+20 cases: ALL PASS
+interp_test.py exit 0

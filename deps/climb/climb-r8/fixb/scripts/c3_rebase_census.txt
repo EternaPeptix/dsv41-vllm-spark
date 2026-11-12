@@ -1,0 +1,32 @@
+rank 0 code  emb_eager 34.08 (n 20) emb_gap 3.12 (n 20) dr_emb_ar 34.34 (n 20) rows_ag 24.8 (n 40) wkv_ag 29.78 (n 40) wkv_gemm 82.08 (n 40)
+rank 0 prose emb_eager 27.12 (n 20) emb_gap 2.06 (n 20) dr_emb_ar 34.69 (n 20) rows_ag 21.54 (n 40) wkv_ag 24.42 (n 40) wkv_gemm 85.25 (n 40)
+rank 0 maths emb_eager 30.14 (n 20) emb_gap 3.04 (n 20) dr_emb_ar 33.73 (n 20) rows_ag 21.97 (n 40) wkv_ag 30.51 (n 40) wkv_gemm 84.34 (n 40)
+rank 1 code  emb_eager 34.82 (n 20) emb_gap 2.21 (n 20) dr_emb_ar 33.66 (n 20) rows_ag 22.35 (n 40) wkv_ag 32.19 (n 40) wkv_gemm 82.43 (n 40)
+rank 1 prose emb_eager 35.6 (n 20) emb_gap 2.59 (n 20) dr_emb_ar 33.5 (n 20) rows_ag 22.21 (n 40) wkv_ag 25.7 (n 40) wkv_gemm 82.93 (n 40)
+rank 1 maths emb_eager 33.31 (n 20) emb_gap 2.24 (n 20) dr_emb_ar 33.97 (n 20) rows_ag 22.74 (n 40) wkv_ag 31.31 (n 40) wkv_gemm 83.68 (n 40)
+rank 2 code  emb_eager 38.29 (n 20) emb_gap 2.16 (n 20) dr_emb_ar 31.23 (n 20) rows_ag 23.84 (n 40) wkv_ag 29.78 (n 40) wkv_gemm 82.93 (n 40)
+rank 2 prose emb_eager 36.5 (n 20) emb_gap 2.46 (n 20) dr_emb_ar 33.62 (n 20) rows_ag 20.8 (n 40) wkv_ag 23.38 (n 40) wkv_gemm 84.7 (n 40)
+rank 2 maths emb_eager 36.43 (n 20) emb_gap 2.34 (n 20) dr_emb_ar 32.1 (n 20) rows_ag 23.87 (n 40) wkv_ag 31.23 (n 40) wkv_gemm 84.13 (n 40)
+rank 3 code  emb_eager 33.74 (n 20) emb_gap 2.4 (n 20) dr_emb_ar 35.04 (n 20) rows_ag 24.66 (n 40) wkv_ag 31.15 (n 40) wkv_gemm 82.61 (n 40)
+rank 3 prose emb_eager 26.77 (n 20) emb_gap 2.24 (n 20) dr_emb_ar 33.66 (n 20) rows_ag 20.38 (n 40) wkv_ag 24.13 (n 40) wkv_gemm 84.9 (n 40)
+rank 3 maths emb_eager 37.94 (n 20) emb_gap 2.32 (n 20) dr_emb_ar 35.44 (n 20) rows_ag 24.42 (n 40) wkv_ag 31.02 (n 40) wkv_gemm 83.36 (n 40)
+rank 4 code  emb_eager 28.74 (n 20) emb_gap 2.34 (n 20) dr_emb_ar 36.26 (n 20) rows_ag 24.45 (n 40) wkv_ag 31.44 (n 40) wkv_gemm 83.06 (n 40)
+rank 4 prose emb_eager 25.52 (n 20) emb_gap 2.51 (n 20) dr_emb_ar 37.2 (n 20) rows_ag 20.85 (n 40) wkv_ag 25.6 (n 40) wkv_gemm 84.13 (n 40)
+rank 4 maths emb_eager 37.71 (n 20) emb_gap 2.35 (n 20) dr_emb_ar 38.43 (n 20) rows_ag 24.45 (n 40) wkv_ag 31.26 (n 40) wkv_gemm 82.9 (n 40)
+rank 5 code  emb_eager 33.97 (n 20) emb_gap 2.34 (n 20) dr_emb_ar 35.39 (n 20) rows_ag 23.7 (n 40) wkv_ag 31.1 (n 40) wkv_gemm 83.44 (n 40)
+rank 5 prose emb_eager 28.42 (n 20) emb_gap 2.53 (n 20) dr_emb_ar 35.62 (n 20) rows_ag 20.56 (n 40) wkv_ag 25.36 (n 40) wkv_gemm 83.71 (n 40)
+rank 5 maths emb_eager 35.31 (n 20) emb_gap 2.34 (n 20) dr_emb_ar 35.73 (n 20) rows_ag 25.12 (n 40) wkv_ag 31.06 (n 40) wkv_gemm 82.32 (n 40)
+rank 6 code  emb_eager 37.82 (n 20) emb_gap 2.29 (n 20) dr_emb_ar 26.61 (n 20) rows_ag 24.62 (n 40) wkv_ag 31.23 (n 40) wkv_gemm 81.62 (n 40)
+rank 6 prose emb_eager 27.3 (n 20) emb_gap 2.27 (n 20) dr_emb_ar 27.44 (n 20) rows_ag 19.31 (n 40) wkv_ag 23.38 (n 40) wkv_gemm 85.44 (n 40)
+rank 6 maths emb_eager 39.39 (n 20) emb_gap 2.32 (n 20) dr_emb_ar 26.91 (n 20) rows_ag 23.94 (n 40) wkv_ag 30.29 (n 40) wkv_gemm 82.91 (n 40)
+rank 7 code  emb_eager 30.05 (n 20) emb_gap 2.21 (n 20) dr_emb_ar 29.82 (n 20) rows_ag 25.1 (n 40) wkv_ag 30.82 (n 40) wkv_gemm 81.81 (n 40)
+rank 7 prose emb_eager 28.29 (n 20) emb_gap 2.43 (n 20) dr_emb_ar 32.35 (n 20) rows_ag 21.25 (n 40) wkv_ag 25.06 (n 40) wkv_gemm 84.18 (n 40)
+rank 7 maths emb_eager 29.09 (n 20) emb_gap 2.3 (n 20) dr_emb_ar 31.26 (n 20) rows_ag 24.85 (n 40) wkv_ag 32.13 (n 40) wkv_gemm 82.98 (n 40)
+== pooled over ranks: p5 / p10 / p50 (us); p5 ~ the transfer alone (the last-arriving rank waits ~0)
+code emb_eager 24.74/27.14/34.18 | dr_emb_ar 25.79/26.66/33.44 | rows_ag 18.21/19.04/24.1 | wkv_ag 23.97/25.34/31.01
+prose emb_eager 16.13/18.43/28.26 | dr_emb_ar 26.24/27.3/33.86 | rows_ag 15.49/16.8/20.9 | wkv_ag 18.24/19.17/24.64
+maths emb_eager 24.93/25.79/35.01 | dr_emb_ar 26.05/26.82/34.24 | rows_ag 17.86/18.82/23.81 | wkv_ag 23.97/25.41/31.07
+== medians over ranks of the per-rank medians (us)
+code emb_eager 34.025 emb_gap 2.315 dr_emb_ar 34.0 rows_ag 24.535 wkv_ag 31.125 wkv_gemm 82.52000000000001
+prose emb_eager 27.795 emb_gap 2.4450000000000003 dr_emb_ar 33.64 rows_ag 20.825000000000003 wkv_ag 24.740000000000002 wkv_gemm 84.44
+maths emb_eager 35.870000000000005 emb_gap 2.33 dr_emb_ar 33.849999999999994 rows_ag 24.18 wkv_ag 31.145 wkv_gemm 83.17

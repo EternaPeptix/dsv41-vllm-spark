@@ -50,6 +50,10 @@ from vllm.model_executor.utils import (
 from vllm.platforms import current_platform
 
 logger = init_logger(__name__)
+_R2DM_FC1, _R2DM_PERM = False, ""  # G17 DSV41_DRAFT_MOE_G17, default off (experts/dsv41_r2_draftmoe.py)  # r2-draftmoe
+if os.environ.get("DSV41_DRAFT_MOE_G17", "0").strip().lower() not in ("", "0", "off", "false"):  # r2-draftmoe
+    from vllm.model_executor.layers.fused_moe.experts import dsv41_r2_draftmoe as _r2dm  # r2-draftmoe
+    _R2DM_FC1, _R2DM_PERM = _r2dm.FC1, _r2dm.PERM  # r2-draftmoe
 
 
 class Mxfp4Config(QuantizationConfig):
@@ -699,6 +703,11 @@ class Mxfp4MoEMethod(FusedMoEMethodBase):
                 "DSV41_MOE_COMPACT: target compact FC1 enabled: logical width 288, "
                 "FC1 rows 576, FC2 input width 384"
             )
+        if _R2DM_FC1 and _r2dm.drafter_compact_eligible(  # r2-draftmoe
+                self, num_experts, hidden_size, intermediate_size_per_partition,  # r2-draftmoe
+                current_platform.is_device_capability(121),  # r2-draftmoe
+                self.mxfp4_backend == Mxfp4MoeBackend.DEEPGEMM_MXFP4, MoEActivation.SILU):  # r2-draftmoe
+            self.w13_intermediate_size = 288  # r2-draftmoe
         weight_loader = extra_weight_attrs.pop("weight_loader")
         scale_weight_loader = Mxfp4MoEMethod.get_scale_weight_loader(weight_loader)
 

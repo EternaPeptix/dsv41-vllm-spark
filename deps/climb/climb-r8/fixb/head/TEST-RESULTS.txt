@@ -1,0 +1,49 @@
+r6-head TEST RESULTS (2026-11-09, after the round-6 review fixes). Kit module dsv41_head_r6.py sha256 ad775bc186f12277...
+(previous build 9bd17b03808d961a, kept as tests/fixtures/ and as KIT.json prior_sha256);
+patched dsv41_r4_small.py c77844fb3188f261 (unchanged; base 3364d8c877db7e53 = live on 8/8, read-only copy).
+device_test.py sha256 1b27d7b6..., install.py af0f2436...
+
+== RAN (all after the fixes) ==
+
+1. tests/test_install.py (Mac, stdlib)                          52/52 PASS     results/results_test_install.txt
+   - install, status, idempotent re-install, uninstall byte-exact on a copy of live
+   - refusals with nothing written: drifted base, odd tag, stale tmp, half-removed patch
+   - NEW: a FOREIGN module (unknown sha) is refused by install and by uninstall (nothing written / deleted);
+     a known earlier kit module (prior_sha256) is upgraded by install
+   - flag-off identity: 7 tagged lines; strip == base byte for byte; AST diff = flag assign + gated import +
+     certified_logits dispatch; other functions AST-identical
+   - composition: climb-r1 composed (live) == base; r5-composed tree: same patched bytes, byte-exact restore
+
+2. tests/test_cfg_guard.py (Mac stub-torch; also 512S1 torch CPU) 54/54 PASS   results/results_test_cfg_guard.txt
+   - B1 guards: non-default screen shape only at BM <= 128 (SWEPT_MAX_B); refine grid/spread only at BMX <= 128;
+     refine BK/stages only at BMX 16; refine warps != 0 -> ValueError; non-default SCREEN_CFG without DQ=2 -> ValueError
+   - 7 must-fail mutants (each guard removed) caught
+
+3. tests/test_dequant.py (Mac, numpy, exhaustive)                ALL PASS       results/results_test_dequant.txt
+   - DQ=1 == live and DQ=2 == live for all 65,024 (q, e) pairs with e in 1..254
+
+4. tests/test_refine_logic.py (512S1, torch CPU)                 216/216 PASS   results/results_test_refine_logic.txt
+
+5. tools/compile_check.py (spark-eight, CPU only, nice 19, lock absent, mandatory env)
+                                                                 ALL PASS       results/compile.log, results/sass/
+6. tools/interp_test.py (spark-eight, TRITON_INTERPRET=1, CPU)   143/143 PASS   results/interp.log
+
+7. device_test.py --smoke (spark-eight, CPU + interpreter)       ALL PASS       results/smoke.log
+   - harness code paths only; NOT a gate. Now runs anchor, bitwise (incl. the per-bucket sweeps), ties, mutants and
+     dispatch (row and tile children: install.py's patch of the venv file applied in a temp dir, == c77844fb,
+     r4.certified_logits -> r6, self-check, _done, stats line, out-flip / hi-flip mutants caught by the self-check).
+   - The first smoke run after the fixes FAILED in the row dispatch child at M=17: the self-check reported
+     "argmax differs". Cause: the interpreter's bf16 dot runs on raw bit patterns, so the certificate l <= hi does
+     not hold there and a row-mode argmax may legitimately differ. In SMOKE mode only, an M whose live pass breaks
+     the certificate is now skipped for row mode, with an INFO line (M=17 'flat'). On the device nothing is skipped.
+     Rerun: ALL PASS.
+
+== NOT RUN (and why) ==
+
+- device_test.py on a GPU (--part all, and --weights real --rank 4): needs a stopped node in a device window. The
+  cluster is serving and this role is read-only. No bitwise result on real hardware exists yet. This is the gate,
+  and it now includes anchor (r4.certified_logits flags-off == r6._run(...,False,'0') at every M), the per-bucket
+  config sweeps, and dispatch (the installed path on the GPU).
+- Any serving arm (hcheck / hrow / htile / hscr / hall): lead's window.
+- The CERTPRE micro-bench (device_test.py --part l2): GPU.
+- No lever in this kit has passed a device or serving test.

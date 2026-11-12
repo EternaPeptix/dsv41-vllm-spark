@@ -1,0 +1,32 @@
+r2-skinny compile log
+
+STATUS: COMPILED 2026-11-08 15:15:25Z-15:15:58Z on spark-eight (CLUSTER_LOCK absent, checked before and every 10 s
+during the build by scripts/drive_compile.sh; window w1c had released it at ~15:14Z).
+
+Command (scripts/compile_spark8.sh, run in ~/climb-scratch/r2-skinny/kernel):
+  PATH=$HOME/venvs/vllm032/bin:$PATH MAX_JOBS=1 nice -n 19 $HOME/venvs/vllm032/bin/python build.py
+  (first attempt failed at once: torch cpp_extension needs ninja, which lives in the venv bin; fixed via PATH)
+Toolchain: nvcc 13.0.88 (/usr/local/cuda), torch 2.13.0+cu130, CUDA_VISIBLE_DEVICES="" (no GPU context)
+nvcc flags (from build.log): -gencode=arch=compute_121,code=sm_121 -O3 -lineinfo -Xptxas=-v -std=c++20
+  --expt-relaxed-constexpr -D__CUDA_NO_HALF_OPERATORS__ ... (torch defaults; no --use_fast_math, same as live build.py)
+Output: skinny_mx_v2_ext.so (9.4 MB, ELF holds one cubin: skinny_mx_v2.sm_121.cubin)
+  sha256 b3af28da9120e5efe1493814768fbf42a5d7194e343a5b9369e3214d9f1f9a92 -> prebuilt/skinny_mx_v2_ext.so
+Sources: skinny_mx_v2.cu 48a18b92cc2a04e3..., build.py d12de6ff09c2e2a7...
+Full log: build.log (kit root). The remote build dir was removed afterwards.
+
+ptxas -v (all 33 entry points): 0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads.
+Registers per thread (cuobjdump --dump-resource-usage agrees):
+  M          1    2    3    4    5    6    7    8
+  A8 MAXR5   95  117  126  151  153  156  165  255
+  QF MAXR5   95  119  127  128  136  143  149  167
+  A8 MAXR8  127  159  168  176  216  232  255  253
+  QF MAXR8  124  164  168  183  189  200  220  254
+  quant_debug_kernel 30
+  live v1 skinny_mx_kernel<M,4,8>: 64 78 80 92 93 96 96 96
+Serving uses MAXR 5 (grid 48: ceil(224/48)=5). MAXR 8 only for DSV41_SKINNY_V2_GRID sweeps (grid 28..44).
+
+Load check: a CPU-only python (CUDA_VISIBLE_DEVICES="", serving venv) imported the .so on spark-eight:
+  IMPORT_OK torch 2.13.0+cu130 ['prepare', 'quant_debug', 'skinny_v2_a8', 'skinny_v2_q', 'supports', 'v1_split']
+(no GPU process; the copy was deleted afterwards).
+
+NOT DONE: device_test.py (needs a stopped node, which only the lead can provide in a window).

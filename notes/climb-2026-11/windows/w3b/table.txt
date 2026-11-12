@@ -1,0 +1,8 @@
+c1 control | G1 125.853 code 127.18 prose 91.40 math 158.98 digest 2f7fdccbd388225a reps_identical True | exact - | det - | G4 min 56.67 mean 73.44
+s5 DSV41_SKINNY_V2=1;DSV41_ATTNOUT_OP=rope,rq;DSV41_DRAFT_MOE_G17=1;DSV41_FC2_GATHER_ADD=1;DSV41_MOE_ROUTEPREP=1 | G1 128.687 code 129.82 prose 93.17 math 163.07 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF | G4 min 56.79 mean 72.39
+s5x DSV41_SKINNY_V2=1;DSV41_ATTNOUT_OP=rope,rq;DSV41_DRAFT_MOE_G17=1;DSV41_FC2_GATHER_ADD=1;DSV41_MOE_ROUTEPREP=1;DSV41_ATTN_XSPLIT=1 | G1 128.705 code 129.93 prose 93.60 math 162.58 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+c2 control | G1 125.986 code 127.40 prose 91.36 math 159.20 digest 2f7fdccbd388225a reps_identical True | exact - | det - | -
+s5o DSV41_SKINNY_V2=1;DSV41_ATTNOUT_OP=rope,rq;DSV41_DRAFT_MOE_G17=1;DSV41_FC2_GATHER_ADD=1;DSV41_MOE_ROUTEPREP=1;DSV41_OBLIT_FOLD=1;DSV41_OBLIT_FOLD_SO_SHA256=164e3381cdec92e76938029acb484b1eb79e31940c5e46ee6d8e02e6f63125cb | G1 128.695 code 130.06 prose 93.16 math 162.87 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+s3 DSV41_SKINNY_V2=1;DSV41_ATTNOUT_OP=rope,rq;DSV41_DRAFT_MOE_G17=1 | G1 128.168 code 129.51 prose 92.81 math 162.19 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+s5b DSV41_SKINNY_V2=1;DSV41_ATTNOUT_OP=rope,rq;DSV41_DRAFT_MOE_G17=1;DSV41_FC2_GATHER_ADD=1;DSV41_MOE_ROUTEPREP=1 | G1 128.781 code 130.03 prose 93.24 math 163.07 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+c3 control | G1 126.017 code 127.29 prose 91.39 math 159.36 digest 2f7fdccbd388225a reps_identical True | exact - | det - | -

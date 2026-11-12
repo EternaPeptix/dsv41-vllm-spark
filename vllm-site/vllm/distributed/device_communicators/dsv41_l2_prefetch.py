@@ -319,6 +319,10 @@ def install_model_module(mod) -> None:
     if G2:
         _side_stream2()  # attn forks
         _side_stream3()  # paced parts
+    if _R1 is not None:  # r1-pf
+        _R1.install(mod)  # r1-pf
+    if _XSR is not None:  # r4-xsretime
+        _XSR.install()  # r4-xsretime
     S.installed = True
     logger.info("DSV41_L2_PREFETCH: DeepseekV4Model.forward bracketed (decode <= %d tokens)", MAX_TOKENS)
 
@@ -573,13 +577,19 @@ def _bracketed(orig, model, args, kwargs):
     try:
         return orig(model, *args, **kwargs)
     finally:
+        if _R1 is not None and getattr(_R1.R, "deferred", None):  # r5-ffnfront
+            _R1.flush_deferred_end()  # r5-ffnfront
         _join()
         _join2()
         _join3()
+        if _XSR is not None:  # r4-xsretime
+            _XSR.join()  # r4-xsretime
         try:
             _finish(sig, mode)
         finally:
             S.sig = S.mode = S.events = None
+            if _R1 is not None and getattr(_R1.R, "r5_exc", None) is not None:  # r5-ffnfront
+                _R1.raise_deferred_error()  # r5-ffnfront
 
 
 def _finish(sig, mode) -> None:
@@ -778,6 +788,8 @@ def make_plan(events, n_coll: int, budget: int = BUDGET, skip_n: int = SKIP_N, d
         result["key"] = key + (woa["lkey"],)
     if G2:
         g2 = make_g2_plan(events, sel, device=device)
+        if _R1 is not None:  # r1-pf
+            g2 = _R1.augment_target_g2(g2, events, sel, device)  # r1-pf
         result["g2"] = g2
         result["key"] = result["key"] + (g2["gkey"],)
         result.setdefault("nl", g2["nl"])  # wq_b ordinal bound for attn forks when WOA is off
@@ -995,6 +1007,10 @@ def g2_fork_lists(events, sel, replan=None, replan_budget=None, woa=None) -> dic
 
 def _parts(segs, fork_kind: str, device) -> list:
     """[(ptr, take, name)] -> [("b"|"p", table, nseg, bytes)]: burst head + paced tail when pacing applies."""
+    if _XSR is not None and fork_kind == "attn":  # r4-xsretime
+        _xp = _XSR.attn_parts(segs, device)  # r4-xsretime
+        if _xp is not None:  # r4-xsretime
+            return _xp  # r4-xsretime
     pace = PACE_GBPS > 0 and S.pace_ok and fork_kind in PACE_KINDS
     if pace and PACE_HEAD > 0:
         head, tail = _cap_named(segs, PACE_HEAD)
@@ -1015,6 +1031,8 @@ def _parts(segs, fork_kind: str, device) -> list:
 def make_g2_plan(events, sel, device="cuda") -> dict:
     """g2 colltrim plan attached to make_plan's result as plan["g2"] (see the module doc)."""
     fl = g2_fork_lists(events, sel)
+    if _XSR is not None:  # r4-xsretime
+        fl = _XSR.retime_lists(fl, events)  # r4-xsretime
     kinds = fl["kind"]
     pre = {idx: _parts(segs, kinds[idx], device) for idx, segs in fl["pre"].items()}
     post = {idx: _parts(segs, "post", device) for idx, segs in fl["post"].items()}
@@ -1057,6 +1075,10 @@ def _fork_part(part, where: str) -> None:
     """g2: launch one planned part. Burst parts at collective forks use the usual side stream (joined at
     the next collective, as today); burst parts at attn forks use the WOA stream (joined at the end of
     the forward); paced parts use the pacer stream (joined at the end of the forward)."""
+    if _R1 is not None and part[0] == "x":  # r1-pf
+        return _R1.fork_part(part, where)  # r1-pf
+    if _XSR is not None and part[0] == "y":  # r4-xsretime
+        return _XSR.fork_part(part, where)  # r4-xsretime
     mode, t, nseg, _nb = part
     main = torch.cuda.current_stream()
     if mode == "p" and S.pace_ok:
@@ -1131,6 +1153,8 @@ def before_collective(kind: str) -> None:
             _try_install()
     if S.sig is None:
         return
+    if _R1 is not None and getattr(_R1.R, "deferred", None):  # r5-ffnfront
+        _R1.flush_deferred("coll")  # r5-ffnfront
     _join()
     S.idx += 1
     if S.mode == "learn":
@@ -1165,3 +1189,25 @@ def after_collective(kind: str) -> None:
         return
     for part in g2["post"].get(S.idx, ()):
         _fork_part(part, "post")
+# climb r1 (r1-pf): default-off levers in dsv41_l2pf_r1.py, imported only when a master flag is set  # r1-pf
+_R1 = None  # r1-pf
+_R1_FLAGS = ('DSV41_L2_PREFETCH_R1_DRAFT', 'DSV41_L2_PREFETCH_R1_IDXTAIL', 'DSV41_L2_PREFETCH_R1_SHW2', 'DSV41_L2_PREFETCH_R1_KVSRC')  # r1-pf
+if ENABLED and any(_env(_k, "0").lower() in ("1", "on", "true") for _k in _R1_FLAGS):  # r1-pf
+    try:  # r1-pf
+        from vllm.distributed.device_communicators import dsv41_l2pf_r1 as _R1  # r1-pf
+        _R1.bind(sys.modules[__name__])  # r1-pf
+    except Exception as _e:  # noqa: BLE001  # r1-pf
+        _R1 = None  # r1-pf
+        logger.warning("DSV41_L2_PREFETCH_R1: disabled (%r)", _e)  # r1-pf
+# climb r4 (r4-xsretime): attention-window re-timing in dsv41_l2pf_xsr.py, imported only when a master flag is set  # r4-xsretime
+_XSR = None  # r4-xsretime
+_XSR_FLAGS = ('DSV41_L2_PREFETCH_PACE_GBPS_ATTN', 'DSV41_L2_PREFETCH_PACE_ATTN_STREAM', 'DSV41_L2_PREFETCH_ATTN_DEDUP')  # r4-xsretime
+if ENABLED and any(_env(_k, "0").lower() not in ("", "0", "off", "false") for _k in _XSR_FLAGS):  # r4-xsretime
+    try:  # r4-xsretime
+        from vllm.distributed.device_communicators import dsv41_l2pf_xsr as _XSR  # r4-xsretime
+        _XSR.bind(sys.modules[__name__])  # r4-xsretime
+        if not _XSR.any_active():  # r4-xsretime
+            _XSR = None  # r4-xsretime
+    except Exception as _e:  # noqa: BLE001  # r4-xsretime
+        _XSR = None  # r4-xsretime
+        logger.warning("DSV41_L2_PREFETCH r4-xsretime: disabled (%r)", _e)  # r4-xsretime

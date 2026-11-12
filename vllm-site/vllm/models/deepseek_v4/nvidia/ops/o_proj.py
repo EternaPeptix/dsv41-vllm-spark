@@ -14,6 +14,7 @@ from vllm.models.deepseek_v4.common.ops.fused_inv_rope_fp8_quant import (
 )
 from vllm.platforms import current_platform
 from vllm.utils.deep_gemm import fp8_einsum, get_tma_aligned_size
+_DSV41_ATTNOUT_OP = __import__("os").environ.get("DSV41_ATTNOUT_OP", "0").strip().lower() not in ("", "0", "off")  # r2-attnout
 
 
 def compute_fp8_einsum_recipe(
@@ -59,6 +60,16 @@ def deep_gemm_fp8_o_proj(
     the padding groups are sliced off.
     """
     use_fp8 = wo_a.weight.dtype == torch.float8_e4m3fn
+    if _DSV41_ATTNOUT_OP and not use_fp8 and not isinstance(o, QuantizedActivation):  # r2-attnout
+        from vllm.models.deepseek_v4.nvidia.ops import dsv41_attnout as _r2ao  # r2-attnout
+        _r2y = _r2ao.o_proj(  # r2-attnout
+            o, positions, cos_sin_cache, wo_a, wo_b, n_groups=n_groups,  # r2-attnout
+            heads_per_group=heads_per_group, nope_dim=nope_dim, rope_dim=rope_dim,  # r2-attnout
+            o_lora_rank=o_lora_rank, quant_group_size=einsum_recipe[2],  # r2-attnout
+            tma_aligned_scales=tma_aligned_scales,  # r2-attnout
+        )  # r2-attnout
+        if _r2y is not None:  # r2-attnout
+            return _r2y  # r2-attnout
     if isinstance(o, QuantizedActivation):
         assert use_fp8
         o_proj_input, o_scale = o.data[:, :n_groups], o.scale[:, :n_groups]

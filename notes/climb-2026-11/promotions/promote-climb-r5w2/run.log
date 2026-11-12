@@ -1,0 +1,18 @@
+14:28:15 [promote-climb-r5w2] editing launcher on 8/8: DSV41_GLUE_RQPAD=1 DSV41_GLUE_RPSPLIT=split
+14:28:15 [promote-climb-r5w2]   spark-one launcher -> 4f3cc1c6
+14:28:15 [promote-climb-r5w2]   spark-two launcher -> 4f3cc1c6
+14:28:16 [promote-climb-r5w2]   spark-three launcher -> 4f3cc1c6
+14:28:16 [promote-climb-r5w2]   spark-four launcher -> 4f3cc1c6
+14:28:17 [promote-climb-r5w2]   spark-five launcher -> 4f3cc1c6
+14:28:17 [promote-climb-r5w2]   spark-six launcher -> 4f3cc1c6
+14:28:18 [promote-climb-r5w2]   spark-seven launcher -> 4f3cc1c6
+14:28:19 [promote-climb-r5w2]   spark-eight launcher -> 4f3cc1c6
+14:28:19 [promote-climb-r5w2] new launcher 4f3cc1c6 on 8/8 (was fda6d05a); diff:
+105a106,107
+> export DSV41_GLUE_RPSPLIT=${DSV41_GLUE_RPSPLIT:-split}  # climb-r5w2: climb r5: r5-glue RQPAD + RPSPLIT=split, +0.35% G1 over 4 arms in 2 windows, G4 flat, exact
+> export DSV41_GLUE_RQPAD=${DSV41_GLUE_RQPAD:-1}  # climb-r5w2: climb r5: r5-glue RQPAD + RPSPLIT=split, +0.35% G1 over 4 arms in 2 windows, G4 flat, exact
+14:28:20 [claude-promote-climb-r5w2] preflight: site manifest 183d0b1a7609 and launcher 4f3cc1c6 identical on 8/8
+14:31:10 [claude-promote-climb-r5w2] HEALTHY: /health 200 + startup complete at +154s after systemd-run (downtime 169s)
+14:35:09 [promote-climb-r5w2] verify: G1 130.475 code 131.67 prose 95.63 math 164.12 digest 2f7fdccbd388225a | exact ec2f4437f8e1ed09 | det ALL==REF
+14:35:09 [promote-climb-r5w2] PROMOTED: launcher 4f3cc1c6
+14:35:10 [promote-climb-r5w2] lock released

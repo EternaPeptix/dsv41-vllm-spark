@@ -1,0 +1,512 @@
+--- base/dsv41_l2_prefetch.py.998af3d7	2026-10-26 06:14:06
++++ site/vllm/distributed/device_communicators/dsv41_l2_prefetch.py	2026-10-26 06:29:44
+@@ -64,6 +64,36 @@
+   carry no items, so with WOA on the collective plan is byte-identical to WOA off. Learned like the
+   collective windows (eager warm-up before each capture), numbered per forward (wq_b post-hook
+   ordinal); a count mismatch at capture skips the remaining WOA windows. Cache hints only.
++
++g2 colltrim (b): stop the prefetch from stretching the RDMA collectives (default OFF; every arm needs the
++main gate, changes cache hints only, and with all of them off the module behaves exactly as 998af3d7).
++The k1 profile measured ~+10 us per post-MoE all-reduce (~1.6 MB windows), ~+18 us per post-attention
++all-reduce (6 MB) and ~+8 us per qkv_a gather (6 MB of q_b + wo_b): the burst kernel saturates LPDDR5X
++for the whole window while the collective's latency chain (send-slot staging, NIC DMA, sys-scope flag
++polls, peer loads) queues behind it. Two levers, combinable ("G2 mode" = any of them on):
++  DSV41_L2_PREFETCH_PACE_GBPS=R   issue the window bytes at R GB/s from a one-warp pacer
++                                  (dsv41_l2pf_paced in DSV41_L2_PREFETCH_PACE_LIB) on a third side stream
++                                  that is joined only at the end of the forward, so a pacer never blocks the
++                                  main stream (0 = off: burst as before)
++  DSV41_L2_PREFETCH_PACE_KINDS    fork kinds that are paced (ar,ag,post,attn); others stay burst
++  DSV41_L2_PREFETCH_PACE_HEAD_KB  the first N KB of each paced fork are still issued as a burst on the
++                                  usual side stream (the bytes the very next kernel reads, e.g. mhc fn) (0)
++  DSV41_L2_PREFETCH_PACE_DELAY_US start the paced part this long after the fork (0)
++  DSV41_L2_PREFETCH_PACE_MAX_US   a pacer stops issuing this long after its start (150; 0 = no cap)
++  DSV41_L2_PREFETCH_PACE_CHUNK    bytes per paced prefetch instruction (16384)
++  DSV41_L2_PREFETCH_PACE_LIB      ~/rdma_ar_dsv41/build-g2ct/libdsv41_l2pf_g2.so (missing -> burst, logged)
++  DSV41_L2_PREFETCH_REPLAN        comma list of cross-window re-plans (window bytes move, never grow):
++    attn    the post-attention all-reduce window (mhc fn + router gate, read right after that AR) is
++            forked at the last wq_b of the attention block instead (second side stream, like WOA), so it
++            streams during rope / KV insert / indexer / sparse MLA and the AR runs with no prefetch.
++            Registers the wq_b post-hooks (as WOA does); with WOA on, its wo_a bytes come first.
++    qbprev  the q_b (wq_b) bytes of every qkv_a all-gather window move to the end of the previous
++            collective's window (the post-MoE all-reduce), so the short gather window needs no burst
++    qbpost  the same bytes are forked right AFTER the previous collective's kernel instead (a "post"
++            fork: they overlap mhc / qkv_a GEMM, not a collective)
++  DSV41_L2_PREFETCH_REPLAN_MB     cap on the bytes one re-plan adds to its receiving fork (16)
++  Windows that lose bytes are not backfilled. Plans stay per (model, num_tokens), learned at the eager
++  warm-up before each capture; rank-local, no collective is added or removed.
+ """
+ from __future__ import annotations
+ 
+@@ -110,6 +140,22 @@
+ WOA = _env("DSV41_L2_PREFETCH_WOA", "0").lower() in ("1", "on", "true")
+ WOA_BUDGET = int(float(_env("DSV41_L2_PREFETCH_WOA_MB", "6")) * (1 << 20))
+ WOB_BUDGET = int(float(_env("DSV41_L2_PREFETCH_WOB_MB", "0")) * (1 << 20))
++# g2 colltrim (b) pacing / re-plan (default off; see module doc)
++PACE_GBPS = float(_env("DSV41_L2_PREFETCH_PACE_GBPS", "0") or "0")
++PACE_KINDS = frozenset(k.strip() for k in _env("DSV41_L2_PREFETCH_PACE_KINDS", "ar,ag,post,attn").split(",")
++                       if k.strip())
++PACE_HEAD = int(float(_env("DSV41_L2_PREFETCH_PACE_HEAD_KB", "0") or "0") * 1024) & ~15
++PACE_DELAY_NS = int(float(_env("DSV41_L2_PREFETCH_PACE_DELAY_US", "0") or "0") * 1000)
++PACE_MAX_NS = int(float(_env("DSV41_L2_PREFETCH_PACE_MAX_US", "150") or "0") * 1000)
++PACE_CHUNK = max(16, int(_env("DSV41_L2_PREFETCH_PACE_CHUNK", "16384")) & ~15)
++PACE_LIB_PATH = os.path.expanduser(
++    _env("DSV41_L2_PREFETCH_PACE_LIB", "~/rdma_ar_dsv41/build-g2ct/libdsv41_l2pf_g2.so")
++)
++REPLAN = frozenset(k.strip() for k in _env("DSV41_L2_PREFETCH_REPLAN", "").split(",") if k.strip())
++REPLAN_BUDGET = int(float(_env("DSV41_L2_PREFETCH_REPLAN_MB", "16")) * (1 << 20))
++_REPLAN_KNOWN = frozenset(("attn", "qbprev", "qbpost"))
++REPLAN_ATTN = "attn" in REPLAN
++G2 = PACE_GBPS > 0 or bool(REPLAN)
+ SONAR_MODULE = "vllm.models.deepseek_v4.nvidia.ops.sonar_bf16_bmm"
+ MODEL_MODULE = "vllm.models.deepseek_v41.nvidia.model"
+ _MAX_INSTALL_TRIES = 100000
+@@ -134,6 +180,12 @@
+         self.pending2: torch.cuda.Stream | None = None
+         self.forks2 = 0
+         self.side2: dict[int, torch.cuda.Stream] = {}
++        # g2 colltrim: paced side stream (joined at the end of the forward) and fork counters
++        self.lib_g2 = None
++        self.pace_ok = False
++        self.pending3: torch.cuda.Stream | None = None
++        self.side3: dict[int, torch.cuda.Stream] = {}
++        self.g2_forks = collections.Counter()
+         # persistent
+         self.plans: dict[tuple, dict] = {}
+         self.learned: collections.Counter = collections.Counter()
+@@ -159,6 +211,17 @@
+     return S.lib
+ 
+ 
++def _load_lib_g2():
++    """g2 colltrim: the paced issuer (a second library; the burst path keeps using LIB_PATH)."""
++    if S.lib_g2 is None:
++        lib = ctypes.CDLL(PACE_LIB_PATH)
++        lib.dsv41_l2pf_paced.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_longlong, ctypes.c_longlong,
++                                         ctypes.c_longlong, ctypes.c_longlong, ctypes.c_void_p, ctypes.c_void_p]
++        lib.dsv41_l2pf_paced.restype = ctypes.c_int
++        S.lib_g2 = lib
++    return S.lib_g2
++
++
+ def init() -> bool:
+     """Called once by rdma_all_reduce.py at import when DSV41_L2_PREFETCH=1."""
+     if not ENABLED:
+@@ -169,6 +232,26 @@
+         S.disabled = True
+         logger.warning("DSV41_L2_PREFETCH: cannot load %s (%s); prefetch disabled on this rank", LIB_PATH, e)
+         return False
++    if G2:
++        bad = sorted(REPLAN - _REPLAN_KNOWN)
++        if bad:
++            raise ValueError(f"DSV41_L2_PREFETCH_REPLAN: unknown re-plan(s) {bad}; known {sorted(_REPLAN_KNOWN)}")
++        if "qbprev" in REPLAN and "qbpost" in REPLAN:
++            raise ValueError("DSV41_L2_PREFETCH_REPLAN: qbprev and qbpost are alternatives; pick one")
++        if PACE_GBPS > 0:
++            try:
++                _load_lib_g2()
++                S.pace_ok = True
++            except (OSError, AttributeError) as e:
++                logger.warning("DSV41_L2_PREFETCH_PACE: cannot load %s (%s); paced parts fall back to burst",
++                               PACE_LIB_PATH, e)
++        logger.info(
++            "DSV41_L2_PREFETCH g2: pace=%s GB/s (kinds=%s head=%d KB delay=%.1f us max=%.0f us chunk=%d lib=%s) "
++            "replan=%s (cap %.1f MB)",
++            PACE_GBPS if S.pace_ok else 0, ",".join(sorted(PACE_KINDS)), PACE_HEAD // 1024,
++            PACE_DELAY_NS / 1e3, PACE_MAX_NS / 1e3, PACE_CHUNK, PACE_LIB_PATH if S.pace_ok else "-",
++            ",".join(sorted(REPLAN)) or "-", REPLAN_BUDGET / 2**20,
++        )
+     logger.info(
+         "DSV41_L2_PREFETCH armed: budget %.1f MB/window ag=%s max_tokens=%d mhc=%s skip_n=%d lib=%s",
+         BUDGET / 2**20, USE_AG, MAX_TOKENS, MHC, SKIP_N, LIB_PATH,
+@@ -194,6 +277,15 @@
+     s = S.side2.get(dev)
+     if s is None:
+         s = S.side2[dev] = torch.cuda.Stream(device=dev)
++    return s
++
++
++def _side_stream3() -> torch.cuda.Stream:
++    """g2 colltrim: the paced issuer's stream, joined only at the end of the forward."""
++    dev = torch.cuda.current_device()
++    s = S.side3.get(dev)
++    if s is None:
++        s = S.side3[dev] = torch.cuda.Stream(device=dev)
+     return s
+ 
+ 
+@@ -224,6 +316,9 @@
+     if WOA:
+         _wrap_sonar()
+         _side_stream2()
++    if G2:
++        _side_stream2()  # attn forks
++        _side_stream3()  # paced parts
+     S.installed = True
+     logger.info("DSV41_L2_PREFETCH: DeepseekV4Model.forward bracketed (decode <= %d tokens)", MAX_TOKENS)
+ 
+@@ -396,7 +491,7 @@
+     n_hooked = 0
+     n_lin = 0
+     for name, m in model.named_modules():
+-        if WOA and (name == "wq_b" or name.endswith(".wq_b")):
++        if (WOA or REPLAN_ATTN) and (name == "wq_b" or name.endswith(".wq_b")):
+             # g1 WOA: the wq_b GEMMs (attention and indexer) end the window that precedes wo_a
+             m.register_forward_hook(_wq_b_post_hook)
+             n_lin += 1
+@@ -412,7 +507,7 @@
+         m.register_forward_pre_hook(pre_hook)
+         n_hooked += 1
+     logger.info("DSV41_L2_PREFETCH: %d weight modules hooked in %s%s", n_hooked, type(model).__name__,
+-                f"; WOA: {n_lin} wq_b post-hooks" if WOA else "")
++                f"; WOA/attn: {n_lin} wq_b post-hooks" if (WOA or REPLAN_ATTN) else "")
+ 
+ 
+ def _wq_b_post_hook(_mod, _args, _out) -> None:
+@@ -427,6 +522,11 @@
+     plan = S.plans.get(S.sig)
+     if plan is None or S.lin > plan.get("nl", 0) or S.idx > plan["n"]:
+         return
++    g2 = plan.get("g2")
++    if g2 is not None:
++        for part in g2["attn"].get(S.lin, ()):
++            _fork_part(part, "attn")
++        return
+     item = plan.get("lwin", {}).get(S.lin)
+     if item is not None:
+         _fork2(item)
+@@ -467,12 +567,15 @@
+     _hook_modules(model)
+     S.sig, S.mode, S.idx, S.forks = sig, mode, 0, 0
+     S.lin, S.forks2 = 0, 0
++    if G2:
++        S.g2_forks = collections.Counter()
+     S.events = [] if mode == "learn" else None
+     try:
+         return orig(model, *args, **kwargs)
+     finally:
+         _join()
+         _join2()
++        _join3()
+         try:
+             _finish(sig, mode)
+         finally:
+@@ -502,6 +605,9 @@
+                     sig[1], plan.get("nl", 0), len(plan.get("lwin", {})), plan.get("lbytes", 0) / 2**20,
+                     ("; first: " + plan.get("ldesc", "")) if first else "",
+                 )
++            if "g2" in plan:
++                logger.info("DSV41_L2_PREFETCH g2 plan tokens=%d %s%s", sig[1], plan["g2"]["summary"],
++                            ("; first: " + plan["g2"]["desc"]) if first else "")
+             if "pruning" in plan:
+                 logger.info(
+                     "DSV41_L2_PREFETCH pruning tokens=%d %s",
+@@ -523,6 +629,10 @@
+                 sig[1], S.forks, S.idx, plan["n"] if plan else -1,
+                 "" if ok else " MISMATCH: windows past the mismatch were skipped",
+             )
++        if G2 and plan is not None and "g2" in plan and ("cap3", sig[1]) not in S.logged:
++            S.logged.add(("cap3", sig[1]))
++            logger.info("DSV41_L2_PREFETCH g2 captured tokens=%d forks %s (planned %s)", sig[1],
++                        json.dumps(dict(sorted(S.g2_forks.items()))), plan["g2"]["nforks"])
+         if WOA:
+             ok2 = plan is not None and plan.get("nl", 0) == S.lin
+             if ("cap2", sig[1]) not in S.logged or not ok2:
+@@ -618,6 +728,7 @@
+                 if ev[0] == "prune_stale_qkv":
+                     stale.add((len(windows) - 1, len(cur[2]) - 1))
+     win, total, desc = {}, 0, []
++    sel = []  # g2 colltrim: every window's selected (ptr, take, name) in read order, by position
+     audit = []
+     diagnostic = PLAN_AUDIT or PRUNE_ROUTER or PRUNE_SHARED or PRUNE_STALE_QKV or PRUNE_SHARED_POST_BUDGET
+     for window_idx, (idx, kind, items) in enumerate(windows):
+@@ -634,6 +745,7 @@
+                           "before": _selected_summary(before, budget),
+                           "after": _selected_summary(items, budget)})
+         segs, left, names = [], budget, []
++        g2segs = []
+         for ptr, nbytes, name in items:
+             if left < 16:
+                 break
+@@ -642,7 +754,11 @@
+                 continue
+             segs.append((ptr, take))
+             names.append(f"{name}:{take / 2**20:.2f}")
++            if G2:
++                g2segs.append((ptr, take, name))
+             left -= take
++        if G2:
++            sel.append((idx, kind, g2segs))
+         if not segs:
+             continue
+         flat = [v for s in segs for v in s]
+@@ -660,6 +776,11 @@
+         woa = make_woa_plan(events, device=device)
+         result.update(woa)
+         result["key"] = key + (woa["lkey"],)
++    if G2:
++        g2 = make_g2_plan(events, sel, device=device)
++        result["g2"] = g2
++        result["key"] = result["key"] + (g2["gkey"],)
++        result.setdefault("nl", g2["nl"])  # wq_b ordinal bound for attn forks when WOA is off
+     if diagnostic:
+         before_groups, after_groups = collections.Counter(), collections.Counter()
+         for window in audit:
+@@ -735,8 +856,231 @@
+     lkey = (nl, tuple((i, w[1], w[2]) for i, w in sorted(lwin.items())),
+             tuple(tuple(it[:2] for it in g[1]) for g in groups))
+     return {"lwin": lwin, "nl": nl, "lbytes": total, "ldesc": " ".join(desc), "lkey": lkey}
++
++
++# ----------------------------------------------------------------------------- g2 colltrim --
++def _woa_segments(events, woa_budget: int | None = None, wob_budget: int | None = None) -> dict:
++    """make_woa_plan's grouping and selection, returning {wq_b ordinal: [(ptr, take, name)]} (no tensors)."""
++    woa_budget = WOA_BUDGET if woa_budget is None else woa_budget
++    wob_budget = WOB_BUDGET if wob_budget is None else wob_budget
++    last_l, cur, groups = None, None, []
++    for ev in events:
++        k = ev[0]
++        if k == "c":
++            last_l, cur = None, None
++        elif k == "L":
++            last_l, cur = ev[1], None
++        elif k == "woa":
++            if last_l is None:
++                continue
++            if cur is None or cur[0] != last_l:
++                cur = [last_l, [], []]
++                groups.append(cur)
++            cur[1].extend((it[0], it[1], ev[1]) for it in ev[2])
++        elif cur is not None:
++            cur[2].extend((it[0], it[1], ev[1]) for it in ev[2])
++    out = {}
++    for lin, woa_items, after in groups:
++        segs = _take_named(woa_items, woa_budget)
++        if wob_budget > 0:
++            segs += _take_named(after, wob_budget)
++        if segs:
++            out[lin] = segs
++    return out
++
++
++def _take_named(items, budget: int) -> list[tuple[int, int, str]]:
++    """_take_items keeping names: first `budget` bytes of [(ptr, nbytes, name)], pieces rounded down to 16 B."""
++    segs, left = [], budget
++    for ptr, nbytes, name in items:
++        if left < 16:
++            break
++        take = min(nbytes, left) & ~15
++        if take <= 0:
++            continue
++        segs.append((ptr, take, name))
++        left -= take
++    return segs
++
++
++def _cap_named(segs, cap: int) -> tuple[list, list]:
++    """Split [(ptr, take, name)] into (first `cap` bytes, the rest), pieces rounded to 16 B."""
++    head, tail, left = [], [], cap
++    for ptr, take, name in segs:
++        if left >= 16 and take > 0:
++            t = min(take, left) & ~15
++            if t > 0:
++                head.append((ptr, t, name))
++                left -= t
++                if take - t >= 16:
++                    tail.append((ptr + t, (take - t) & ~15, name))
++                continue
++        tail.append((ptr, take, name))
++    return head, tail
+ 
+ 
++def g2_fork_lists(events, sel, replan=None, replan_budget=None, woa=None) -> dict:
++    """Pure-Python g2 re-plan (CPU-testable). sel = [(idx, kind, [(ptr, take, name)])] per collective window in
++    order (make_plan's selection after pruning). Returns {"pre": {idx: segs}, "post": {idx: segs},
++    "attn": {lin: segs}, "kind": {idx: kind}, "moved": {...bytes by re-plan...}}; segs in issue order."""
++    replan = REPLAN if replan is None else replan
++    replan_budget = REPLAN_BUDGET if replan_budget is None else replan_budget
++    woa = WOA if woa is None else woa
++    pre = {idx: list(segs) for idx, _kind, segs in sel}
++    kinds = {idx: kind for idx, kind, _segs in sel}
++    order = [idx for idx, _kind, _segs in sel]
++    post: dict[int, list] = {}
++    attn: dict[int, list] = {}
++    moved = collections.Counter()
++    # last wq_b ordinal inside each collective window (events between collective idx and the next one)
++    last_l: dict[int, int] = {}
++    cur, nl = None, 0
++    for ev in events:
++        if ev[0] == "c":
++            cur = ev[1]
++        elif ev[0] == "L":
++            nl = max(nl, ev[1])
++            if cur is not None:
++                last_l[cur] = ev[1]
++    if woa or "attn" in replan:
++        attn = {lin: list(segs) for lin, segs in (_woa_segments(events).items() if woa else ())}
++    if "attn" in replan:
++        # the window after a collective window that holds a wq_b boundary is the post-attention AR window:
++        # fork it at that (last) wq_b instead, after any WOA bytes
++        for pos in range(1, len(order)):
++            prev, idx = order[pos - 1], order[pos]
++            lin = last_l.get(prev)
++            if lin is None or kinds[idx] != "ar" or not pre.get(idx):
++                continue
++            take, keep = _cap_named(pre[idx], replan_budget)
++            if not take:
++                continue
++            attn.setdefault(lin, []).extend(take)
++            pre[idx] = keep
++            moved["attn"] += sum(t for _p, t, _n in take)
++    for mode in ("qbprev", "qbpost"):
++        if mode not in replan:
++            continue
++        for pos in range(1, len(order)):
++            prev, idx = order[pos - 1], order[pos]
++            if kinds[idx] != "ag":
++                continue
++            qb = [sg for sg in pre.get(idx, ()) if _weight_category(sg[2]) == "q_b"]
++            if not qb:
++                continue
++            take, rest = _cap_named(qb, replan_budget)
++            if not take:
++                continue
++            taken = collections.Counter()
++            for ptr, t, _n in take:
++                taken[ptr] += t
++            keep = []
++            for ptr, t, nm in pre[idx]:  # drop the moved q_b bytes (the cap keeps any remainder in place)
++                if _weight_category(nm) == "q_b" and taken[ptr] > 0:
++                    used = min(t, taken[ptr])
++                    taken[ptr] -= used
++                    if t - used >= 16:
++                        keep.append((ptr + used, (t - used) & ~15, nm))
++                    continue
++                keep.append((ptr, t, nm))
++            pre[idx] = keep
++            if mode == "qbprev":
++                pre.setdefault(prev, []).extend(take)
++            else:
++                post.setdefault(prev, []).extend(take)
++            moved[mode] += sum(t for _p, t, _n in take)
++    return {"pre": {k: v for k, v in pre.items() if v}, "post": post, "attn": {k: v for k, v in attn.items() if v},
++            "kind": kinds, "moved": dict(moved), "nl": nl}
++
++
++def _parts(segs, fork_kind: str, device) -> list:
++    """[(ptr, take, name)] -> [("b"|"p", table, nseg, bytes)]: burst head + paced tail when pacing applies."""
++    pace = PACE_GBPS > 0 and S.pace_ok and fork_kind in PACE_KINDS
++    if pace and PACE_HEAD > 0:
++        head, tail = _cap_named(segs, PACE_HEAD)
++    elif pace:
++        head, tail = [], list(segs)
++    else:
++        head, tail = list(segs), []
++    out = []
++    for mode, ss in (("b", head), ("p", tail)):
++        if not ss:
++            continue
++        t = torch.tensor([v for p, tk, _n in ss for v in (p, tk)], dtype=torch.int64, device=device)
++        S.keepalive.append(t)  # a captured graph keeps reading this table
++        out.append((mode, t, len(ss), sum(tk for _p, tk, _n in ss)))
++    return out
++
++
++def make_g2_plan(events, sel, device="cuda") -> dict:
++    """g2 colltrim plan attached to make_plan's result as plan["g2"] (see the module doc)."""
++    fl = g2_fork_lists(events, sel)
++    kinds = fl["kind"]
++    pre = {idx: _parts(segs, kinds[idx], device) for idx, segs in fl["pre"].items()}
++    post = {idx: _parts(segs, "post", device) for idx, segs in fl["post"].items()}
++    attn = {lin: _parts(segs, "attn", device) for lin, segs in fl["attn"].items()}
++    nb = collections.Counter()
++    nforks = collections.Counter()
++    for where, d in (("pre", pre), ("post", post), ("attn", attn)):
++        for parts in d.values():
++            for mode, _t, _n, b in parts:
++                nb[f"{where}_{mode}"] += b
++                nforks[f"{where}_{mode}"] += 1
++    summary = json.dumps({"bytes_mb": {k: round(v / 2**20, 2) for k, v in sorted(nb.items())},
++                          "moved_mb": {k: round(v / 2**20, 2) for k, v in sorted(fl["moved"].items())},
++                          "forks": dict(sorted(nforks.items()))}, sort_keys=True)
++    desc = []
++    for idx in sorted(fl["pre"])[:3]:
++        desc.append(f"[{kinds[idx]}{idx} " + " ".join(f"{n}:{t / 2**20:.2f}" for _p, t, n in fl["pre"][idx]) + "]")
++    for idx in sorted(fl["post"])[:1]:
++        desc.append(f"[post{idx} " + " ".join(f"{n}:{t / 2**20:.2f}" for _p, t, n in fl["post"][idx]) + "]")
++    for lin in sorted(fl["attn"])[:1]:
++        desc.append(f"[L{lin} " + " ".join(f"{n}:{t / 2**20:.2f}" for _p, t, n in fl["attn"][lin]) + "]")
++    gkey = ("g2",
++            tuple(sorted((i, tuple(s[:2] for s in v)) for i, v in fl["pre"].items())),
++            tuple(sorted((i, tuple(s[:2] for s in v)) for i, v in fl["post"].items())),
++            tuple(sorted((i, tuple(s[:2] for s in v)) for i, v in fl["attn"].items())),
++            PACE_GBPS if S.pace_ok else 0.0, PACE_HEAD, tuple(sorted(PACE_KINDS)))
++    return {"pre": pre, "post": post, "attn": attn, "bytes": sum(nb.values()), "summary": summary,
++            "desc": " ".join(desc), "gkey": gkey, "nforks": json.dumps(dict(sorted(nforks.items()))),
++            "nl": fl["nl"]}
++
++
++def _join3() -> None:
++    p = S.pending3
++    if p is not None:
++        torch.cuda.current_stream().wait_stream(p)
++        S.pending3 = None
++
++
++def _fork_part(part, where: str) -> None:
++    """g2: launch one planned part. Burst parts at collective forks use the usual side stream (joined at
++    the next collective, as today); burst parts at attn forks use the WOA stream (joined at the end of
++    the forward); paced parts use the pacer stream (joined at the end of the forward)."""
++    mode, t, nseg, _nb = part
++    main = torch.cuda.current_stream()
++    if mode == "p" and S.pace_ok:
++        side = _side_stream3()
++        side.wait_stream(main)
++        period_ps = int(round(PACE_CHUNK * 1000.0 / PACE_GBPS))
++        rc = _load_lib_g2().dsv41_l2pf_paced(t.data_ptr(), nseg, PACE_CHUNK, period_ps, PACE_DELAY_NS,
++                                             PACE_MAX_NS, None, side.cuda_stream)
++        if rc:
++            raise RuntimeError(f"DSV41_L2_PREFETCH_PACE: paced prefetch launch failed (cuda error {rc})")
++        S.pending3 = side
++    else:
++        side = _side_stream2() if where == "attn" else _side_stream()
++        side.wait_stream(main)
++        rc = _load_lib().dsv41_l2pf(t.data_ptr(), nseg, CHUNK, side.cuda_stream)
++        if rc:
++            raise RuntimeError(f"DSV41_L2_PREFETCH: prefetch launch failed (cuda error {rc})")
++        if where == "attn":
++            S.pending2 = side
++        else:
++            S.pending = side
++    S.g2_forks[f"{where}_{mode}"] += 1
++
++
+ # ----------------------------------------------------------------------------- collective --
+ def _join() -> None:
+     p = S.pending
+@@ -798,6 +1142,26 @@
+         return
+     if kind == "ag" and not USE_AG:
+         return
++    g2 = plan.get("g2")
++    if g2 is not None:
++        for part in g2["pre"].get(S.idx, ()):
++            _fork_part(part, "pre")
++        return
+     item = plan["win"].get(S.idx)
+     if item is not None:
+         _fork(item)
++
++
++def after_collective(kind: str) -> None:
++    """g2 colltrim: called by RdmaAllReduce right AFTER it launched collective S.idx (same stream). Forks
++    the planned "post" parts, which then start when the collective kernel has finished."""
++    if not G2 or S.disabled or S.sig is None or S.mode != "capture":
++        return
++    plan = S.plans.get(S.sig)
++    if plan is None or S.idx > plan["n"]:
++        return
++    g2 = plan.get("g2")
++    if g2 is None:
++        return
++    for part in g2["post"].get(S.idx, ()):
++        _fork_part(part, "post")

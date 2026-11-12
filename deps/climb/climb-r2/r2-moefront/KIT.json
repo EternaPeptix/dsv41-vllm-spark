@@ -1,0 +1,161 @@
+{
+  "name": "r2-moefront",
+  "round": "climb r2 (kernel levers), 2026-11-08",
+  "levers": [
+    {
+      "gid": "G04",
+      "member": "moe:L-A",
+      "variant": "Stage A: FC1-input quant + mfront plan + mfront scatter fused into one PDL-launched Triton kernel; the top-k kernel is untouched",
+      "flag": "DSV41_MOE_ROUTEPREP",
+      "status": "built; compile (sm_121, 10 variants) + interpreter gate PASSED on spark-eight 2026-11-08T17:15Z (results/compile.log, results/interp.log); remaining gate before any rp arm: device_test.py exit 0 on a stopped node"
+    },
+    {
+      "gid": "G18",
+      "member": "moe:L-F (FC1 part)",
+      "variant": "early griddepcontrol.launch_dependents in the fused route-prep kernel (FC1 is already PDL-launched) + optional exact post-top-k L2 prefetch of the selected experts' first FC1 k-blocks",
+      "flag": "DSV41_MOE_FC1_FRONT",
+      "status": "built (needs DSV41_MOE_ROUTEPREP=1); pdl/pf2/pf4/pf8 variants compile (prefetch.global.L2 + launch_dependents in the PTX); remaining gate: device_test.py exit 0 incl. case F (fused(0/pdl/pf2) -> production PDL FC1, eager + 50 poisoned graph replays)"
+    }
+  ],
+  "flags": [
+    {
+      "name": "DSV41_MOE_ROUTEPREP",
+      "default": "0",
+      "on_value": "1",
+      "meaning": "Target MoE layers (E384 top-6 H5120, M32 path, mfront serving) defer the FC1-input quant from prepare() and run _dsv41_rp_kernel instead of per_token_group_quant_8bit + _dsv41_fp_plan_kernel + _dsv41_fp_scatter_kernel. Ineligible calls (M > 96, other geometry) quantize in apply() with the identical prepare() call. Unset/0/off/false: nothing imported, nothing changed. At the first eligible call (eager profile/warm-up run) the process precompiles all 5 SLOTS buckets of the variant in use (Triton JITFunction.warmup, no launch); any compile error turns the fused path OFF for the process (logged 'fused route prep OFF (precompile failed: ...)') and every call takes today's prepare() quant."
+    },
+    {
+      "name": "DSV41_MOE_FC1_FRONT",
+      "default": "0",
+      "on_value": "pdl | pf1 | pf2 | pf4 | pf8",
+      "meaning": "Read only when DSV41_MOE_ROUTEPREP=1 (otherwise inert). pdl: the fused kernel triggers its PDL dependents (FC1) right after its gdc_wait. pfN: pdl + prefetch.global.L2 of the first N FC1 k-blocks (64 B each) of every weight row and the matching w1_scale words of each selected expert, issued once per expert by its first route. Invalid value: ValueError at import."
+    }
+  ],
+  "files": [
+    {
+      "path": "vllm/model_executor/layers/fused_moe/deep_gemm_utils.py",
+      "base_sha256": "58e264c8b870196fd006e80dc6484247820d75ec1561705b2fe3f1f74bba8cd6",
+      "base_sha256_with_r1": {
+        "r1-pdl (install.py EDITS as of 2026-11-08 13:30Z)": "c3a05cca1b4f439314c7470621706dee54e37a7ad86a609feb1c2b21bea56765",
+        "r2-draftmoe installed first (install.py as of 2026-11-08 15:40Z)": "d42686d08202055e06611b914f1b50e343304868974de669c4cc0b57835165ea"
+      },
+      "action": "patch",
+      "patched_sha256": {
+        "live -> moefront": "9ce425b5489290f007698898d70b9bbd9287824f8d645e51b1228288733a08f5",
+        "live -> moefront -> draftmoe": "89292ccd27192c413eb042fbbce982f7a5a02f5cbba29dddf2ddb6544bc72607",
+        "live -> draftmoe -> moefront": "37a0a3ee6f880b28dc5a7c14c957379fe81b1e2f708a63f0945d34bca667f91a"
+      }
+    },
+    {
+      "path": "vllm/model_executor/layers/fused_moe/experts/deep_gemm_moe.py",
+      "base_sha256": "9364f121aacf5061be13b6490b83b58ad2bf11cbb1e154c84ef5c2a54ba61097",
+      "base_sha256_with_r1": {
+        "none of r1-attn/r1-drafter/r1-pf/r1-pdl/r1-eager touch it": "9364f121aacf5061be13b6490b83b58ad2bf11cbb1e154c84ef5c2a54ba61097",
+        "r2-draftmoe installed first (install.py as of 2026-11-08 15:40Z)": "21e3f9af27bc2d1cf754975cf8892ad372fee7113ffcc0d50f1018dfad1deead"
+      },
+      "action": "patch",
+      "patched_sha256": {
+        "live -> moefront": "b2c3b833e3e353022920a22f054ba7ae05bb69d94118579343e9f2930f5be5b1",
+        "live -> moefront -> draftmoe": "bc01c6eff6ece994e55e6969bfe8cbf9317ac62bb0ce5de9ae68e79ae0eec793",
+        "live -> draftmoe -> moefront": "c94542088293b3dc15e387dfa1405aba09dc59b57fcf9c0837daef0d721df007"
+      }
+    },
+    {
+      "path": "vllm/model_executor/layers/fused_moe/dsv41_routeprep.py",
+      "base_sha256": null,
+      "new_sha256": "842f49fb5df830793e02c12ff0195fb853165e90fac35a16ff3f136cf7b0eda7",
+      "action": "new"
+    }
+  ],
+  "read_only_context": {
+    "vllm/model_executor/layers/fused_moe/router/dsv4_topk.py": "45c5fc4f4b6f7acf02dcd85eddee259f533fff18c8837399c83741e9ac411906 (not modified; the fused kernel is its PDL dependent)",
+    "vllm/model_executor/layers/fused_moe/experts/sm121_target_m32.py": "38fb644bae275a5c1cd9446fb6108af4ddbf670f936716063bf8393b5fe597f6 (FC1 launch wrapper, not modified: FC1 is already PDL via deep_gemm set_pdl)",
+    "vllm/utils/deep_gemm.py": "3fae19d459c220d36eb00f1f4818c07fdfe28c0056c5a48dbee9e907a74b0bc8 (set_pdl(True) at 289-291, not modified)",
+    "$HOME/dsv41-fc2/athena_fc2_forty_layer_trial.py": "sha12 ae2089724597 (runtime getsource transform of DeepGemmFP4Experts.apply; its 3 anchors still match once, tested)"
+  },
+  "install": "python3 install.py install",
+  "uninstall": "python3 install.py uninstall",
+  "depends_on": [],
+  "composes_with": [
+    "r1-pdl (installed before or not at all; its mfront plan/scatter hooks stay reachable for every call the fused path does not take)",
+    "r2-draftmoe (same two files; pure tagged insertions on both sides; each accepts the other's tag; tested in both install orders and both uninstall orders, with and without r1-pdl underneath; the composed bytes depend on the order, so use one order on all 8 nodes: recommended r1-pdl -> r2-moefront -> r2-draftmoe, uninstall in reverse)"
+  ],
+  "conflicts_with": [
+    "DSV41_QHOIST (moves the same quant to a side stream; not in production; do not combine)",
+    "DSV41_MOE_FUSED_PERMUTE != 1 (the fused path then stays off: static check, logged)"
+  ],
+  "expected_gain_pct": {
+    "low": 0.4,
+    "central": 0.8,
+    "high": 1.2
+  },
+  "expected_gain_pct_per_flag": {
+    "DSV41_MOE_ROUTEPREP=1": {
+      "low": 0.4,
+      "central": 0.8,
+      "high": 1.2
+    },
+    "DSV41_MOE_FC1_FRONT=pdl (on top)": {
+      "low": 0.0,
+      "central": 0.05,
+      "high": 0.15
+    },
+    "DSV41_MOE_FC1_FRONT=pf2/pf4 (on top)": {
+      "low": -0.1,
+      "central": 0.1,
+      "high": 0.35
+    }
+  },
+  "window_arms": [
+    {
+      "name": "C",
+      "env": {}
+    },
+    {
+      "name": "rp",
+      "env": {
+        "DSV41_MOE_ROUTEPREP": "1"
+      }
+    },
+    {
+      "name": "rp-pdl",
+      "env": {
+        "DSV41_MOE_ROUTEPREP": "1",
+        "DSV41_MOE_FC1_FRONT": "pdl"
+      }
+    },
+    {
+      "name": "rp-pf2",
+      "env": {
+        "DSV41_MOE_ROUTEPREP": "1",
+        "DSV41_MOE_FC1_FRONT": "pf2"
+      }
+    },
+    {
+      "name": "rp-pf4",
+      "env": {
+        "DSV41_MOE_ROUTEPREP": "1",
+        "DSV41_MOE_FC1_FRONT": "pf4"
+      }
+    }
+  ],
+  "device_checks": [
+    "device_test.py on a stopped node (spark-eight), DSV41_MOE_FUSED_PERMUTE=1, exit code 0: W precompile of all SLOTS buckets for FC1_FRONT 0/pdl/pf2; Q1 every finite bf16 x at every reachable scale, Q2 every bf16 absmax; P per-route bytes/scale words/layout/ends/dead-row words bitwise for M in 1..96, 128, 170 with random + hostile + ROUTE_LIVE dead rows and live dsv4_topk routes; G CUDA graph [dsv4_topk -> fused] for 0/pdl/pf2, 200 poisoned replays; F production target_m32 FC1 (PDL on, checked) launched directly behind the fused kernel for 0/pdl/pf2, eager 8 M values + graph [topk -> fused -> FC1] 4 M values x 50 poisoned replays, rows bitwise through inv_perm (a missing FC1 is a FAIL); T timings median of 200, warm and cold-L2",
+    "Triton compile for sm_121 (compile_check.py on spark-eight, no launch), 10 variants incl. pdl/pf2/pf4/pf8 at SLOTS 64/256/1024 and int64 ids: PTX has div.rn.f32 (>=2), no div.full/approx, no fma.rn.f32, no .NaN max/min, 0f2EDBE6FF and 0f46800000, no e4m3 cvt, no atom., griddepcontrol.wait before the first global ld/st, launch_dependents only in pdl/pf, prefetch.global.L2 only in pf; '.ftz' ops are printed as INFO only (not a failure; see EXACTNESS.md section 1)",
+    "flags-off relaunch: exact.py ec2f4437f8e1ed09, G1 digest 2f7fdccbd388225a",
+    "rank0.log contains 'DSV41_MOE_ROUTEPREP=1 (r2-moefront): fused route prep eligible (precompiled 5 SLOTS variants)' in every rp arm (else the arm is inert: 'OFF (static check failed)' or 'OFF (precompile failed: ...)')",
+    "per arm: exact.py, G1 digest, 9 long-prompt hashes identical to control"
+  ],
+  "production_launcher": "dcd09a30 since 2026-11-08T17:05Z (promote climb-w2: DTGRAPH, L2_PREFETCH_R1_SHW2/KVSRC, IDXPAR, MHC_OVERLAP_DRAFT); built against fda6d05a, reviewed against 08a249da. The flags this kit relies on are unchanged: DSV41_MOE_FUSED_PERMUTE=1, DSV41_SM121_TARGET_M32=1 MAX_M=96, ROUTE_LIVE=skip, COMPACT=1, FC1_DEAL=deal, AV_PROFILE=pinned. Site files rechecked 17:2xZ on spark-one/four/eight: deep_gemm_utils 58e264c8, deep_gemm_moe 9364f121, dsv4_topk 45c5fc4f, sm121_target_m32 38fb644b",
+  "expected_gain_pct_note": "top level = the rp arm (DSV41_MOE_ROUTEPREP=1 alone), same as the per-flag entry and the summary; the FC1_FRONT arms add -0.1..+0.35 (central +0.1) on top, unmeasured",
+  "gates_before_window": [
+    "DONE 2026-11-08T17:15Z: bash tools/run_spark8_checks.sh with CLUSTER_LOCK absent -> results/compile.log 'ALL PASS' / 'compile_check.py exit 0' (sha256 c37499040247967c161f89c272b239c80fe79e70f565a9ec970e397a48525fa8), results/interp.log '20 cases: ALL PASS' / 'interp_test.py exit 0' (sha256 ce07f23e80f7803474ef51caf8bde855e134fb4e25b7fab92b2319fadd0b07fe); PTX in ptx/. Rerun if dsv41_routeprep.py changes (its sha is in the log header).",
+    "OPEN (lead, GPU): device_test.py exit 0 on a stopped node (header has the command): Q1/Q2 exhaustive quant vs the live CUDA kernel, P plan/scatter, G graph replays, W precompile, F real PDL FC1 directly behind the fused kernel for FC1_FRONT 0/pdl/pf2 (eager + 50 poisoned graph replays). Required before rp; case F required before rp-pdl / rp-pf*. --no-fc1 does not clear it."
+  ],
+  "compile_log": {
+    "results/compile.log": "c37499040247967c161f89c272b239c80fe79e70f565a9ec970e397a48525fa8",
+    "results/interp.log": "ce07f23e80f7803474ef51caf8bde855e134fb4e25b7fab92b2319fadd0b07fe",
+    "results/compile.run1.log": "d5dac5af1e941a8c3fcf12ae6b6ed94ef4ba76add17d8f6c828ddc1380768594 (first run; compiled, one over-strict check, see TEST-RESULTS.txt)",
+    "toolchain": "spark-eight ~/venvs/vllm032 Triton 3.7.1, /usr/local/cuda/bin/ptxas, GPUTarget cuda 121, no GPU (CUDA_VISIBLE_DEVICES empty)"
+  }
+}

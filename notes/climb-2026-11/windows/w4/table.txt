@@ -1,0 +1,6 @@
+identity - | G1 128.674 code 129.90 prose 93.17 math 162.95 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF
+c1 control | G1 128.713 code 129.95 prose 93.19 math 163.00 digest 2f7fdccbd388225a reps_identical True | exact - | det - | G4 min 57.60 mean 73.34
+xs DSV41_ATTN_XSPLIT=1 | G1 128.770 code 129.98 prose 93.72 math 162.61 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+xr200 DSV41_ATTN_XSPLIT=1;DSV41_L2_PREFETCH_PACE_GBPS_ATTN=200 | G1 130.356 code 131.55 prose 95.24 math 164.28 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+xo160 DSV41_ATTN_XSPLIT=1;DSV41_L2_PREFETCH_PACE_ATTN_STREAM=1;DSV41_L2_PREFETCH_PACE_GBPS_ATTN=160 | G1 128.811 code 129.85 prose 93.95 math 162.63 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+c2 control | G1 128.796 code 129.98 prose 93.30 math 163.10 digest 2f7fdccbd388225a reps_identical True | exact - | det - | -

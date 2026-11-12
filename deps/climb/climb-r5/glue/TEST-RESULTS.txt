@@ -1,0 +1,233 @@
+# r5-glue test results, after the review fixes (glue:fix), 2026-11-09T06:30Z
+# kit modules: dsv41_r5g_rq.py 9ae74abc68b6c5a9, dsv41_r5g_rp.py db2dfaf4aceb8967; install.py 87f62b3432b04d6f;
+#   install-all.sh 0bf2f7c918d9e9c3; device_test.py e043dd41700ef3d7; tools/compile_check.py f45fd97667b70404;
+#   tools/pdl_producer.py 26d5f7f295f22fac; tools/hook_import_test.py 1d6cf28e0e912276
+# base (live, pulled read-only from spark-one 2026-11-09 ~05:1xZ): dsv41_attnout.py 308942eb, dsv41_routeprep.py 842f49fb;
+#   launcher 166d7aac (re-read on spark-eight 06:0xZ: 166d7aacb0c922a7)
+
+SUMMARY (every line below was run in this fix round; logs in results/)
+  tests/test_install.py            Mac (Python 3.14.7)            exit 0, ALL PASS (43; foreign r1-pdl lines now REFUSED, review N4)
+  tests/test_install_all.py        Mac (fake homes, local)        exit 0, ALL PASS (17; NEW, review N3: 3-node install / status /
+                                                                  HOOKS-LOST / FOREIGN / STALE-TMP refusals / rollback / uninstall)
+  tests/test_ast_exact.py          Mac                            exit 0, ALL PASS (+ 9 must-fail source mutants caught)
+  tests/test_writesets.py          Mac (numpy)                    exit 0, ALL PASS
+  tests/test_wrappers.py           512S1 exo-venv313 (torch CPU)  exit 0, ALL PASS (43; incl. the synthetic sweep and the
+                                                                  "wrong only at M=6, first eager call at M=2" mutants, review N2)
+  tests/test_compile_check_logic.py 512S1 exo-venv313 (torch CPU) exit 0, ALL PASS (21; NEW, review B1/N1: fake Triton, production
+                                                                  specialization assertions, width-generic byte counts, must-fail
+                                                                  modes late / spill / nodiv, real r2-moefront PTX counter case)
+  pyflakes (all kit .py, incl. the hook test's child script)      clean
+  bash -n install-all.sh tools/run_spark8_checks.sh               ok
+  tools/compile_check.py           NOT RUN: CLUSTER_LOCK still held on spark-one (checked 06:25:44Z; eta 11:32Z). Rewritten for
+                                   review B1; only its logic is tested (fake Triton). Triton's real binder path, the real PTX/SASS
+                                   and therefore the hoist/split load-order verdict are UNVERIFIED until run_spark8_checks.sh runs.
+  tools/interp_test.py             NOT RUN (same reason; same runner; unchanged).
+  device_test.py                   NOT RUN: needs a GPU on a stopped node. New parts S0 / RQ-P / RP-P / H (review N5/N6) are
+                                   written but have never executed.
+
+== tests/test_install.py (Mac, Python 3.14.7, 2026-11-09T06:25:08Z)
+PASS base copy models/deepseek_v4/nvidia/ops/dsv41_attnout.py has the KIT.json live sha
+PASS base copy model_executor/layers/fused_moe/dsv41_routeprep.py has the KIT.json live sha
+PASS KIT.json new_sha256 of models/deepseek_v4/nvidia/ops/dsv41_r5g_rq.py == kit file
+PASS KIT.json new_sha256 of model_executor/layers/fused_moe/dsv41_r5g_rp.py == kit file
+PASS dry exit 0
+PASS dry writes nothing
+PASS status before install: base x2, modules absent, NOT-INSTALLED
+PASS install exit 0
+PASS status after install: INSTALLED
+PASS install idempotent (no byte changes)
+PASS models/deepseek_v4/nvidia/ops/dsv41_attnout.py: strip(tagged) == base
+PASS models/deepseek_v4/nvidia/ops/dsv41_attnout.py: backup == base
+PASS models/deepseek_v4/nvidia/ops/dsv41_attnout.py: every inserted line carries the tag (4 lines)
+PASS models/deepseek_v4/nvidia/ops/dsv41_attnout.py: insertion is at the end of the file
+PASS models/deepseek_v4/nvidia/ops/dsv41_attnout.py: hook = one flag assignment + one `if <flag>:` block
+PASS models/deepseek_v4/nvidia/ops/dsv41_attnout.py: flag expression False for unset/0/off/false/'' and True for 1/hoist/split/on
+PASS models/deepseek_v4/nvidia/ops/dsv41_attnout.py: gated body imports the kit module and rebinds only _launch_rq
+PASS models/deepseek_v4/nvidia/ops/dsv41_attnout.py: hook executes as designed with flag=None (imported=[])
+PASS models/deepseek_v4/nvidia/ops/dsv41_attnout.py: hook executes as designed with flag='0' (imported=[])
+PASS models/deepseek_v4/nvidia/ops/dsv41_attnout.py: hook executes as designed with flag='1' (imported=['vllm.models.deepseek_v4.nvidia.ops'])
+PASS model_executor/layers/fused_moe/dsv41_routeprep.py: strip(tagged) == base
+PASS model_executor/layers/fused_moe/dsv41_routeprep.py: backup == base
+PASS model_executor/layers/fused_moe/dsv41_routeprep.py: every inserted line carries the tag (4 lines)
+PASS model_executor/layers/fused_moe/dsv41_routeprep.py: insertion is at the end of the file
+PASS model_executor/layers/fused_moe/dsv41_routeprep.py: hook = one flag assignment + one `if <flag>:` block
+PASS model_executor/layers/fused_moe/dsv41_routeprep.py: flag expression False for unset/0/off/false/'' and True for 1/hoist/split/on
+PASS model_executor/layers/fused_moe/dsv41_routeprep.py: gated body imports the kit module and rebinds only _launch
+PASS model_executor/layers/fused_moe/dsv41_routeprep.py: hook executes as designed with flag=None (imported=[])
+PASS model_executor/layers/fused_moe/dsv41_routeprep.py: hook executes as designed with flag='0' (imported=[])
+PASS model_executor/layers/fused_moe/dsv41_routeprep.py: hook executes as designed with flag='split' (imported=['vllm.model_executor.layers.fused_moe'])
+PASS module models/deepseek_v4/nvidia/ops/dsv41_r5g_rq.py copied
+PASS module model_executor/layers/fused_moe/dsv41_r5g_rp.py copied
+PASS status reports HOOKS-LOST after a parent re-copy
+PASS re-install after HOOKS-LOST restores INSTALLED
+PASS uninstall exit 0
+PASS uninstall restores exact bytes, removes modules and redundant backups
+PASS uninstall idempotent
+PASS install refuses a foreign base and writes nothing
+PASS install refuses when a parent module is absent and writes nothing
+PASS uninstall refuses when a patched file changed after install, and writes nothing
+PASS FOREIGN_TAGS is empty
+PASS models/deepseek_v4/nvidia/ops/dsv41_attnout.py: install refuses a base carrying r1-pdl tagged lines and writes nothing
+PASS model_executor/layers/fused_moe/dsv41_routeprep.py: install refuses a base carrying r1-pdl tagged lines and writes nothing
+ALL PASS
+exit 0
+
+== tests/test_install_all.py (Mac, Python 3.14.7, 2026-11-09T06:25:09Z)
+PASS status on base nodes: CLEAN, exit 0
+PASS install exit 0, OVERALL INSTALLED
+PASS installed trees byte-identical on every node
+PASS installed tree has the two new modules and both .bak files
+PASS status after install: INSTALLED, exit 0
+PASS install again is idempotent (exit 0, trees unchanged)
+PASS HOOKS-LOST node: status exit 2, n2 HOOKS-LOST
+PASS HOOKS-LOST node: preflight refuses and writes nothing
+PASS HOOKS-LOST node: install refuses and writes nothing
+PASS HOOKS-LOST node: uninstall refuses and writes nothing
+PASS FOREIGN node: uninstall refuses and writes nothing
+PASS stale .tmp-r5-glue: preflight refuses
+PASS uninstall exit 0, OVERALL CLEAN
+PASS uninstalled trees == base on every node
+PASS failing install on n3: exit 1, rollback message
+PASS after rollback every node is CLEAN (trees == base)
+PASS status after rollback: CLEAN, exit 0
+ALL PASS
+exit 0
+
+== tests/test_ast_exact.py (Mac, Python 3.14.7, 2026-11-09T06:25:14Z)
+PASS base copy dsv41_attnout.py is the live file (sha 308942eb)
+PASS base copy dsv41_routeprep.py is the live file (sha 842f49fb)
+PASS RQ params = live + PAD_J: constexpr
+PASS RQ decorator triton.jit(do_not_specialize=['M'])
+PASS RQ every statement before the padding loop
+PASS RQ live tail is `for p in range(M + r, PADDED_M, M)`
+PASS RQ kit tail = jj = tl.arange(0, PAD_J); for j0 in range(0, PADDED_M - M - r, PAD_J * M)
+PASS RQ kit pad rows p = M + r + j0 + jj * M (the live rows M+r, M+r+M, ...; tests/test_writesets.py)
+PASS RQ pad offset = live formula, vectorised
+PASS RQ pad value 0 (live tl.zeros([8], tl.uint8), kit tl.zeros([PAD_J, 8], tl.uint8))
+PASS RQ _launch_r2_into: padded_m / sf_cols / launch == live _launch_rq
+PASS RQ _launch_new_into = live launch with the r5 kernel and + PAD_J
+PASS RQ _alloc: the live allocations, same order
+PASS RP params = live + SPLIT: constexpr
+PASS RP decorator
+PASS RP pid / nprog / gdc_wait
+PASS RP plan (s .. total)
+PASS RP route (e .. first)
+PASS RP t / k
+PASS RP prefetch guard: live `if first:`, kit `if first & is0:`
+PASS RP prefetch body
+PASS RP early trigger
+PASS RP kit: inv_perm / layout stores under `if is0:`
+PASS RP inv_perm / layout stores
+PASS RP xrow (kit: hoisted to the top)
+PASS RP orow
+PASS RP live chunk loop is `for ch in tl.static_range(H // (GB * GROUP))`
+PASS RP chunk preamble g / c / col / fmax_v / one_v
+PASS RP chunk offs
+PASS RP live load `xf = tl.load(xrow + offs).to(tl.float32)`, kit `xf = xa.to(tl.float32)`
+PASS RP chunk body after the load (absmax .. packed-word store), statement by statement
+PASS RP _r5g_offs(ch) returns the live offs expression
+PASS RP hoist: xa0..xa4 = tl.load(xrow + _r5g_offs(i, GB, GROUP)) in chunk order
+PASS RP split: xa = tl.load(xrow + _r5g_offs(y, GB, GROUP))
+PASS RP hoist: chunks quantized in the live order 0..4
+PASS RP split: one chunk per program (ch = program_id(1))
+PASS RP segment padding (kit guard first & is0)
+PASS RP strided dead-row fill (kit under is0; nprog = num_programs(0) unchanged)
+PASS RP expert ends (kit guard (pid == 0) & is0)
+PASS RP every live kernel statement is compared above
+PASS RP launch: _pf_args call
+PASS RP launch: args tuple
+PASS RP launch: constexpr/option dict = live + SPLIT
+PASS RP launch: grid = (M * TOPK, 5 if split else 1); live (M * TOPK,)
+ALL PASS
+== must-fail mutants
+PASS mutant caught: rq: bf16 rounding of the split sum dropped
+PASS mutant caught: rq: split chains swapped
+PASS mutant caught: rq: pad row stride M+1
+PASS mutant caught: rq: pad value 1
+PASS mutant caught: rp: amax eps floor dropped
+PASS mutant caught: rp: x*inv -> x/scale
+PASS mutant caught: rp: chunks 3/4 loads swapped
+PASS mutant caught: rp: segment padding in every split program
+PASS mutant caught: rp: SPLIT missing from the launch dict
+ALL PASS (clean + every mutant caught)
+exit 0
+
+== tests/test_writesets.py (Mac, Python 3.14.7, 2026-11-09T06:25:14Z)
+PASS RQ padding rows live == kit and every SF byte written exactly once (147840 (N, PADDED_M, M, r) programs, M from 1 to 384)
+PASS RQ kit: one masked store per program for every sonar M 1..32 (r = 0 worst case)
+INFO r2 loop trips (r = 0) at M 1/2/4/5/6: {1: 127, 2: 63, 4: 31, 5: 25, 6: 21}
+PASS RP hoist and split: identical write sets to the live kernel, each element once (80 cases, M 1..10, 4 routings)
+ALL PASS
+exit 0
+
+== tests/test_wrappers.py (512S1 exo-venv313 torch 2.11.0, 2026-11-09T06:25:31Z)
+PASS RQ SWEEP_M is every sonar M 1..32
+PASS RQ first eager call M=1: sweep (32 M) + real-data self-check ran both kernels, bytes == r2
+PASS RQ INFO line names the sweep: 'bit-identical ... at every M 1..32 (synthetic sweep'
+PASS RQ second call M=1: new kernel only
+PASS RQ capture at an unchecked M after a pass: new kernel, no check
+PASS RQ new eager M=2: checked once
+PASS RQ capture before any check: r2 kernel
+PASS RQ no check budget and never passed: r2 kernel
+PASS RQ mutant new kernel that skips the last padding row: caught at every M (1,2,4,5,6,16,32), disabled, r2 bytes served
+PASS RQ mutant new kernel that raises: caught at every M (1,2,4,5,6,16,32), disabled, r2 bytes served
+PASS RQ mutant wrong only at M=6, first eager call at M=2: the sweep catches it at M=6, r2 bytes served, a later capture at M=6 runs r2
+PASS RP hoist: MODE/SPLIT parsed
+PASS RP hoist: sweep covers M 1..10 x 2 routings
+PASS RP hoist first eager M=4: sweep (20) + real-data self-check (r2 + new on poisoned copies) then the real launch, bytes == r2
+PASS RP hoist: INFO line names the sweep
+PASS RP hoist: launch grid (24, 1)
+PASS RP hoist: M=11 (M*6 > 64) always r2, no check
+PASS RP hoist: warmup compiles r2 as before (2) and the new kernel in scope only (1)
+PASS RP hoist: capture after a pass, unchecked M=6: new kernel, no check
+PASS RP hoist: capture before any check -> r2
+PASS RP hoist: new-kernel precompile failure -> disabled, r2 compiled and serving
+PASS RP hoist mutant 'layout': caught at every M 1..10, disabled, r2 bytes served
+PASS RP hoist mutant 'ends': caught at every M 1..10, disabled, r2 bytes served
+PASS RP hoist mutant 'row-byte': caught at every M 1..10, disabled, r2 bytes served
+PASS RP hoist mutant 'raise': caught at every M 1..10, disabled, r2 bytes served
+PASS RP hoist mutant wrong only at M=6, first eager call at M=2: the sweep catches it, r2 bytes served, a later capture at M=6 runs r2
+PASS RP split: MODE/SPLIT parsed
+PASS RP split: sweep covers M 1..10 x 2 routings
+PASS RP split first eager M=4: sweep (20) + real-data self-check (r2 + new on poisoned copies) then the real launch, bytes == r2
+PASS RP split: INFO line names the sweep
+PASS RP split: launch grid (24, 5)
+PASS RP split: M=11 (M*6 > 64) always r2, no check
+PASS RP split: warmup compiles r2 as before (2) and the new kernel in scope only (1)
+PASS RP split: capture after a pass, unchecked M=6: new kernel, no check
+PASS RP split: capture before any check -> r2
+PASS RP split: new-kernel precompile failure -> disabled, r2 compiled and serving
+PASS RP split mutant 'layout': caught at every M 1..10, disabled, r2 bytes served
+PASS RP split mutant 'ends': caught at every M 1..10, disabled, r2 bytes served
+PASS RP split mutant 'row-byte': caught at every M 1..10, disabled, r2 bytes served
+PASS RP split mutant 'raise': caught at every M 1..10, disabled, r2 bytes served
+PASS RP split mutant wrong only at M=6, first eager call at M=2: the sweep catches it, r2 bytes served, a later capture at M=6 runs r2
+PASS DSV41_GLUE_RQPAD='2' raises ValueError at import
+PASS DSV41_GLUE_RPSPLIT='1' raises ValueError at import
+ALL PASS
+exit 0
+
+== tests/test_compile_check_logic.py (512S1 exo-venv313 torch 2.11.0, 2026-11-09T06:25:33Z)
+PASS good listings + production spec: compile_check exit 0, ALL PASS
+PASS rule model used (fake has no binder) and announced
+PASS good: PASS line 'hoist_m1: M specialized to constexpr 1'
+PASS good: PASS line 'split_m4: M = 4 plain i32'
+PASS good: PASS line 'hoist_m4: tt.divisibility 16 on every pointer and on x_row_stride'
+PASS good: PASS line 'split_i64_m1: specialization identical to the r2 kernel's'
+PASS good: PASS line 'rq_r2_m1: tt.divisibility 16 on ['P', 'Q', 'SF']; M plain i32'
+PASS good: PASS line 'rq m4: kit specialization identical'
+PASS good: PASS line 'hoist_m4: PTX global-load bytes/thread before the first'
+PASS good: PASS line 'split_m1: SASS LDG bytes/thread before the first ATOMS'
+PASS good: PASS line 'hoist_pf2_m4: prefetch.global.L2 present'
+PASS good: PASS line 'split_nopdl_m4: launch_dependents absent'
+PASS good: PASS line 'hoist_pdl_m4: launch_dependents present'
+PASS good: PASS line 'rq_kit_m1: no local-memory spills'
+PASS good: no FAIL line
+PASS scalar b16 x loads (width-generic byte count): still exit 0
+PASS must-fail mode 'late': exit 1 with FAIL 'PTX global-load bytes/thread before the first atom.shared' for hoist and split
+PASS must-fail mode 'late': exit 1 with FAIL 'SASS LDG bytes/thread before the first ATOMS' for hoist and split
+PASS must-fail mode 'spill': exit 1 with FAIL 'no local-memory spills' for hoist and split
+PASS must-fail mode 'nodiv': exit 1 with FAIL 'tt.divisibility 16 on every pointer' for hoist and split
+PASS real r2-moefront s64_off.ptx: 4 B (the ids ld.global.b32) before the histogram, 88 B in all (40 b16 + 2 b32)
+ALL PASS
+exit 0

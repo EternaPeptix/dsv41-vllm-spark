@@ -1,0 +1,204 @@
+{
+  "name": "r6-head",
+  "round": "climb r6 (LM-head screen/refine + sampling kernels), 2026-11-09; built against production launcher 166d7aac",
+  "levers": [
+    {
+      "id": "HEADREF",
+      "source": "climb-r5 DESIGN.md \u00a76 item 2 / PLAN.md \u00a74 r4 #14 (head-refine load balance), re-based on t2 (scripts/headwait.py)",
+      "flag": "DSV41_R6_HEAD_REFINE",
+      "variant": "row (central) | tile (pure bitwise, same set as live)",
+      "status": "built; CPU tests PASS (installer 52/52, cfg guards 54/54, refine logic 216/216 incl. forced ties + must-fail mutants); compile check sm_121 ALL PASS (module ad775bc1), Triton-interpreter consistency 143/143, device_test --smoke ALL PASS incl. the new anchor and dispatch parts (interpreter bf16 dot is not numeric: logic only); device test and serving arm NOT run (no GPU window)",
+      "estimate_basis": "t2 (out/headwait_t2.txt): maths excess over prose ~87 us/step at the (max,id) gather (max-over-8-ranks refine), code ~12 us, prose 0; r6 adds the cand kernel (~3-4 us) and one launch gap (~2.8 us measured between head kernels) in front of a refine K chain no shorter than live's, so light steps LOSE 3-6 us. low: production candidates fill whole tiles (row ~ tile), maths -4 us, code/prose -6 us; central: maths recovers ~56% of 87 us net 45 us, code -2 us, prose -4 us; high: maths ~92% (net 80 us), code +8 us, prose -1 us. Rows/tiles ratio in production is unknown until the r6 stats line is read."
+    },
+    {
+      "id": "SCREENDQ",
+      "source": "task (2): E1 _screen_kernel exact speedups; t2 screen 462-480 us/step = 88 MB at ~190 GB/s",
+      "flag": "DSV41_R6_HEAD_SCREEN",
+      "variant": "exact integer dequant (no I2F, one exponent byte per 32 weights): smem 40.0 -> 24.8 KB/CTA (2 -> 3 CTAs/SM by shared memory at 100 KB/SM), 540 -> 447 instr per K step; + launch-shape sweep (BN/BK/warps/stages) in device_test.py",
+      "status": "built; exhaustive dequant proof PASS (65,024 (q,e) pairs); compile PASS; device timing/bitwise sweep NOT run. SASS model at M=7: the screen is NOT issue-bound (issue-only floor live 47-60 us, r6 39-50 us at 2.4-1.9 GHz, vs DRAM floor 383-440 us), so any gain is memory-level parallelism only"
+    },
+    {
+      "id": "CERTPRE",
+      "source": "PLAN.md \u00a74 r4 #15 cert-head L2 pre-stage; t2: 75-87 us between the last FFN GEMM and the screen with 0 L2-prefetch kernels (scripts/prestage.py)",
+      "flag": "(none: not built)",
+      "variant": "design + device micro-bench only (device_test.py --part l2)",
+      "status": "partial: trace evidence that the head table is never staged; the in-graph hook belongs in dsv41_l2pf_r1 (same pattern as R1_DRAFT's DRAFT_HEAD_MB, target graph's last MoE all-reduce window), which r5-ffnfront also patches; not built this round"
+    }
+  ],
+  "flags": [
+    {
+      "name": "DSV41_R6_HEAD_REFINE",
+      "default": "0",
+      "on_value": "row | tile",
+      "meaning": "Read at import of dsv41_r4_small (module-level bool) and validated by dsv41_head_r6 at import (ValueError on other values). On: certified_logits(full=False) runs _r6_xnorm (live body + list-counter zero) -> screen -> _r6_cand (live tile predicate per row or per 16-row tile, -inf fill, compact list) -> _r6_refine (persistent grid, live op sequence per listed row). tile: output bit-identical to live; row: computed logits bit-identical, other rows -inf, argmax-identical by the CERT certificate."
+    },
+    {
+      "name": "DSV41_R6_HEAD_SCREEN",
+      "default": "0",
+      "on_value": "1",
+      "meaning": "r6 screen kernel: live _screen_kernel with the exact integer dequant (DSV41_R6_HEAD_SCREEN_DQ=1|2). HI and THR bit-identical (exhaustive dequant proof; device bitwise at every M). Falls back to the live screen when the CERT table has an exponent byte outside 1..254 (checked once)."
+    },
+    {
+      "name": "DSV41_R6_HEAD_SCREEN_DQ",
+      "default": "1",
+      "on_value": "1 | 2",
+      "meaning": "1: cvt.rn.bf16 of the exact product; 2: top 16 bits of the exact product. Both proven equal to live for every (q, e) the builder emits."
+    },
+    {
+      "name": "DSV41_R6_HEAD_SCREEN_CFG",
+      "default": "0,0,0,0",
+      "on_value": "BN,BK,warps,stages copied from an 'ELIGIBLE-ENV screen' line (with DSV41_R6_HEAD_SCREEN_DQ=2)",
+      "meaning": "r6 screen launch shape; 0 = live value. Any non-zero field REQUIRES DSV41_R6_HEAD_SCREEN_DQ=2 (ValueError at import otherwise: the device sweep runs non-default shapes with DQ2 only). Applies at BM <= SWEPT_MAX_B=128 (every bucket the sweep runs: M 2/7/24/48/96 -> BM 16/16/32/64/128); above it the live shape serves. Use only a config device_test.py printed as an ELIGIBLE-ENV line."
+    },
+    {
+      "name": "DSV41_R6_HEAD_REFINE_CFG",
+      "default": "0,0,0,0,1",
+      "on_value": "BK,0,stages,grid,spread copied from an 'ELIGIBLE-ENV refine' line",
+      "meaning": "r6 refine: BK/stages 0 = live XBK/XSTAGES and act at BMX 16 only; warps MUST be 0 (live XWARPS; ValueError otherwise, the sweep does not vary it); grid 0 = 4 x SMs (192 on GB10); spread 1 = rows per chunk clamp(ceil(n/grid),1,16). grid/spread act at every BMX <= SWEPT_MAX_B=128 (the sweep runs one M per BMX bucket 16/32/64/128); above it grid 0 and spread 1 serve. Use only an 'ELIGIBLE-ENV refine' line."
+    },
+    {
+      "name": "DSV41_R6_HEAD_CAND_ROWS",
+      "default": "256",
+      "on_value": "power of two >= 16",
+      "meaning": "rows per _r6_cand_kernel CTA at BMX 16 (halved per BMX doubling)."
+    },
+    {
+      "name": "DSV41_R6_HEAD_SELFCHECK",
+      "default": "1",
+      "on_value": "0 | 1",
+      "meaning": "first eager call per M runs the live pass too and compares (HI/THR bits; tile output bits; row output == where(predicate, live, -inf) + list length; argmax). One host sync per new M. Failure: ERROR log, live result, r6 off for the process (rank-local; no collective involved). Speed arms: SELFCHECK=0 once the device test and the hcheck arm (SELFCHECK=1) are clean, or warm every served M before measuring (each new M costs one extra head pass + host syncs)."
+    },
+    {
+      "name": "DSV41_R6_HEAD_STATS_EVERY",
+      "default": "2000",
+      "on_value": "N | 0",
+      "meaning": "every N r6 calls one host read and a log line: rows computed per call vs live-equivalent tiles per call (the rows-vs-tiles evidence for the refine lever). 0 = no reads."
+    }
+  ],
+  "files": [
+    {
+      "path": "vllm/models/deepseek_v41/nvidia/dsv41_r4_small.py",
+      "base_sha256": "d9bf5d596c261771379d1ce5c8fb505cd3b5edff19540f7d8ccf1973fa845e74",
+      "action": "patch",
+      "owner": "r4-e1 + g1-stepovh + climb-r1 r1-drafter (live 8/8)",
+      "edit": "+7 tagged lines (# dsv41-r6-head): module-level flag + gated import; first statement of certified_logits dispatches to dsv41_head_r6 when on and full=False",
+      "patched_sha256": "ebe73cdb57f06670370fb539ce77a836eadce74f51da29c1a15767086990247c",
+      "compose_bases": {
+        "live (climb-r1 integrate/composed, 166d7aac)": "3364d8c877db7e532923fe03d6da5fa2763867d06d18f575c4c8835556faae8e",
+        "climb-r5 install-all (r5-prio -> r5-ffnfront -> r5-glue)": "3364d8c877db7e532923fe03d6da5fa2763867d06d18f575c4c8835556faae8e (r5 does not touch this file; proven on the r5-composed tree)",
+        "base_r6step_b1306620": "d9bf5d596c261771379d1ce5c8fb505cd3b5edff19540f7d8ccf1973fa845e74"
+      },
+      "recompose_note": "2026-11-10: rebased onto b1306620 base+r6-step (d9bf5d59); head anchors END of step-C4 block to reproduce live head-then-step order (ebe73cdb). r6-step is a prerequisite. Prior clean-r4 base 3364d8c8 -> patched c77844fb retained in git history."
+    },
+    {
+      "path": "vllm/models/deepseek_v41/nvidia/dsv41_head_r6.py",
+      "base_sha256": null,
+      "action": "new",
+      "sha256": "ad775bc186f12277e13e272477e9e2b969ac7912531b549699f6fa0294842eca",
+      "prior_sha256": [
+        "9bd17b03808d961a4f36ae0d7c3b36aebe22e0996f898d13a2cabe41fe3eacfa"
+      ]
+    }
+  ],
+  "install": "python3 install.py install   (8/8; status / dry / uninstall)",
+  "depends_on": [
+    "live dsv41_r4_small.py 3364d8c8 (DSV41_R4_CERT_HEAD=1, DSV41_R4_CERT_HEAD_M=2-96, DSV41_SYNC_FREE=argmax as in launcher 166d7aac)"
+  ],
+  "conflicts_with": [],
+  "expected_gain_pct": {
+    "HEADREF": {
+      "low": -0.02,
+      "central": 0.08,
+      "high": 0.16
+    },
+    "SCREENDQ": {
+      "low": -0.02,
+      "central": 0.09,
+      "high": 0.37
+    },
+    "CERTPRE (not built)": {
+      "low": 0.03,
+      "central": 0.14,
+      "high": 0.25
+    },
+    "built set (HEADREF+SCREENDQ)": {
+      "low": -0.04,
+      "central": 0.17,
+      "high": 0.53
+    }
+  },
+  "expected_gain_ms_per_step": {
+    "HEADREF": {
+      "low": -0.005,
+      "central": 0.017,
+      "high": 0.035,
+      "note": "G1-weighted (1% G1 = 0.214 ms); maths -0.004/0.045/0.080, code -0.006/-0.002/0.008, prose -0.006/-0.004/-0.001 ms/step"
+    },
+    "SCREENDQ": {
+      "low": -0.004,
+      "central": 0.02,
+      "high": 0.08,
+      "note": "fixed work, every workload"
+    },
+    "CERTPRE": {
+      "low": 0.006,
+      "central": 0.03,
+      "high": 0.052
+    },
+    "built set": {
+      "low": -0.009,
+      "central": 0.037,
+      "high": 0.115
+    }
+  },
+  "window_arms": [
+    {
+      "name": "hcheck (det only, not a speed arm; run FIRST)",
+      "env": "DSV41_R4_CERT_HEAD=check DSV41_R6_HEAD_REFINE=row DSV41_R6_HEAD_SCREEN=1 DSV41_R6_HEAD_SELFCHECK=1 DSV41_R4_CERT_HEAD_LOG_EVERY=500"
+    },
+    {
+      "name": "hrow",
+      "env": "DSV41_R6_HEAD_REFINE=row DSV41_R6_HEAD_SELFCHECK=0"
+    },
+    {
+      "name": "htile",
+      "env": "DSV41_R6_HEAD_REFINE=tile DSV41_R6_HEAD_SELFCHECK=0"
+    },
+    {
+      "name": "hscr",
+      "env": "DSV41_R6_HEAD_SCREEN=1 DSV41_R6_HEAD_SELFCHECK=0 + the fastest 'ELIGIBLE-ENV screen' line (DQ2 + CFG), or DSV41_R6_HEAD_SCREEN_DQ=<1|2> DSV41_R6_HEAD_SCREEN_CFG=0,0,0,0"
+    },
+    {
+      "name": "hall",
+      "env": "DSV41_R6_HEAD_REFINE=row DSV41_R6_HEAD_SELFCHECK=0 + the hscr screen line + the fastest 'ELIGIBLE-ENV refine' line (or DSV41_R6_HEAD_REFINE_CFG=0,0,0,0,1)"
+    },
+    {
+      "name": "note",
+      "env": "SELFCHECK=0 on speed arms only after device_test.py exit 0 (both weight sets) and a clean hcheck (8/8 'self-check passed', no FAILED, check counters 0); otherwise keep SELFCHECK=1 and warm every served M before the measured segment"
+    }
+  ],
+  "device_checks": [
+    "device_test.py --part all on a stopped node in the mandatory env (venv vllm032 + CUDA_HOME); exit 0 required; ~25-35 min",
+    "device_test.py --part all --weights real --rank 4 (real head.weight rows of rank 4) on the same node; exit 0 required",
+    "parts that gate: anchor (r4.certified_logits flags-off == the _run reference, every M), bitwise + per-bucket config sweeps (M 2/7/24/48/96), ties, mutants, graph, dispatch (installed path on the GPU, child per mode, self-check must-fail mutants), and the time part's forced-set bitwise checks",
+    "pick SCREEN_DQ / SCREEN_CFG / REFINE_CFG only from the 'ELIGIBLE-ENV' lines it prints (ready to paste), fastest cold-L2 time",
+    "serving: every r6 arm's rank logs show '[r6-head] self-check passed at M=' (hcheck, SELFCHECK=1) and never 'self-check FAILED'; exact.py ec2f4437, G1 digest 2f7fdccbd388225a, 9 long prompts identical",
+    "serving: the '[r6-head] r6 refine: ... rows computed (x/call), live-equivalent tiles (y/call)' lines on every rank (rows vs tiles evidence)"
+  ],
+  "tests": {
+    "cpu": [
+      "tests/test_install.py (stdlib, any host)",
+      "tests/test_cfg_guard.py (stdlib + stub torch, any host)",
+      "tests/test_dequant.py (numpy)",
+      "tests/test_refine_logic.py (torch CPU; 512S1 exo-venv313)"
+    ],
+    "spark-eight CPU only": [
+      "tools/run_spark8_checks.sh: tools/compile_check.py, tools/interp_test.py, device_test.py --smoke"
+    ],
+    "device": [
+      "device_test.py"
+    ]
+  },
+  "composition_notes": "climb-r1 tooling: while r6-head is installed, climb-r1/install-all.sh status over the full kit set reports FOREIGN on dsv41_r4_small.py (c77844fb is neither c46e66bd nor 3364d8c8), and a direct r1-drafter install.py uninstall restores dspark.py and speculator.py and then refuses on dsv41_r4_small.py (half removed). Uninstall r6-head BEFORE r1-drafter. Subset runs (R1ALL_KITS=r1-pdl etc.) are unaffected.",
+  "r8_fixb": "r8-fixb (climb-r8/fixb, 2026-11-09): device_test.py repaired (ksplit = two sequential K-half loops, per-config mutant sweep, composed ebe73cdb accepted, env rule + launcher mirror via ../common/prodenv.py); tools/mutfit.py added. The module and installer are unchanged. See ../README.md section 1."
+}

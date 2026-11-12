@@ -1,0 +1,63 @@
+# r8-fixb TEST-RESULTS (2026-11-09). Everything below RAN, where stated. NOT run: any GPU device test, any serving arm,
+# any install on a Spark (they need a stopped node / a cluster window). Kit pins: python3 install.py pins -> 20/20 OK.
+# Module under test: step/files/.../dsv41_step.py 425c651509c46d05 (r6 = ebe2f7bbebefe916, kept in step/prev/).
+
+== 1. step CPU tests (512S1 Mac Studio, ~/exo-venv313 python 3.13 / torch 2.11.0 CPU, pytest from ~/climb-r1/pydeps)
+   cd step && STEP_R5=~/climb-r6/climb-r5 PYTHONPATH=~/climb-r1/pydeps python3 -m pytest -q tests/
+   38 passed  (30 r6 tests unchanged against the r8 module + 8 new in tests/test_r8_fixb.py; log tests/run-r8.txt)
+   new: r8 vs r6 AST diff == exactly the PACK pairing set (COLEMB, C4, AR map, flags, entry points identical);
+        prefill sizes 129..16384 pure pass-through (look + all; decode forwards before/after still pack);
+        foreign operand / second first-layer wkv call -> stock; r6 negative control (T-only pairing serves the stored kv
+        to a foreign operand); colemb size gate in source; det gate PACK half on the full T lists (sim) -> all gates
+        pass, 7/7 mutants caught.
+
+== 2. step device_test.py --cpu-selftest (512S1, same env)              -> SUMMARY: 28 checks (13 mutants), 0 failed
+   r6 harness parts (C3a mutant ids at 26 T, PACK=all GEMM harness 60 gates / 20 mutants with the r8 identity fields) +
+   det gate on the latest-possible-scheduler simulation (quick T): PACK look/all 9 gates PASS; pack-nowait, pack-cap,
+   pack-stale (x2 modes) and pack-r6pair CAUGHT at every T; COLEMB pass-through on CPU ids PASS (engaged gates and
+   colemb-side / colemb-cap are GPU-only). Log: step/tests/cpu-selftest-r8.txt
+
+== 3. head (spark-eight, CPU only: CUDA_VISIBLE_DEVICES=, nice 19, mandatory venv/CUDA env, no CLUSTER_LOCK on
+   spark-one or spark-eight at start; staged in ~/climb-scratch/r8-fixb/, Triton cache deleted, dir removed afterwards)
+   tools/mutfit.py (sm_121 compile, no GPU)                                -> ALL PASS   (head/results-r8/mutfit.log)
+     every mutant compiles and fits wherever its unmutated kernel fits: 192 (mutant, cfg) pairs
+     ksplit (two sequential K-half loops) smem == r6 refine at all 12 refine cfgs (BMX16 BK128/256/512 x s2/3/4:
+       8192 .. 98304 B; BMX32/64/128 live: 24576 / 40960 / 73728 B)
+     negative control: the round-6 ksplit at the live cfg, BMX 128 = 147456 B > 101376 (reproduces r6-dwA)
+   device_test.py --smoke (Triton interpreter, harness only, NOT a gate)  -> ALL PASS (83 s) (head/results-r8/smoke.log)
+     incl. the dispatch children (row, tile) and the mutant part; the per-config sweep is numeric -> GPU only
+   head CPU tests (512S1 + Mac): test_cfg_guard 54/54, test_dequant ALL PASS, test_refine_logic 216/216,
+     test_install 51/51 (run on the Mac in a copy whose ../../climb-r5 resolves, as in climb-r6/)
+
+== 4. skew
+   tests/test_r8_t4c.py (512S1 pytest)                                     -> 16 passed, 1 skipped (Linux-only case)
+   same functions on spark-eight (vllm032 python, no pytest there: a tiny shim in /tmp, removed) -> 13 functions
+     passed incl. the Linux affinity case (foreign pid blocked, own pin allowed)
+   read-only on spark-eight (serving): audited real hostcensus.py --dur 1 --no-gpu: 2 events (systemctl is-active,
+     own small-core pin), 0 blocked; audited iso.py plan --core 16 --irq: 0 events (refuses: no pinned proxy in prod)
+   T4c classifier dry run on spark-eight (no tool): A/A control volatile keys = ['/proc/irq/307']; one differing key
+     /proc/irq/307 17 -> 13, class irq-mask [GICv3 738 Level arch_mem_timer] kernel-timer -> explained
+   live probe (spark-eight, 8 s): /proc/irq/307 smp_affinity_list 8,13,7,19,18,7,3,0; irqbalance inactive on
+     spark-two/four/eight
+   r6 skew scripts: test_skewlib, test_iso, test_host, test_window RESULT PASS (512S1); test_install RESULT PASS (Mac,
+     matching layout)
+
+== 5. install / compose / fleet (Mac)
+   integrate/compose_fixb.py on copies of climb-r7/integrate/composed/* -> PASS 78 checks (integrate/compose_fixb.txt)
+   integrate/test_fleet.sh (3 fake nodes = r5r6-pre copies, local transport) -> PASS 10 checks (integrate/test_fleet.txt)
+     lock refusals, install/idempotent/uninstall byte-exact, write failure on node 3 -> nodes 1-2 rolled back,
+     drifted r4_small -> preflight refuses with nothing written
+   ops/fleet.sh status against the real fleet (read-only, script fed over ssh stdin) -> CLEAN 8/8
+     (integrate/fleet_status_live.txt)
+   ops/plan.sh: renders the device plan for EXPECT=4f3cc1c6; refuses without EXPECT; 4 env-rule mutants (a node line
+     without the venv or without CUDA_HOME) each REFUSED
+   common/prodenv.py on the live launcher copy (climb-r7/integrate/live/dsv41-tp8.sh = 4f3cc1c6, = ~/dsv41-tp8.sh on
+     spark-eight): 107 exports, GLUE_RQPAD=1 / RPSPLIT=split; both must-fail controls caught
+
+== 6. census re-base (Mac, light): scripts/c3_rebase.py -> scripts/c3_rebase_census.txt (8 ranks x 3 captures)
+
+== NOT run (and what decides it)
+   head device_test.py --part all (synthetic + real weights), step device_test.py --part all (E0, C3a, C3b, C4, det),
+   skew device_test.py: device window (ops/plan.sh -> device-window.sh), stopped nodes.
+   COLEMB / PACK solo arms with the 9-case check on every T arm: ops/serve.sh (EXPECT=4f3cc1c6).
+   Any install of the r8 module on a Spark (ops/fleet.sh install, lock-gated).

@@ -1,0 +1,99 @@
+r1-eager TEST-RESULTS (2026-11-08)
+
+== 1. pytest on 512S1 (scratch ~/climb-r1/r1-eager, pytest from ~/climb-r1/pydeps) ==
+Sun Nov  8 13:47:39 UTC 2026
+host: 512S1 (Mac Studio), python 3.13.13, torch 2.11.0
+tests/test_dtgraph.py::test_parse_flag[1-regions2-False-2-refused2] PASSED [  6%]
+tests/test_dtgraph.py::test_parse_flag[dt-regions3-False-2-refused3] PASSED [  8%]
+tests/test_dtgraph.py::test_parse_flag[update-regions4-True-2-refused4] PASSED [ 10%]
+tests/test_dtgraph.py::test_parse_flag[1,warm=5,seg=2,log=0-regions5-False-5-refused5] PASSED [ 12%]
+tests/test_dtgraph.py::test_parse_flag[td-regions6-False-2-refused6] PASSED [ 14%]
+tests/test_dtgraph.py::test_parse_flag[dt,td-regions7-False-2-refused7] PASSED [ 16%]
+tests/test_dtgraph.py::test_parse_flag_rejects_unknown PASSED            [ 18%]
+tests/test_dtgraph.py::test_module_off_by_default PASSED                 [ 20%]
+tests/test_dtgraph.py::test_classify_h2d PASSED                          [ 22%]
+tests/test_dtgraph.py::test_classify_arena_owned_source_passes PASSED    [ 24%]
+tests/test_dtgraph.py::test_classify_d2h_sync_rng_index_coll PASSED      [ 26%]
+tests/test_dtgraph.py::test_classify_pass_and_cpu PASSED                 [ 28%]
+tests/test_dtgraph.py::test_classify_collectives PASSED                  [ 30%]
+tests/test_dtgraph.py::test_arena_take_alloc_align_full_and_slots PASSED [ 32%]
+tests/test_dtgraph.py::test_pin_result PASSED                            [ 34%]
+tests/test_dtgraph.py::test_region_single_segment_and_fence PASSED       [ 36%]
+tests/test_dtgraph.py::test_region_hazard_runs_eager_then_resumes_in_order PASSED [ 38%]
+tests/test_dtgraph.py::test_region_latch_on_stream_event_hazard PASSED   [ 40%]
+tests/test_dtgraph.py::test_region_no_resume_on_other_stream_and_max_seg PASSED [ 42%]
+tests/test_dtgraph.py::test_region_slots_cycle_and_wait PASSED           [ 44%]
+tests/test_dtgraph.py::test_region_refuses_reentry_and_abort PASSED      [ 46%]
+tests/test_dtgraph.py::test_dispatch_mode_stages_h2d_and_serves_pinned PASSED [ 48%]
+tests/test_dtgraph.py::test_dispatch_mode_async_tensor_h2d_pattern PASSED [ 50%]
+tests/test_dtgraph.py::test_eligible_decode PASSED                       [ 52%]
+tests/test_dtgraph.py::test_ineligible[cg_full-False-not_full_graph] PASSED [ 54%]
+tests/test_dtgraph.py::test_ineligible[num_ubatches-2-ubatch] PASSED     [ 56%]
+tests/test_dtgraph.py::test_ineligible[has_prefill-True-prefill] PASSED  [ 58%]
+tests/test_dtgraph.py::test_ineligible[pcp-True-pcp] PASSED              [ 60%]
+tests/test_dtgraph.py::test_ineligible[dcp_size-2-dcp] PASSED            [ 62%]
+tests/test_dtgraph.py::test_ineligible[lora-True-lora] PASSED            [ 64%]
+tests/test_dtgraph.py::test_ineligible[encoder_inputs-True-encoder] PASSED [ 66%]
+tests/test_dtgraph.py::test_ineligible[encoder_decoder-True-encoder] PASSED [ 68%]
+tests/test_dtgraph.py::test_ineligible[fused_av_ok-False-av_not_fused] PASSED [ 70%]
+tests/test_dtgraph.py::test_ineligible[pp_single-False-pp] PASSED        [ 72%]
+tests/test_dtgraph.py::test_dt_begin_end_flow PASSED                     [ 74%]
+tests/test_dtgraph.py::test_dt_begin_skips_ineligible PASSED             [ 76%]
+tests/test_dtgraph.py::test_wrap_execute_model_aborts_and_reraises PASSED [ 78%]
+tests/test_dtgraph.py::test_hz_wrapper_is_inert_outside_region PASSED    [ 80%]
+tests/test_dtgraph.py::test_install_hooks_patch_and_restore PASSED       [ 82%]
+tests/test_install.py::test_base_copy_is_live_base PASSED                [ 84%]
+tests/test_install.py::test_anchors_apply_exact_counts PASSED            [ 86%]
+tests/test_install.py::test_dry_install_idempotent_status_uninstall PASSED [ 88%]
+tests/test_install.py::test_refuses_other_base PASSED                    [ 90%]
+tests/test_install.py::test_refuses_tagged_on_other_base PASSED          [ 92%]
+tests/test_install.py::test_flag_off_ast_identical PASSED                [ 94%]
+tests/test_install.py::test_inserted_statements_are_all_guarded PASSED   [ 96%]
+tests/test_install.py::test_flag_expression PASSED                       [ 98%]
+tests/test_install.py::test_region_brackets_the_glue PASSED              [100%]
+
+=============================== warnings summary ===============================
+tests/test_dtgraph.py::test_install_hooks_patch_and_restore
+  /Users/jeweled/climb-r1/r1-eager/dsv41_dtgraph.py:593: UserWarning: DSV41_DTGRAPH: GroupCoordinator hooks not installed (No module named 'vllm')
+    warnings.warn(f"DSV41_DTGRAPH: GroupCoordinator hooks not installed ({e})")
+
+tests/test_dtgraph.py::test_install_hooks_patch_and_restore
+  /Users/jeweled/climb-r1/r1-eager/dsv41_dtgraph.py:616: UserWarning: DSV41_DTGRAPH: Triton hooks not installed (No module named 'triton')
+    warnings.warn(f"DSV41_DTGRAPH: Triton hooks not installed ({e})")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================== 50 passed, 2 warnings in 1.01s ========================
+
+== 2. read-only torch 2.13 / cuda.bindings / triton API probe on spark-one ==
+cmd: ssh spark-one 'CUDA_VISIBLE_DEVICES= nice -n 19 ~/venvs/vllm032/bin/python -B -' < spark_check_full.py   (script on stdin, no files written, no GPU touched: 'cuda initialized: False')
+torch 2.13.0+cu130
+CUDAGraph.__new__ (cls, keep_graph: 'bool' = False) -> 'Self'
+capture_begin (self, pool: '_POOL_HANDLE | None' = None, capture_error_mode: 'str' = 'global', check_input_liveness: 'bool' = False) -> 'None'
+has ['instantiate', 'raw_cuda_graph', 'raw_cuda_graph_exec', 'replay', 'capture_end']
+graph_pool_handle True
+Event ['record', 'wait', 'synchronize', 'query'] Stream ['wait_stream', 'wait_event', 'record_event', 'synchronize', 'query']
+   ('aten.lift_fresh.default', ('pass', ''))
+   ('aten.empty.memory_format', ('pin', 'pin_alloc'))
+   ('aten.copy_.default', ('pass_cpu', ''))
+   ('aten.copy_.default', ('pass', ''))
+   ('aten.lift_fresh.default', ('pass', ''))
+   ('aten._to_copy.default', ('stage', 'h2d'))
+   ('aten.lift_fresh.default', ('pass', ''))
+   ('aten.empty.memory_format', ('pass', ''))
+   ('aten.copy_.default', ('stage', 'h2d'))
+stats {'regions': 1, 'pinned': 1, 'staged': 2, 'segments': 1} log ['begin', 'launch', 'fence'] t in arena True t2 in arena False out2 meta
+cuda initialized: False
+cudaGraphExecUpdate doc: ['cudaGraphExecUpdate(hGraphExec, hGraph)', '', 'Check whether an executable graph can be updated with a graph and perform the update if possible.']
+   ['Returns', 'resultInfo : :py:obj:`~.cudaGraphExecUpdateResultInfo`']
+ctor <CUgraphExec 0x0> <CUgraph 0x0> <CUstream 0x0>
+triton hooks None HookChain
+cuda initialized: False
+
+== 3. hashes ==
+live base model_runner.py (8/8 spark-one..eight, 2026-11-08): efb031733472a4769038668e4e04742f2156f90a582bbaaf474618f2ae3148cc
+efb031733472a4769038668e4e04742f2156f90a582bbaaf474618f2ae3148cc  base/v1/worker/gpu/model_runner.py
+aa3e9d9e57462c40f8e42022ce291752c0fd673106ee20a1a134c4de56421a0a  patched/vllm/v1/worker/gpu/model_runner.py
+5afb75d429763256ee1a119af574718460d833f8207fa325dd2be1dbf0f6f566  dsv41_dtgraph.py
+py_compile (python3 on this Mac) of patched model_runner.py and dsv41_dtgraph.py: OK
+
+Not run (no GPU available to this agent): any CUDA capture/replay, exact.py, G1 digest, nsys. These are the window's device checks (KIT.json device_checks).

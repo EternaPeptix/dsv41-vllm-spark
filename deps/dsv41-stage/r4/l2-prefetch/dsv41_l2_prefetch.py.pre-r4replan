@@ -1,0 +1,421 @@
+# SPDX-License-Identifier: Apache-2.0
+"""DSv4.1 r4 l2-prefetch: while an RDMA collective spins, prefetch the next weights into L2.
+
+Gate: DSV41_L2_PREFETCH=1 (default off; rdma_all_reduce.py imports this module only then).
+
+Why: in a TP8 decode step the target graph runs 85 RDMA all-reduces (+ the r3-dense all-gathers,
+if installed). Each is an 8-16 CTA ar_kernel that polls flags for 20-90 us while the SMs and DRAM
+sit idle. The kernels right after it are weight-bound: mhc_fused (reads the layer's hc fn, 24 x
+20480 fp32 = 1.97 MB), then the bf16 router gate (3.93 MB) and the MXFP8 shared w1/w3 (3.0 MB)
+after the post-attention all-reduce, or the replicated fused_wqa_wkv (9.5 MB) after the post-MoE
+all-reduce. A side-stream kernel issues `cp.async.bulk.prefetch.L2` for the first
+DSV41_L2_PREFETCH_MB (default 6) of those weights right before the collective is launched, so the
+following kernels start on L2 hits. GB10 L2 = 24 MiB (nsys TARGET_INFO_GPU.l2CacheSize).
+A prefetch is only a cache hint: every output is bit-identical by construction.
+
+How the "next weights" are found (no hard-coded layer map, robust to other patches):
+  * DeepseekV4Model.forward (target model only; the DSpark drafter is not bracketed) is wrapped.
+    A decode-sized forward (<= DSV41_L2_PREFETCH_MAX_TOKENS tokens, not a PIECEWISE capture) that
+    runs eagerly LEARNS: forward pre-hooks on every weight-holding submodule (experts, embeddings
+    and lm-head excluded by size / name) and a wrapper on the mHC entry points record the order of
+    weight reads, and this module's collective hook numbers the RDMA collectives.
+    Window k = the first BUDGET bytes of weights read after collective k (until collective k+1).
+  * vLLM captures every FULL graph right after an eager warm-up forward of the same size, so the
+    capture replays exactly the learned sequence: at collective k the hook forks the side stream
+    (side.wait_stream(main)), launches the prefetch there, and joins it back into the main stream
+    at collective k+1 or at the end of the forward (the capture never ends with an open branch).
+  * Plans are per (model, num_tokens); a size is frozen once captured. Eager (uncaptured) decode
+    forwards relearn at most DSV41_L2_PREFETCH_LEARN_MAX times and never prefetch.
+  * Collective count mismatch at capture (path changed between warm-up and capture) is logged and
+    the remaining windows are skipped. Rank-local: no communication is added, so a rank that
+    disables itself (missing .so, error) cannot desynchronise the RDMA sequence.
+
+Env knobs:
+  DSV41_L2_PREFETCH_MB            budget per window (6)
+  DSV41_L2_PREFETCH_AG            1 = all-gather windows too (1)
+  DSV41_L2_PREFETCH_MAX_TOKENS    largest bracketed forward (128)
+  DSV41_L2_PREFETCH_MHC           1 = record the mHC fn read (the kernel right after the AR) (1)
+  DSV41_L2_PREFETCH_SKIP_N        drop 2-D weights with <= N output rows from plans (0 = keep all)
+  DSV41_L2_PREFETCH_MIN_PARAM_KB  ignore tensors smaller than this (32)
+  DSV41_L2_PREFETCH_MAX_PARAM_MB  modules holding a tensor larger than this are not hooked (64)
+  DSV41_L2_PREFETCH_LEARN_MAX     relearn cap per uncaptured size (8)
+  DSV41_L2_PREFETCH_CHUNK         bytes per bulk-prefetch instruction (16384)
+  DSV41_L2_PREFETCH_LIB           path of libdsv41_l2pf.so
+                                  (~/dsv41-stage/r4/l2-prefetch/libdsv41_l2pf.so)
+"""
+from __future__ import annotations
+
+import collections
+import ctypes
+import os
+import sys
+
+import torch
+
+from vllm.logger import init_logger
+
+logger = init_logger(__name__)
+
+
+def _env(name: str, default: str) -> str:
+    return os.environ.get(name, default).strip()
+
+
+ENABLED = _env("DSV41_L2_PREFETCH", "0").lower() in ("1", "on", "true")
+BUDGET = int(float(_env("DSV41_L2_PREFETCH_MB", "6")) * (1 << 20))
+USE_AG = _env("DSV41_L2_PREFETCH_AG", "1") != "0"
+MAX_TOKENS = int(_env("DSV41_L2_PREFETCH_MAX_TOKENS", "128"))
+MHC = _env("DSV41_L2_PREFETCH_MHC", "1") != "0"
+SKIP_N = int(_env("DSV41_L2_PREFETCH_SKIP_N", "0"))
+MIN_PARAM = int(float(_env("DSV41_L2_PREFETCH_MIN_PARAM_KB", "32")) * 1024)
+MAX_PARAM = int(float(_env("DSV41_L2_PREFETCH_MAX_PARAM_MB", "64")) * (1 << 20))
+LEARN_MAX = int(_env("DSV41_L2_PREFETCH_LEARN_MAX", "8"))
+CHUNK = int(_env("DSV41_L2_PREFETCH_CHUNK", "16384"))
+LIB_PATH = os.path.expanduser(
+    _env("DSV41_L2_PREFETCH_LIB", "~/dsv41-stage/r4/l2-prefetch/libdsv41_l2pf.so")
+)
+MODEL_MODULE = "vllm.models.deepseek_v41.nvidia.model"
+_MAX_INSTALL_TRIES = 100000
+
+
+class _State:
+    def __init__(self) -> None:
+        self.lib = None
+        self.disabled = not ENABLED
+        self.installed = False
+        self.install_tries = 0
+        self.side: dict[int, torch.cuda.Stream] = {}
+        # per bracketed forward
+        self.sig: tuple | None = None
+        self.mode: str | None = None  # "learn" | "capture"
+        self.idx = 0
+        self.events: list | None = None
+        self.pending: torch.cuda.Stream | None = None
+        self.forks = 0
+        # persistent
+        self.plans: dict[tuple, dict] = {}
+        self.learned: collections.Counter = collections.Counter()
+        self.frozen: set[tuple] = set()
+        self.hooked: set[int] = set()
+        self.keepalive: list[torch.Tensor] = []
+        self.logged: set = set()
+        self.model_filter = None  # tests: callable(model) -> bool
+
+
+S = _State()
+
+
+# ----------------------------------------------------------------------------- native ------
+def _load_lib():
+    if S.lib is None:
+        lib = ctypes.CDLL(LIB_PATH)
+        lib.dsv41_l2pf.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_longlong, ctypes.c_void_p]
+        lib.dsv41_l2pf.restype = ctypes.c_int
+        lib.dsv41_spin.argtypes = [ctypes.c_longlong, ctypes.c_int, ctypes.c_void_p]
+        lib.dsv41_spin.restype = ctypes.c_int
+        S.lib = lib
+    return S.lib
+
+
+def init() -> bool:
+    """Called once by rdma_all_reduce.py at import when DSV41_L2_PREFETCH=1."""
+    if not ENABLED:
+        return False
+    try:
+        _load_lib()
+    except OSError as e:
+        S.disabled = True
+        logger.warning("DSV41_L2_PREFETCH: cannot load %s (%s); prefetch disabled on this rank", LIB_PATH, e)
+        return False
+    logger.info(
+        "DSV41_L2_PREFETCH armed: budget %.1f MB/window ag=%s max_tokens=%d mhc=%s skip_n=%d lib=%s",
+        BUDGET / 2**20, USE_AG, MAX_TOKENS, MHC, SKIP_N, LIB_PATH,
+    )
+    return True
+
+
+def _side_stream() -> torch.cuda.Stream:
+    dev = torch.cuda.current_device()
+    s = S.side.get(dev)
+    if s is None:
+        s = S.side[dev] = torch.cuda.Stream(device=dev)
+    return s
+
+
+# ----------------------------------------------------------------------------- install -----
+def _try_install() -> None:
+    S.install_tries += 1
+    mod = sys.modules.get(MODEL_MODULE)
+    if mod is None:
+        return
+    install_model_module(mod)
+
+
+def install_model_module(mod) -> None:
+    """Wrap DeepseekV4Model.forward and the mHC entry points of the nvidia DSv4.1 model module."""
+    cls = getattr(mod, "DeepseekV4Model", None)
+    if cls is None:
+        S.installed = True
+        logger.warning("DSV41_L2_PREFETCH: %s has no DeepseekV4Model; nothing bracketed", MODEL_MODULE)
+        return
+    if not getattr(cls, "_dsv41_l2pf", False):
+        bracket_class(cls)
+    if MHC:
+        _wrap_mhc(mod, "mhc_shifted_post_pre", 4)
+        _wrap_mhc(mod, "mhc_pre_delayed_tilelang", 1)
+    _side_stream()  # created outside any capture
+    S.installed = True
+    logger.info("DSV41_L2_PREFETCH: DeepseekV4Model.forward bracketed (decode <= %d tokens)", MAX_TOKENS)
+
+
+def bracket_class(cls) -> None:
+    """Wrap cls.forward(self, input_ids, positions, ...) (public for the GPU unit test)."""
+    orig = cls.forward
+
+    def forward(self, *args, **kwargs):
+        return _bracketed(orig, self, args, kwargs)
+
+    forward.__wrapped__ = orig  # type: ignore[attr-defined]
+    cls.forward = forward
+    cls._dsv41_l2pf = True
+
+
+def _wrap_mhc(mod, name: str, fn_pos: int) -> None:
+    fn = getattr(mod, name, None)
+    if fn is None or getattr(fn, "_dsv41_l2pf", False):
+        return
+
+    def wrapper(*args, **kwargs):
+        if S.mode == "learn":
+            t = args[fn_pos] if len(args) > fn_pos else kwargs.get("fn")
+            if isinstance(t, torch.Tensor):
+                _record(("mhc_fn", (t,)))
+        return fn(*args, **kwargs)
+
+    wrapper._dsv41_l2pf = True  # type: ignore[attr-defined]
+    wrapper.__wrapped__ = fn  # type: ignore[attr-defined]
+    setattr(mod, name, wrapper)
+
+
+# ----------------------------------------------------------------------------- recording ---
+def _tensor_items(tensors) -> list[tuple[int, int, int | None]]:
+    out = []
+    for t in tensors:
+        if not isinstance(t, torch.Tensor) or not t.is_cuda:
+            continue
+        nbytes = t.numel() * t.element_size()
+        ptr = t.data_ptr()
+        if nbytes < MIN_PARAM or ptr % 16 or not t.is_contiguous():
+            continue
+        rows = int(t.shape[0]) if t.dim() == 2 else None
+        out.append((ptr, nbytes, rows))
+    return out
+
+
+def _record(ev) -> None:
+    name, tensors = ev
+    items = _tensor_items(tensors)
+    if items and S.events is not None:
+        S.events.append(("w", name, items))
+
+
+def _module_tensors(m: torch.nn.Module) -> list[torch.Tensor] | None:
+    """Direct (non-recursive) params + buffers in read order: small (scales) first, then weights.
+    None = do not hook (no tensor worth prefetching, or holds a huge tensor: experts, vocab)."""
+    ts = []
+    for pname, p in list(m.named_parameters(recurse=False)) + list(m.named_buffers(recurse=False)):
+        if p is None or not p.is_cuda:
+            continue
+        if pname.startswith("hc_"):  # mHC tensors: recorded at their real use by _wrap_mhc
+            continue
+        nbytes = p.numel() * p.element_size()
+        if nbytes > MAX_PARAM:
+            return None
+        if nbytes >= MIN_PARAM:
+            ts.append(p)
+    if not ts:
+        return None
+    return sorted(ts, key=lambda t: t.numel() * t.element_size())
+
+
+def _hook_modules(model: torch.nn.Module) -> None:
+    if id(model) in S.hooked:
+        return
+    S.hooked.add(id(model))
+    n_hooked = 0
+    for name, m in model.named_modules():
+        if ".experts" in name and "shared_experts" not in name:
+            continue
+        ts = _module_tensors(m)
+        if ts is None:
+            continue
+        def pre_hook(_mod, _args, _ts=ts, _name=name):
+            if S.mode == "learn":
+                _record((_name, _ts))
+
+        m.register_forward_pre_hook(pre_hook)
+        n_hooked += 1
+    logger.info("DSV41_L2_PREFETCH: %d weight modules hooked in %s", n_hooked, type(model).__name__)
+
+
+# ----------------------------------------------------------------------------- bracket -----
+def _in_piecewise() -> bool:
+    try:
+        from vllm.forward_context import in_piecewise_cudagraph
+
+        return bool(in_piecewise_cudagraph())
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _num_tokens(args, kwargs) -> int:
+    pos = kwargs.get("positions", args[1] if len(args) > 1 else None)
+    if isinstance(pos, torch.Tensor):
+        return int(pos.shape[-1]) if pos.dim() == 2 else int(pos.shape[0])  # mrope: [3, n]
+    ids = kwargs.get("input_ids", args[0] if args else None)
+    return int(ids.shape[0]) if isinstance(ids, torch.Tensor) else 0
+
+
+def _bracketed(orig, model, args, kwargs):
+    if S.disabled or S.sig is not None or (S.model_filter is not None and not S.model_filter(model)):
+        return orig(model, *args, **kwargs)
+    n = _num_tokens(args, kwargs)
+    if n <= 0 or n > MAX_TOKENS or _in_piecewise():
+        return orig(model, *args, **kwargs)
+    sig = (id(model), n)
+    capturing = torch.cuda.is_current_stream_capturing()
+    if capturing:
+        mode = "capture" if sig in S.plans else None
+    else:
+        mode = "learn" if (sig not in S.frozen and S.learned[sig] < LEARN_MAX) else None
+    if mode is None:
+        return orig(model, *args, **kwargs)
+    _hook_modules(model)
+    S.sig, S.mode, S.idx, S.forks = sig, mode, 0, 0
+    S.events = [] if mode == "learn" else None
+    try:
+        return orig(model, *args, **kwargs)
+    finally:
+        _join()
+        try:
+            _finish(sig, mode)
+        finally:
+            S.sig = S.mode = S.events = None
+
+
+def _finish(sig, mode) -> None:
+    if mode == "learn":
+        S.learned[sig] += 1
+        if S.idx == 0:
+            return  # no RDMA collective in this forward (NCCL path): learn nothing
+        plan = make_plan(S.events or [], S.idx)
+        old = S.plans.get(sig)
+        S.plans[sig] = plan
+        if old is None or old["key"] != plan["key"]:
+            first = sig[1] not in {k[1] for k in S.logged if k[0] == "plan"}
+            S.logged.add(("plan", sig[1]))
+            logger.info(
+                "DSV41_L2_PREFETCH plan tokens=%d collectives=%d windows=%d prefetch=%.1f MB/forward%s%s",
+                sig[1], plan["n"], len(plan["win"]), plan["bytes"] / 2**20,
+                "" if old is None else " (relearned)",
+                ("; first windows: " + plan["desc"]) if first else "",
+            )
+    else:
+        S.frozen.add(sig)
+        plan = S.plans.get(sig)
+        ok = plan is not None and plan["n"] == S.idx
+        if ("cap", sig[1]) not in S.logged or not ok:
+            S.logged.add(("cap", sig[1]))
+            logger.info(
+                "DSV41_L2_PREFETCH captured tokens=%d forks=%d collectives=%d (learned %d)%s",
+                sig[1], S.forks, S.idx, plan["n"] if plan else -1,
+                "" if ok else " MISMATCH: windows past the mismatch were skipped",
+            )
+
+
+def make_plan(events, n_coll: int, budget: int = BUDGET, skip_n: int = SKIP_N, device="cuda") -> dict:
+    """events: [("c", idx, kind) | ("w", name, [(ptr, nbytes, rows), ...])] in forward order.
+    Window idx = the first `budget` bytes of the weights read after collective idx and before the
+    next one. Returns {"n", "win": {idx: (segtable int64 [2*nseg] on device, nseg, bytes)}, ...}."""
+    windows: list[list] = []
+    cur = None
+    for ev in events:
+        if ev[0] == "c":
+            cur = [ev[1], ev[2], []]
+            windows.append(cur)
+        elif cur is not None:
+            for it in ev[2]:
+                if skip_n and it[2] is not None and it[2] <= skip_n:
+                    continue
+                cur[2].append((it[0], it[1], ev[1]))
+    win, total, desc = {}, 0, []
+    for idx, kind, items in windows:
+        segs, left, names = [], budget, []
+        for ptr, nbytes, name in items:
+            if left < 16:
+                break
+            take = min(nbytes, left) & ~15
+            if take <= 0:
+                continue
+            segs.append((ptr, take))
+            names.append(f"{name}:{take / 2**20:.2f}")
+            left -= take
+        if not segs:
+            continue
+        flat = [v for s in segs for v in s]
+        t = torch.tensor(flat, dtype=torch.int64, device=device)
+        S.keepalive.append(t)  # a captured graph keeps reading this table
+        nb = sum(s[1] for s in segs)
+        win[idx] = (t, len(segs), nb)
+        total += nb
+        if len(desc) < 4:
+            desc.append(f"[{kind}{idx} " + " ".join(names) + "]")
+    key = (n_coll, tuple((i, w[1], w[2]) for i, w in sorted(win.items())),
+           tuple(tuple(s[:2] for s in w[2]) for w in windows))
+    return {"n": n_coll, "win": win, "bytes": total, "desc": " ".join(desc), "key": key}
+
+
+# ----------------------------------------------------------------------------- collective --
+def _join() -> None:
+    p = S.pending
+    if p is not None:
+        torch.cuda.current_stream().wait_stream(p)
+        S.pending = None
+
+
+def _fork(item) -> None:
+    t, nseg, _ = item
+    main = torch.cuda.current_stream()
+    side = _side_stream()
+    side.wait_stream(main)
+    rc = _load_lib().dsv41_l2pf(t.data_ptr(), nseg, CHUNK, side.cuda_stream)
+    if rc:
+        raise RuntimeError(f"DSV41_L2_PREFETCH: prefetch launch failed (cuda error {rc})")
+    S.pending = side
+    S.forks += 1
+
+
+def before_collective(kind: str) -> None:
+    """Called by RdmaAllReduce right before it launches an all-reduce ("ar") / all-gather ("ag"),
+    on the stream the collective runs on."""
+    if S.disabled:
+        return
+    if not S.installed:
+        if S.install_tries < _MAX_INSTALL_TRIES:
+            _try_install()
+    if S.sig is None:
+        return
+    _join()
+    S.idx += 1
+    if S.mode == "learn":
+        if S.events is not None:
+            S.events.append(("c", S.idx, kind))
+        return
+    plan = S.plans.get(S.sig)
+    if plan is None or S.idx > plan["n"]:
+        return
+    if kind == "ag" and not USE_AG:
+        return
+    item = plan["win"].get(S.idx)
+    if item is not None:
+        _fork(item)

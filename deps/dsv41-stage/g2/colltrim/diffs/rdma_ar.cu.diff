@@ -1,0 +1,162 @@
+--- /private/tmp/claude-501/-Users-jeweled/64b45536-e9c4-4d44-9db6-63d2a8374326/scratchpad/ct/src/k1pl/rdma_ar.cu	2026-10-24 02:20:37
++++ rdma_ar.cu	2026-10-26 06:26:07
+@@ -8,6 +8,9 @@
+ //                     order and broadcasts it (two hops, 4x fewer bytes on the wire than one-shot)
+ //   all-gather      : one-shot copy, out[r] = input of rank r
+ // Every element of a reduction is summed by one fixed rule, so all ranks see bit-identical results.
++//   column all-gather (g2 colltrim, 2026-10-26): same wire protocol as all-gather; the receiver writes
++//                     rank r's [outer, seg] input straight into columns [r*seg, (r+1)*seg) of the
++//                     concatenated [outer, world*seg] output (no staging tensor, no movedim copy)
+ //
+ // Data path (all buffers are cudaHostAlloc'd = the same LPDDR5X on GB10, registered once per HCA):
+ //   GPU kernel: stage input in the send slot, last CTA publishes ctrl.send_seq
+@@ -44,7 +47,7 @@
+ constexpr int kThreads = 512;
+ constexpr int kSignalEvery = 32;  // request a CQE every N posts per QP so the SQ drains
+ 
+-enum Mode : int { kOneShot = 0, kGather = 1, kTwoShot = 2 };
++enum Mode : int { kOneShot = 0, kGather = 1, kTwoShot = 2, kGatherCols = 3 };  // kGatherCols: g2 colltrim
+ 
+ #define CHECK_CUDA(x)                                                                        \
+   do {                                                                                       \
+@@ -109,6 +112,7 @@
+   int rank, world;
+   long long timeout_ns;
+   int timing;  // record per-call stage timings (RDMA_AR_TIMING=1)
++  long long seg;  // g2 colltrim kGatherCols only: input row width in 16-byte vectors (output row = world * seg)
+ };
+ 
+ __device__ __forceinline__ uint64_t ld_acquire_sys(const uint64_t* p) {
+@@ -249,6 +253,19 @@
+       const uint4* src = reinterpret_cast<const uint4*>(rbase + (long long)r * p.max_bytes);
+       uint4* dst = p.out + (long long)r * p.nvec;
+       for (long long i = tid; i < p.nvec; i += stride) dst[i] = (r == p.rank) ? p.in[i] : __ldcv(src + i);
++    }
++  } else if constexpr (kMode == kGatherCols) {
++    // g2 colltrim: vector i of rank r's input (row i / seg, column i % seg) goes to output row i / seg,
++    // column r * seg + i % seg. Same loads as kGather; only the destination index differs.
++    const unsigned useg = (unsigned)p.seg;
++    const long long orow = (long long)p.world * p.seg;
++    for (int r = 0; r < p.world; ++r) {
++      const uint4* src = reinterpret_cast<const uint4*>(rbase + (long long)r * p.max_bytes);
++      uint4* dst = p.out + (long long)r * p.seg;
++      for (long long i = tid; i < p.nvec; i += stride) {
++        const long long row = (long long)((unsigned)i / useg);
++        dst[row * orow + (i - row * p.seg)] = (r == p.rank) ? p.in[i] : __ldcv(src + i);
++      }
+     }
+   } else if constexpr (kMode == kOneShot) {
+     for (long long i = tid; i < p.nvec; i += stride) {
+@@ -380,6 +397,19 @@
+ #pragma unroll
+       for (int r = 0; r < kW; ++r) p.out[(long long)r * p.nvec + i] = v[r];
+     }
++  } else if constexpr (kMode == kGatherCols) {
++    // g2 colltrim: as kGather above (all kW loads in flight before any store), stores to the column slot
++    const unsigned useg = (unsigned)p.seg;
++    for (long long i = tid; i < p.nvec; i += stride) {
++      uint4 v[kW];
++#pragma unroll
++      for (int r = 0; r < kW; ++r)
++        v[r] = (r == p.rank) ? p.in[i] : __ldcv(reinterpret_cast<const uint4*>(rbase + (long long)r * p.max_bytes) + i);
++      const long long row = (long long)((unsigned)i / useg);
++      uint4* dst = p.out + row * ((long long)kW * p.seg) + (i - row * p.seg);
++#pragma unroll
++      for (int r = 0; r < kW; ++r) dst[(long long)r * p.seg] = v[r];
++    }
+   } else if constexpr (kMode == kOneShot) {
+     for (long long i = tid; i < p.nvec; i += stride) {
+       uint4 v[kW];
+@@ -689,6 +719,19 @@
+     launch<kGather, false>(x, out);
+   }
+ 
++  // g2 colltrim: column all-gather. x = [outer, seg_bytes] bytes (any dtype, contiguous), out = [outer,
++  // world * seg_bytes] bytes (contiguous): out row o, bytes [r*seg_bytes, (r+1)*seg_bytes) = row o of rank r's x.
++  // seg_bytes == x bytes is the plain dim-0 gather. Same wire protocol and sequence as all_gather_into.
++  void all_gather_cols(torch::Tensor out, torch::Tensor x, int64_t seg_bytes) {
++    TORCH_CHECK(x.is_cuda() && x.is_contiguous() && out.is_contiguous() && out.scalar_type() == x.scalar_type() &&
++                    out.numel() == x.numel() * world_,
++                "rdma_ar: bad all_gather_cols args");
++    const int64_t nbytes = x.numel() * x.element_size();
++    TORCH_CHECK(seg_bytes > 0 && seg_bytes % 16 == 0 && nbytes % seg_bytes == 0,
++                "rdma_ar: all_gather_cols seg_bytes ", seg_bytes, " must be a positive multiple of 16 dividing ", nbytes);
++    launch<kGatherCols, false>(x, out, seg_bytes / 16);
++  }
++
+   int64_t max_bytes() const { return max_bytes_; }
+   // average GPU->proxy->GPU round trip (ns) through the control block
+   double pingpong(int n) {
+@@ -731,7 +774,7 @@
+   }
+ 
+   template <int kMode, bool kF32>
+-  void launch(const torch::Tensor& x, torch::Tensor& out) {
++  void launch(const torch::Tensor& x, torch::Tensor& out, int64_t seg_vec = 0) {
+     const int64_t nbytes = x.numel() * x.element_size();
+     TORCH_CHECK(nbytes % 16 == 0 && nbytes <= max_bytes_, "rdma_ar: bad size ", nbytes);
+     TORCH_CHECK(!proxy_error_.load(), "rdma_ar: proxy reported an RDMA error");
+@@ -755,6 +798,7 @@
+     p.world = world_;
+     p.timeout_ns = timeout_ns_;
+     p.timing = timing_;
++    p.seg = seg_vec;  // g2 colltrim: read by kGatherCols only
+     // a few CTAs are enough: the cost is latency, not bandwidth (RDMA_AR_VEC_PER_CTA tunes it)
+     // k1/3-rdma-loads: parload_ picks ar_kernel_pl (world 8) over the legacy ar_kernel
+     launch_kernel<kMode, kF32>(p, vec_per_cta_, parload_ != 0, at::cuda::getCurrentCUDAStream());
+@@ -1035,6 +1079,16 @@
+                     out.numel() == x.numel() * world_,
+                 "selftest: bad all_gather args");
+     go<kGather, false>(x, out, par, vec_per_cta, timing);
++  }
++  // g2 colltrim: column all-gather through the same kernels (see RdmaAR::all_gather_cols)
++  void all_gather_cols_into(torch::Tensor out, torch::Tensor x, int64_t seg_bytes, bool par, int64_t vec_per_cta,
++                            bool timing) {
++    TORCH_CHECK(x.is_cuda() && x.is_contiguous() && out.is_contiguous() && out.scalar_type() == x.scalar_type() &&
++                    out.numel() == x.numel() * world_,
++                "selftest: bad all_gather_cols args");
++    const int64_t nbytes = x.numel() * x.element_size();
++    TORCH_CHECK(seg_bytes > 0 && seg_bytes % 16 == 0 && nbytes % seg_bytes == 0, "selftest: bad seg_bytes ", seg_bytes);
++    go<kGatherCols, false>(x, out, par, vec_per_cta, timing, seg_bytes / 16);
+   }
+   // [n_timed, avg stage, avg pub->flags, avg flags->end (tail), avg total] in ns
+   std::vector<double> stats(bool reset) {
+@@ -1070,7 +1124,7 @@
+     __atomic_thread_fence(__ATOMIC_SEQ_CST);
+   }
+   template <int kMode, bool kF32>
+-  void go(const torch::Tensor& x, torch::Tensor& out, bool par, int64_t vec_per_cta, bool timing) {
++  void go(const torch::Tensor& x, torch::Tensor& out, bool par, int64_t vec_per_cta, bool timing, int64_t seg_vec = 0) {
+     const int64_t nbytes = x.numel() * x.element_size();
+     TORCH_CHECK(nbytes % 16 == 0 && nbytes > 0 && nbytes <= max_bytes_, "selftest: bad size ", nbytes);
+     c10::cuda::CUDAGuard guard(device_);
+@@ -1093,6 +1147,7 @@
+     p.world = world_;
+     p.timeout_ns = 5000000000LL;  // 5 s: nothing should ever wait here
+     p.timing = timing ? 1 : 0;
++    p.seg = seg_vec;
+     launch_kernel<kMode, kF32>(p, std::max<long long>(64, vec_per_cta), par, at::cuda::getCurrentCUDAStream());
+   }
+ 
+@@ -1120,6 +1175,7 @@
+       .def("connect", &RdmaAR::connect)
+       .def("all_reduce", &RdmaAR::all_reduce, py::arg("x"), py::arg("two_shot") = false)
+       .def("all_gather_into", &RdmaAR::all_gather_into)
++      .def("all_gather_cols", &RdmaAR::all_gather_cols, py::arg("out"), py::arg("x"), py::arg("seg_bytes"))
+       .def("stats", &RdmaAR::stats, py::arg("reset") = false)
+       .def("arena_info", &RdmaAR::arena_info)
+       .def("pingpong", &RdmaAR::pingpong, py::arg("n") = 1000)
+@@ -1136,10 +1192,13 @@
+            py::arg("par"), py::arg("vec_per_cta") = 512, py::arg("timing") = false)
+       .def("all_gather_into", &SelfTest::all_gather_into, py::arg("out"), py::arg("x"), py::arg("par"),
+            py::arg("vec_per_cta") = 512, py::arg("timing") = false)
++      .def("all_gather_cols_into", &SelfTest::all_gather_cols_into, py::arg("out"), py::arg("x"),
++           py::arg("seg_bytes"), py::arg("par"), py::arg("vec_per_cta") = 512, py::arg("timing") = false)
+       .def("stats", &SelfTest::stats, py::arg("reset") = false)
+       .def("max_chunk", &SelfTest::max_chunk)
+       .def("max_bytes", &SelfTest::max_bytes)
+       .def("max_reduce_bytes", &SelfTest::max_reduce_bytes)
+       .def("thp", &SelfTest::thp);
+   m.attr("K1_VARIANT") = "3-rdma-loads-v1";
++  m.attr("G2_VARIANT") = "colltrim-cols-v1";  // g2 colltrim: all_gather_cols / all_gather_cols_into present
+ }

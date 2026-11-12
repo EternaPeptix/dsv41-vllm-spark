@@ -110,6 +110,34 @@ _G2_FC2C_ROOT = Path.home() / "dsv41-stage/g2/fc2c-on-m32all"
 _G2_FC2C_MANIFEST_SHA256 = "5a79c849510e7e1403dc81ffc9ec6b9e30e6a408444feea1a76807beceb9e95e"
 
 
+# g130 fc1 G-aware tile deal (default off; kit ~/dsv41-stage/g130/fc1): DSV41_MOE_FC1_DEAL=deal|dealx swaps only the tree that
+# compiles the target FC1 (same native binary, patched JIT header); FC2 and the E128 drafter kernels are SASS-identical.
+_FC1DEAL_ROOT = Path.home() / "dsv41-stage/g130/fc1"
+_FC1DEAL_MANIFESTS = {
+    "deal": "c87842e48970f15c340de2bb18d0296cf7f7c7a70a003eb3c10310eb7e841bcd",
+    "dealx": "9e8eecde6e02710921c02e8c67e346ee8e2d4e6e6eaddaa8b586231d51a40d3b"
+}
+
+
+def fc1_deal_arm() -> str:
+    raw = os.environ.get("DSV41_MOE_FC1_DEAL", "0").strip().lower()
+    if raw in ("", "0", "off"):
+        return ""
+    assert raw in _FC1DEAL_MANIFESTS, f"DSV41_MOE_FC1_DEAL={raw!r}: use 0 or one of {tuple(_FC1DEAL_MANIFESTS)}"
+    assert g1_variant() == "all", "DSV41_MOE_FC1_DEAL is qualified with DSV41_MOE_M32_G1=all only"
+    return raw
+
+
+def fc1_route_rec():
+    """DSV41_MOE_FC1_ROUTE_REC=1: side-file recorder (diagnostic instance only); None otherwise."""
+    if os.environ.get("DSV41_MOE_FC1_ROUTE_REC", "0").strip() != "1":
+        return None
+    spec = importlib.util.spec_from_file_location("dsv41_fc1_route_rec", _FC1DEAL_ROOT / "site/fc1_route_rec.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.RouteRec()
+
+
 def g1_variant() -> str:
     raw = os.environ.get("DSV41_MOE_M32_G1", "0").strip().lower()
     if raw in ("", "0", "off"):
@@ -128,6 +156,9 @@ _D05_MAX_ROWS = 384 * 32 + 96 * 6  # = 12864 > M_sum(96 tokens) = 12480
 # g1 fc2c-d05: D05 source + FC2-compact v2 tail native (spark-four CPU build, 2026-10-26).
 _FC2C_MANIFEST_SHA256 = "3b6f30bcf05bdb8d1255409cfea91dd711479e5102c5cfb1466917ad76c90cb9"
 _FC2C_NATIVE_SHA256 = "33d4eb19f3dc7c281440afa6df80724c1f9adae0ed6bc8e57f835b9eea83889a"
+# g130/pdl-fc2c (vibe, W-E3): early-B pdl prologue merged onto the fc2c-on-m32all tree;
+# native bytes identical (33d4eb19...), header adds the prologue (see that kit for the SASS/GPU evidence).
+_FC2C_PDL_MANIFEST_SHA256 = "b5879a041793b11a82ee2663f66e92de6777171b85ea6da317d629733e3d0e4c"
 _FC2C_TOPK, _FC2C_ALIGN = 6, 32
 _FC2C_KREAL_B = 144  # packed bytes of k 0..287; bytes 144..191 of every w2 row are TP padding (zero)
 _NO_TAIL = object()  # FC2Compact.run(): weight has no tail (first seen during capture) -> caller falls back
@@ -410,6 +441,7 @@ class TargetM32Kernel:
         self.verifier = verifier
         self.fc2c = fc2c
         self.g1_la = False
+        self.fc1_rec = None
         assert d05 == "0" or fc2_native is not None
         assert d05 != "verify" or verifier is not None
         assert fc2c is None or d05 == "1", "DSV41_MOE_FC2C needs DSV41_MOE_FC2_D05=1"
@@ -428,6 +460,8 @@ class TargetM32Kernel:
         # This adapter is private to the tested MoE path. Its reduction ignores
         # invalid routes; the public grouped-GEMM padding contract is unchanged.
         assert "ensure_zero_padding" not in kwargs
+        if self.fc1_rec is not None:
+            self.fc1_rec.observe(args)
         if self.g1_la:  # g1-la cp.async's A rows at row stride K: contiguous, 16-B aligned A only
             aq = args[0][0]
             assert aq.dim() == 2 and aq.is_contiguous() and aq.data_ptr() % 16 == 0, "g1-la: bad A layout"
@@ -517,11 +551,23 @@ def load_d05_native(baseline_native, pdl: bool):
     return native
 
 
+def fc2c_pdl_arm() -> bool:
+    """DSV41_MOE_FC2C_PDL: swap the FC2C tree for the pdl-fc2c merged tree (g130 kit). Default 0 = unchanged."""
+    raw = os.environ.get("DSV41_MOE_FC2C_PDL", "0").strip().lower()
+    assert raw in ("", "0", "1", "off", "on"), f"DSV41_MOE_FC2C_PDL={raw!r}"
+    return raw in ("1", "on")
+
+
 def fc2c_tree() -> tuple:
     """(tree root, JIT cache, pinned manifest sha) of the FC2-compact native for the active DSV41_MOE_M32_G1."""
     variant = g1_variant()
     if variant == "all":
-        root, cache, manifest_sha = _G2_FC2C_ROOT / "tree", _G2_FC2C_ROOT / "jit-cache", _G2_FC2C_MANIFEST_SHA256
+        if fc2c_pdl_arm():
+            root, cache, manifest_sha = (Path.home() / "dsv41-stage/g130/pdl-fc2c/tree",
+                                        Path.home() / "dsv41-stage/g130/pdl-fc2c/jit-cache",
+                                        _FC2C_PDL_MANIFEST_SHA256)
+        else:
+            root, cache, manifest_sha = _G2_FC2C_ROOT / "tree", _G2_FC2C_ROOT / "jit-cache", _G2_FC2C_MANIFEST_SHA256
     else:
         assert variant == "", f"DSV41_MOE_FC2C is qualified with DSV41_MOE_M32_G1=all or 0, not {variant!r}"
         g1 = Path.home() / "dsv41-stage/g1/fc2c-d05"
@@ -593,6 +639,10 @@ def get_target_m32_kernel() -> TargetM32Kernel:
         root = (_G1_ROOT / f"trees/{g1_variant()}-base").resolve()
         jit_cache = (_G1_ROOT / f"jit/{g1_variant()}-base").resolve()
         manifest_sha = _G1_MANIFESTS[f"{g1_variant()}-base"]
+        if fc1_deal_arm():
+            root = (_FC1DEAL_ROOT / f"trees/{fc1_deal_arm()}-base").resolve()
+            jit_cache = (_FC1DEAL_ROOT / f"jit/{fc1_deal_arm()}-base").resolve()
+            manifest_sha = _FC1DEAL_MANIFESTS[fc1_deal_arm()]
     else:
         root = Path(os.environ["DSV41_TARGET_M32_NATIVE_DIR"]).resolve()
         jit_cache = root.parent / "target-m32-jit-cache-v1"
@@ -650,4 +700,5 @@ def get_target_m32_kernel() -> TargetM32Kernel:
         fc2c.poison_served = g1_variant() in _G1_HAS_D05  # g2: those D05 trees store live rows only
     kernel = TargetM32Kernel(native, fc2_native, mode, verifier, fc2c)
     kernel.g1_la = g1_variant() in _G1_HAS_LA
+    kernel.fc1_rec = fc1_route_rec()
     return kernel

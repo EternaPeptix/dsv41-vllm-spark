@@ -1,0 +1,80 @@
+{
+ "name": "r1-attn",
+ "levers": [
+  {
+   "gid": "G20",
+   "id": "attn:L-IP",
+   "title": "IDXPAR",
+   "flag": "DSV41_IDXPAR",
+   "status": "built"
+  },
+  {
+   "gid": "G11",
+   "id": "mem:M3(b)/glue:F/dense:D7",
+   "title": "compressor-GEMM vs qkv_a skinny priority",
+   "flag": null,
+   "status": "skipped",
+   "reason": "needs the qkv_a chain (r3 skinny + RDMA all-gather + l2pf AG fork) on a high-priority non-origin stream inside capture (priority 0 is already the least; aux0 cannot be demoted); RDMA collective never captured off-origin, files not owned; gain depends on undocumented CTA back-fill behaviour; cheap reorder/join variants ~0 (verdicts-r2)"
+  }
+ ],
+ "flags": [
+  {
+   "name": "DSV41_IDXPAR",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "8 index-source layers (2/8/14/20/24/28/32/36), captured FULL decode graphs only: indexer wq_b -> q rope/quant on an own priority -2 stream, main wq_b -> SWA insert on aux_stream_list[1] (priority 0, host-launched first), kv-source compressor -> wk -> indexer-K store -> compressed insert on an own priority -1 stream; all three joined before logits. 'flat' = same branches, all priority 0 (diagnostic). Unset/0 = stock (helper never imported)."
+  }
+ ],
+ "files": [
+  {
+   "path": "models/deepseek_v41/attention.py",
+   "base_sha256": "f2f48198de81ebc7eb4ead6d145cbeea5bf867c632d9d9aa8b237a6801b857ca",
+   "patched_sha256": "0e4b6e91bc54d88f71b239d85e5fba5458466adf0b84c3f98ea2ac75c83514fd",
+   "action": "patch"
+  },
+  {
+   "path": "models/deepseek_v41/nvidia/dsv41_idxpar.py",
+   "base_sha256": null,
+   "new_sha256": "b682d81332df01986e6744f2b6fd83df25cdb93e47d3a726ee18f07da25b79da",
+   "action": "new"
+  }
+ ],
+ "install": "python3 install.py install",
+ "depends_on": [],
+ "conflicts_with": [],
+ "expected_gain_pct": {
+  "low": 0.15,
+  "central": 0.45,
+  "high": 0.62
+ },
+ "window_arms": [
+  {
+   "name": "control",
+   "env": {}
+  },
+  {
+   "name": "idxpar",
+   "env": {
+    "DSV41_IDXPAR": "1"
+   }
+  },
+  {
+   "name": "idxpar-flat (optional diagnostic, only if idxpar < +0.3%)",
+   "env": {
+    "DSV41_IDXPAR": "flat"
+   }
+  }
+ ],
+ "device_checks": [
+  "boot log on 8/8: 'DSV41_IDXPAR=1 armed: indexer-q stream priority -2, compressor stream priority -1 ...' (if both print the same value the device has one level above 0: lever degrades towards flat); no 'DSV41_IDXPAR: ... stock path' warnings",
+  "L2 prefetch capture lines unchanged vs control: 'DSV41_L2_PREFETCH_WOA captured tokens=N ... wq_b=48 (learned 48)' and 'g2 captured ... forks' counts, no MISMATCH",
+  "exactness: exact.py ec2f4437f8e1ed09, G1 outputs_digest 2f7fdccbd388225a, the 9 long-prompt hashes (kv-source layers write compressed KV, compressor state and indexer-K caches)",
+  "nsys (one rank, 60-step window, --cuda-graph-trace=node): scripts/idxpar_trace.py -> ovl=1, idxS ~0-2 us, prologue sum per forward 383-390 us -> ~240-270 us, woaS >= idxS+idxD",
+  "memory: boot KV-cache / free-memory lines vs control (graph pool + up to 2 cuBLAS workspaces)"
+ ],
+ "interacts_with": [
+  "r1-pf (edits dsv41_l2_prefetch.py: IDXPAR relies on the wq_b post-hook forking WOA from torch.cuda.current_stream(); A/B IDXPAR alone first)",
+  "r1-pdl (edits common/ops/query_quant.py = the q_kv_norm kernel whose dependents IDXPAR moves to other streams)"
+ ],
+ "tests": "tests/run_all.sh ~/exo-venv313/bin/python3 (512S1): 20/20 OK, see TEST-RESULTS.txt"
+}

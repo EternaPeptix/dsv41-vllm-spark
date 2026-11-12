@@ -1,0 +1,217 @@
+{
+ "name": "r2-moeback",
+ "round": "climb round 2 (kernel levers)",
+ "levers": [
+  {
+   "gid": "G25",
+   "ids": [
+    "moe:L-G",
+    "glue:D"
+   ],
+   "flag": "DSV41_FC2_GATHER_ADD",
+   "status": "built",
+   "summary": "routed+shared MoE add folded into Athena's status-gated gather (one Triton kernel instead of gather + CUDAFunctor_add<bf16>)"
+  },
+  {
+   "gid": "G18",
+   "ids": [
+    "moe:L-E"
+   ],
+   "flag": "DSV41_FC2_PDL",
+   "status": "partial",
+   "summary": "Athena FC2 PDL launch (cudaLaunchKernelEx + programmatic stream serialization) with weight/scale staging before griddepcontrol.wait; SiLU early trigger via the existing DSV41_MOE_PDL_TRIGGER=start. Binary NOT built yet (CLUSTER_LOCK held through both sessions); fail-closed: install.py refuses an unvetted build/ .so and installs it only after vet-pdl (SASS gates) + tools/g18_gate.py (device test + racecheck + synccheck) passed for that sha, so DSV41_FC2_PDL=1 exits 97 until then. SiLU-mul-quant fold into the FC2 prologue: skipped (see README)."
+  }
+ ],
+ "flags": [
+  {
+   "name": "DSV41_FC2_GATHER_ADD",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "G25: Athena gather writes bf16(f32(bf16(acc)) + f32(shared)) into the routed output; MoERunner skips shared_output + fused_output. Read at import in moe_runner.py and fc2_status_gated_gather_trial.py."
+  },
+  {
+   "name": "DSV41_FC2_PDL",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "G18: sitecustomize points ATHENA_FC2_GRAPH_SO at athena_tp8_fc2_packed_graph_pdl_sm121.so (sha-checked against its .sha256 sidecar, fail-closed exit 97) and sets DSV41_MOE_PDL_TRIGGER=start unless already set. Only active with DSV41_FC2=1 (production default). The binary is installed only after vet-pdl + the device gate."
+  }
+ ],
+ "files": [
+  {
+   "key": "moe_runner",
+   "path": "vllm/model_executor/layers/fused_moe/runner/moe_runner.py",
+   "root": "site-packages",
+   "base_sha256": [
+    "20b69fe514bebd6723a1378f89a564c8fec4144c30244101f629c3f32c188183"
+   ],
+   "action": "patch",
+   "lever": "G25",
+   "base_note": "live production (spark-one, 2026-11-08); no round-1 kit touches this file (tests/test_compose_r1.py)"
+  },
+  {
+   "key": "gather",
+   "path": "~/dsv41-fc2/fc2_status_gated_gather_trial.py",
+   "root": "$HOME",
+   "base_sha256": [
+    "733c3a87ff0fa487a1f394fb429e2fef4e85a8ec1eab791162a4e6c183286459",
+    "4fc6960be159c61faff94cb697b99cbaa6031fc67c03527b840e7d1c47ec0f72"
+   ],
+   "action": "patch",
+   "lever": "G25",
+   "base_note": "[0] live production (spark-one, 2026-11-08, rechecked 14:54Z); [1] live + climb-r1/r1-pdl installed (its gather hook). Order: install r1-pdl FIRST, uninstall LIFO (tests/test_compose_r1.py section 5, real installers)"
+  },
+  {
+   "key": "site",
+   "path": "~/dsv41-fc2/site/sitecustomize.py",
+   "root": "$HOME",
+   "base_sha256": [
+    "733bdbe0e82566a309e03cb9b9a1b27df13ad4e6645c587ecaccab8abd5329c2"
+   ],
+   "action": "patch",
+   "lever": "G18",
+   "base_note": "live production (spark-one, 2026-11-08); no round-1 kit touches this file (tests/test_compose_r1.py)"
+  },
+  {
+   "key": "fold_module",
+   "path": "vllm/model_executor/layers/fused_moe/runner/dsv41_moe_fold.py",
+   "root": "site-packages",
+   "base_sha256": null,
+   "action": "new",
+   "lever": "G25"
+  },
+  {
+   "key": "pdl_so",
+   "path": "~/dsv41-fc2/athena_tp8_fc2_packed_graph_pdl_sm121.so (+ .sha256 sidecar)",
+   "root": "$HOME",
+   "base_sha256": null,
+   "action": "new",
+   "lever": "G18",
+   "note": "installed only when KIT.json pdl_binary_sha256 (set by `install.py vet-pdl`) equals build/*.so AND build/DEVICE-G18.json (tools/g18_gate.py) passed for that sha; a build/ .so with a null/different sha refuses the whole install"
+  }
+ ],
+ "untouched_pinned": {
+  "~/dsv41-fc2/athena_fc2_forty_layer_trial.py": "ae2089724597c5d3954069501a72542062ec543d5574347dd5c022e0d7f373e5",
+  "vllm/model_executor/layers/fused_moe/experts/deep_gemm_moe.py": "9364f121aacf5061be13b6490b83b58ad2bf11cbb1e154c84ef5c2a54ba61097",
+  "~/dsv41-tp8.sh": [
+   "fda6d05a74fb600e7b0488270812cbc0b5a76f15aff1c513a667f83bb491ff3a (brief)",
+   "08a249da6b339600c96fc88d71c70b46c64df777ded960669e8a16d3be4f521b (live 2026-11-08 13:50Z: climb-w1 L2 prefetch defaults only; kit does not read or patch the launcher)"
+  ],
+  "~/dsv41-fc2/athena_tp8_fc2_packed_graph_sm121.so": "85d888ae36fdfbc1eb126e3c9048f6e2dc9b89a5189aae2488bc89d630b515e0"
+ },
+ "pdl_binary_sha256": null,
+ "install": "python3 install.py install",
+ "depends_on": [],
+ "conflicts_with": [],
+ "new_file_sha256": {
+  "files/vllm/model_executor/layers/fused_moe/runner/dsv41_moe_fold.py": "a6c66c1a08fd53323cf3fe7c2f846008b3e0f91d8d3b780fc06490626426f633",
+  "files/athena-pdl/moet-baseline-research/fc2_serial32packed_k288_pdl.cu": "13c85826c91ed5187ad1714962e05286bd0d1a0e2bc943110e8649710523763d",
+  "files/athena-pdl/moet-baseline-research/fc2_packed_graph_binding_pdl.cu": "4af817b48e74e86706bfcda0f925f4513551fc1c8741704cdb8eefa9de05d8a9",
+  "files/athena-pdl/build_pdl.sh": "69a1270dc54fbbe867fe158d99a93e978d59e2b621207a21d47b935fc45375c3",
+  "tools/ptx_check_g25.py": "0476edcd1d2fc3cf951d64d0fe613f09017ae9e276489b5d07ac3164382cd0fb",
+  "tools/ptx_rule_g25.py": "93ff51ac4cbb9c31b80532229b152a11bb565af94f2f92a0e395e9e442da70e0",
+  "tools/g18_gate.py": "3cbe3fff72e4e810d7c49640b2a5098c5b856a1a971ec7abe0f6b3891f26856a"
+ },
+ "pdl_binary_note": "Not built: CLUSTER_LOCK held (w1b/w1c in session 1; w1d 14:35Z-~18:36Z at the fix session, 14:54Z). Steps: (1) spark-eight only, no lock or the lead's token: bash files/athena-pdl/build_pdl.sh files/athena-pdl ~/climb-scratch/r2-moeback/build; (2) python3 install.py vet-pdl ~/climb-scratch/r2-moeback/build (refuses unless live==control SASS, control vs PDL differ only by ACQBULK/NOP (STRICT) or by scheduling (SCHEDULE-ONLY, same opcode multiset), no global store before the wait, live .so == pinned 85d888ae, .so == the one the log hashed; then writes this field + pdl_vet); (3) stopped node: tools/g18_gate.py --kit . (writes build/DEVICE-G18.json); (4) install 8/8. While this field is null, install.py REFUSES any build/ .so.",
+ "uninstall": "python3 install.py uninstall",
+ "composes_with": {
+  "climb-r1/r1-pdl": "both patch ~/dsv41-fc2/fc2_status_gated_gather_trial.py; anchors disjoint, either text order gives the same file. With the REAL installers: install r1-pdl first (its installer refuses our patched gather, nothing written), uninstall LIFO (r1-pdl's uninstall refuses while we are on top, nothing changed; ours restores r1-pdl's exact patch). While both are installed `r1-pdl status` shows the gather as TAGGED, NOT OUR EXACT PATCH (expected). With DSV41_GLUE_PDL (gather family) and DSV41_FC2_GATHER_ADD both on, the fold kernel is launched without PDL (our hook returns first); the two levers attack the same gather->AR gap and do not stack.",
+  "other round-1 kits": "no overlap with moe_runner.py / sitecustomize.py (scan in tests/test_compose_r1.py)"
+ },
+ "expected_gain_pct": {
+  "G25": {
+   "low": 0.26,
+   "central": 0.3,
+   "high": 0.35
+  },
+  "G18": {
+   "low": 0.17,
+   "central": 0.27,
+   "high": 0.43
+  },
+  "both": {
+   "low": 0.43,
+   "central": 0.58,
+   "high": 0.78
+  }
+ },
+ "expected_saving_ms": {
+  "G25": {
+   "low": 0.06,
+   "central": 0.071,
+   "high": 0.081
+  },
+  "G18": {
+   "low": 0.04,
+   "central": 0.064,
+   "high": 0.1
+  }
+ },
+ "window_arms": [
+  {
+   "name": "control",
+   "env": {}
+  },
+  {
+   "name": "g25-gather-add",
+   "env": {
+    "DSV41_FC2_GATHER_ADD": "1"
+   }
+  },
+  {
+   "name": "g18-fc2-pdl",
+   "env": {
+    "DSV41_FC2_PDL": "1"
+   },
+   "note": "implies DSV41_MOE_PDL_TRIGGER=start (setdefault in sitecustomize); needs the built PDL .so installed"
+  },
+  {
+   "name": "g18-fc2-pdl-notrigger (diagnostic only)",
+   "env": {
+    "DSV41_FC2_PDL": "1",
+    "DSV41_MOE_PDL_TRIGGER": "0"
+   }
+  },
+  {
+   "name": "g25+g18",
+   "env": {
+    "DSV41_FC2_GATHER_ADD": "1",
+    "DSV41_FC2_PDL": "1"
+   }
+  }
+ ],
+ "device_checks": [
+  "device_test.py --part g25 (stopped node): exit 0, every case bit-identical, eager + graph replay, M=1..24,32..96,1500,2048",
+  "tools/ptx_check_g25.py on spark-eight with no lock (compiles, no GPU): exit 0 (no .ftz, 48 fma.rn.f32x2 like production, and exactly one proven epilogue: A = 16 cvt.rn.bf16x2.f32 + 16 fp32 add elements, or B = 8 cvt.rn.bf16x2.f32 + 16 bf16 add elements; the known-wrong fp32-accumulator fold fails)",
+  "files/athena-pdl/build_pdl.sh (spark-eight only) then install.py vet-pdl <out>: live == control SASS IDENTICAL, control vs PDL only ACQBULK/NOP (STRICT) or scheduling (SCHEDULE-ONLY); records pdl_binary_sha256",
+  "tools/g18_gate.py --kit . (stopped node): device_test.py --part g18 --reps 200 exit 0 (8 graph cases x 200 replays) + compute-sanitizer racecheck and synccheck --quick rc 0 -> build/DEVICE-G18.json; required by install for the binary",
+  "boot log: ATHENA_FC2_TRIAL_HOOK_INSTALLED x4 as today; with G25 on one \"DSV41_FC2_GATHER_ADD: first folded MoE call (M=..., event=yes)\" per worker; with G18 on \"DSV41_FC2_PDL on: ... trigger=start\" per process",
+  "flags-off relaunch after install: exact.py ec2f4437f8e1ed09 and G1 outputs_digest 2f7fdccbd388225a; per-flag arms the same digest + 9 long-prompt cases",
+  "nsys (see README \"Reading the effect in nsys\")"
+ ],
+ "pdl_device_gate": {
+  "stamp": "build/DEVICE-G18.json",
+  "writer": "tools/g18_gate.py",
+  "requires": [
+   "pdl_so_sha256 == pdl_binary_sha256",
+   "pass true",
+   "device_test_rc 0 (device_test.py --part g18 --reps >=200)",
+   "racecheck_rc 0 (compute-sanitizer --tool racecheck --error-exitcode 99, --quick)",
+   "synccheck_rc 0 (compute-sanitizer --tool synccheck --error-exitcode 99, --quick)",
+   "reps >= 200",
+   "graph_cases_ok >= 8"
+  ]
+ },
+ "install_order": "after climb-r1/r1-pdl if both are installed; uninstall LIFO (this kit first). install checks every base before writing (no partial install).",
+ "tests": {
+  "Mac+512S1 2026-11-08T14:52Z": {
+   "test_install.py": "67 PASS",
+   "test_ptx_rule.py": "16 PASS",
+   "test_compose_r1.py": "20 PASS",
+   "test_plan_g25.py": "30 PASS",
+   "emul_add_exhaustive.py": "4,261,739,522 pairs, 0 diff",
+   "emul_gather_fold.py": "518,400 elements, 0 diff; neg control 88,586",
+   "device_test.py --plan": "11/11 OK"
+  },
+  "not_run": "build_pdl.sh, vet-pdl on a real build, ptx_check_g25.py, device_test/g18_gate on a GPU (CLUSTER_LOCK w1d held; no GPU allowed to this agent)"
+ }
+}

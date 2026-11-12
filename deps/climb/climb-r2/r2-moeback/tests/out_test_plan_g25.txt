@@ -1,0 +1,37 @@
+DSV41_FC2_GATHER_ADD: first folded MoE call (M=1, event=yes)
+PASS [overlap m=1] flag-off log == base 
+PASS [overlap m=1] flag-off AR input bits == base 
+PASS [overlap m=1] flag-on AR input bits == base 
+PASS [overlap m=1] flag-on log == base with gather+add -> wait+gather_add 
+PASS [overlap m=1] base has exactly one add [('torch', 'add', 'main')]
+DSV41_FC2_GATHER_ADD: first folded MoE call (M=6, event=yes)
+PASS [overlap m=6] flag-off log == base 
+PASS [overlap m=6] flag-off AR input bits == base 
+PASS [overlap m=6] flag-on AR input bits == base 
+PASS [overlap m=6] flag-on log == base with gather+add -> wait+gather_add 
+PASS [overlap m=6] base has exactly one add [('torch', 'add', 'main')]
+DSV41_FC2_GATHER_ADD: first folded MoE call (M=48, event=yes)
+PASS [overlap m=48] flag-off log == base 
+PASS [overlap m=48] flag-off AR input bits == base 
+PASS [overlap m=48] flag-on AR input bits == base 
+PASS [overlap m=48] flag-on log == base with gather+add -> wait+gather_add 
+PASS [overlap m=48] base has exactly one add [('torch', 'add', 'main')]
+DSV41_FC2_GATHER_ADD: first folded MoE call (M=96, event=no)
+PASS [no-overlap m=96 (> stream threshold 64)] flag-off log == base 
+PASS [no-overlap m=96 (> stream threshold 64)] flag-off AR input bits == base 
+PASS [no-overlap m=96 (> stream threshold 64)] flag-on AR input bits == base 
+PASS [no-overlap m=96 (> stream threshold 64)] flag-on log == base with gather+add -> wait+gather_add 
+PASS [no-overlap m=96 (> stream threshold 64)] base has exactly one add [('torch', 'add', 'main')]
+DSV41_FC2_GATHER_ADD: first folded MoE call (M=4, event=yes)
+PASS [status failed m=4] flag-off log == base 
+PASS [status failed m=4] flag-off AR input bits == base 
+PASS [status failed m=4] flag-on AR input bits == base 
+PASS [status failed m=4] flag-on log == base with gather+add -> wait+gather_add 
+PASS [status failed m=4] base has exactly one add [('torch', 'add', 'main')]
+PASS [drafter/non-Athena experts] flag-on == base (no fold) 
+PASS [routed_scaling_factor 2.5] flag-on == base (no fold) 
+PASS [fused output pre-reduced] flag-on == base (no fold) 
+PASS [padded routed width (declined)] flag-on == base (no fold) 
+DSV41_FC2_GATHER_ADD: first folded MoE call (M=6, event=yes)
+PASS [double gather] raises DSV41_FC2_GATHER_ADD: second Athena gather under one armed MoE call
+ALL PASS

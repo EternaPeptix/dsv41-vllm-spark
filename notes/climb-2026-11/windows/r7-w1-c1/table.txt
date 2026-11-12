@@ -1,0 +1,5 @@
+identity - | G1 130.687 code 131.83 prose 95.77 math 164.46 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF
+c1 RDMA_AR_AUDIT=200;RDMA_AR_EXT=/home/jeweled/dsv41-stage/r7comm2/build/rdma_ar_ext.so | G1 130.660 code 131.94 prose 95.79 math 164.24 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+t1 RDMA_AR_AUDIT=200;RDMA_AR_EXT=/home/jeweled/dsv41-stage/r7comm2/build/rdma_ar_ext.so;DSV41_RDMA_TRIM=1 | G1 131.631 code 132.94 prose 96.45 math 165.50 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF | -
+c2 RDMA_AR_AUDIT=200;RDMA_AR_EXT=/home/jeweled/dsv41-stage/r7comm2/build/rdma_ar_ext.so | G1 130.703 code 131.86 prose 95.73 math 164.52 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+t2 RDMA_AR_AUDIT=200;RDMA_AR_EXT=/home/jeweled/dsv41-stage/r7comm2/build/rdma_ar_ext.so;DSV41_RDMA_TRIM=1 | G1 131.662 code 132.84 prose 96.54 math 165.60 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF | -

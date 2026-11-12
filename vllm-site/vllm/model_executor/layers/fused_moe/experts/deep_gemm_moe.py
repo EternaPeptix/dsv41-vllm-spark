@@ -50,6 +50,13 @@ from vllm.utils.deep_gemm import (
 from vllm.utils.import_utils import has_deep_gemm
 
 logger = init_logger(__name__)
+_R2DM_FC1, _R2DM_PERM = False, ""  # G17 DSV41_DRAFT_MOE_G17, default off (experts/dsv41_r2_draftmoe.py)  # r2-draftmoe
+if os.environ.get("DSV41_DRAFT_MOE_G17", "0").strip().lower() not in ("", "0", "off", "false"):  # r2-draftmoe
+    from vllm.model_executor.layers.fused_moe.experts import dsv41_r2_draftmoe as _r2dm  # r2-draftmoe
+    _R2DM_FC1, _R2DM_PERM = _r2dm.FC1, _r2dm.PERM  # r2-draftmoe
+_DSV41_RP = os.environ.get("DSV41_MOE_ROUTEPREP", "0").strip().lower() not in ("", "0", "off", "false")  # r2-moefront
+if _DSV41_RP:  # r2-moefront
+    from vllm.model_executor.layers.fused_moe import dsv41_routeprep as _dsv41_rp  # r2-moefront
 
 
 def _fp8_workspace_shape(
@@ -585,6 +592,8 @@ class DeepGemmFP4Experts(mk.FusedMoEExpertsModular):
 
     @staticmethod
     def _workspace_m_alignment(M: int, N: int, K: int, topk: int, experts: int) -> int:
+        if _R2DM_FC1 and (N, K, topk, experts) == _r2dm.DRAFT_COMPACT_GEOMETRY:  # r2-draftmoe
+            return DeepGemmFP4Experts._workspace_m_alignment(M, 768, K, topk, experts)  # r2-draftmoe
         alignment = get_mk_alignment_for_contiguous_layout()[0]
         if (
             os.environ.get("DSV41_SM121_TARGET_M32") == "1"
@@ -739,6 +748,8 @@ class DeepGemmFP4Experts(mk.FusedMoEExpertsModular):
         expert_tokens_meta: mk.ExpertTokensMetadata | None,
         apply_router_weight_on_input: bool,
     ):
+        if _DSV41_RP and a1q_scale is None and self.expects_unquantized_inputs:  # r2-moefront
+            hidden_states, a1q_scale = _dsv41_rp.front(self, hidden_states, w1, topk_ids, expert_map, expert_tokens_meta)  # r2-moefront
         assert a1q_scale is not None
         assert a2_scale is None
         assert self.w1_scale is not None
@@ -769,6 +780,11 @@ class DeepGemmFP4Experts(mk.FusedMoEExpertsModular):
         if compact_fc1:
             assert tuple(w2.shape) == (384, 5120, 192)
             assert activation == MoEActivation.SILU
+        if _R2DM_FC1 and not compact_fc1 and (  # r2-draftmoe
+                N, K, topk_ids.size(1), local_num_experts) == _r2dm.DRAFT_COMPACT_GEOMETRY:  # r2-draftmoe
+            assert tuple(w2.shape) == (128, 5120, 192)  # r2-draftmoe
+            assert activation == MoEActivation.SILU  # r2-draftmoe
+            compact_fc1 = True  # r2-draftmoe
 
         block_m = 32 if self._dsv41_force_m32 else self._workspace_m_alignment(
             topk_ids.size(0), N, K, topk_ids.size(1), local_num_experts
@@ -859,3 +875,5 @@ class DeepGemmFP4Experts(mk.FusedMoEExpertsModular):
         )
         if dsv41_call is not None:
             self._dsv41_draft_verify.shadow(self, output, dsv41_call)
+if _DSV41_RP:  # r2-moefront
+    DeepGemmFP4Experts.expects_unquantized_inputs = property(_dsv41_rp.expects_unquantized_inputs)  # r2-moefront

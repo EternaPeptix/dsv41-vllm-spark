@@ -1,0 +1,158 @@
+r2-skinny test results (rerun 2026-11-08 ~15:20Z after the review fixes; no GPU used)
+kernel/skinny_mx_v2.cu      sha256 48a18b92cc2a04e380701622c39c1db13338333cf324cdda7eaf23e5db51ca50
+new/dsv41_r2_skinny.py      sha256 5010c4e90d6abcac952bc9d5c9d9bc572bb6a6431481e59680b7808e980adae4
+install.py                  sha256 906c1597a731c97e5822f0b6ce95b39405f7dfb77c22da536230ba709d097767
+device_test.py              sha256 b5121b000016bcde1ee1d6e9ea4b0a3d3c687655c1389ee599a4151ee467c244
+prebuilt/skinny_mx_v2_ext.so sha256 b3af28da9120e5efe1493814768fbf42a5d7194e343a5b9369e3214d9f1f9a92
+
+== COMPILE (spark-eight, 2026-11-08 15:15Z, CLUSTER_LOCK free): BUILD_RC=0, 33 entry points, all
+   "0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads"; registers in COMPILE-LOG.txt; full log build.log.
+   CPU-only import of the .so in the serving venv (CUDA_VISIBLE_DEVICES=""): IMPORT_OK, 6 bindings.
+
+== NOT RUN: device_test.py. It needs a stopped GB10 node (brief rule 3: the lead runs it in a window; hard rule 1
+   forbids stopping anything). Gate before any arm: bash scripts/run_device_test.sh spark-eight 7 -> exit 0.
+
+== Mac Studio 512S1 (~/exo-venv313, torch 2.11 CPU + numpy): exit codes
+   tests/test_emulation.py (full, M=1..8)  EXIT=0  79 PASS / 0 FAIL  40 s
+   tests/test_routing.py                   EXIT=0   9 PASS / 0 FAIL   4 s
+   tests/test_device_harness_cpu.py       EXIT=0   3 PASS / 0 FAIL   2 s   (live-quant chunk rows [103, 256, 384] <= 409)
+   (full logs: tests/cpu_tests_512S1.log, tests/emulation-full.log)
+
+== this Mac (python3 stdlib): tests/test_install.py  EXIT=0  (log tests/test_install.log)
+[PASS] live base copy sha256 == KIT.json base_sha256 1f1c0456e7b515fa
+[PASS] prebuilt .so sha256 == KIT.json b3af28da9120e5ef
+[PASS] dry: anchors apply to the live base (21 tagged lines) rc=0
+[PASS] install /var/folders/7j/j8m8l08574n5llm9vm62kgz00000gn/T/tmpy2t3m907/vllm/models/deepseek_v41/nvidia/dsv41_r3_dense.py: patched (1f1c0456e7b515fa -> 1ad5c4e817db5ff0), 21 tagged lines
+[PASS] installed file has exactly 21 tagged lines 
+[PASS] module copied 
+[PASS] re-install is idempotent 
+[PASS] status reports PATCHED, the .so == KIT.json and a current patch == KIT.json) /var/folders/7j/j8m8l08574n5llm9vm62kgz00000gn/T/tmpy2t3m907/home/dsv41-r2/skinny_mx_v2/build/skinny_mx_v2_ext.so | patch matches this kit revision
+[PASS] AST(patched minus tagged lines) == AST(base) 
+[PASS] every outermost tagged branch is guarded by R2_V2 / R2_QFUSE ['not R2_V2 and os.environ.get("DSV41_SKINNY_V2", "0").strip().lower() not in ("", "0", "off")', 'not R2_V2 and os.environ.get("DSV41_SKINNY_QFUSE", "0").strip() == "1"', 'R2_V2', 'R2_V2 and self._r2 is not None', 'R2_QFUSE and self._r2 is not None']
+[PASS] invalid DSV41_SKINNY_V2 values raise at import (2, true); 1|pdl (any case/space) and off/'' do not [('2', True), ('true', True), ('pdl ', False), ('PDL', False), ('off', False), ('', False)]
+[PASS] flags unset -> R2_V2 = R2_QFUSE = False; QFUSE alone stays off; V2=pdl+QFUSE=1 -> both on; V2=0 off 
+[PASS] dsv41_r2_skinny is imported only on a tagged (flag-guarded) line 
+[PASS] install refuses a stale patch (tagged lines != this revision) and leaves it untouched /var/folders/7j/j8m8l08574n5llm9vm62kgz00000gn/T/tmpy2t3m907/vllm/models/deepseek_v41/nvidia/dsv41_r3_dense.py: carries # r2-skinny lines that differ from this kit revision's edits (stale patch?); refusing: uninstall first
+[PASS] status flags the stale patch 
+[PASS] uninstall restores the base bytes 1f1c0456e7b515fa
+[PASS] uninstall removes the module 
+[PASS] install refuses an unrecorded base sha256 and leaves it untouched /var/folders/7j/j8m8l08574n5llm9vm62kgz00000gn/T/tmpn12wm4tl/vllm/models/deepseek_v41/nvidia/dsv41_r3_dense.py: sha256 8368aae89b79a6cce3b0a546bcd0925db8e7442aac868c2c6c6fa75e05e89b75 is not a recorded base (['1f1c0456e7b515fa4166b00bf18360547e9a29f6b9d84c64e4b607e2cc8a9193']); refusing
+[PASS] install refuses when KIT.json has no .so sha256 (even with an .so at the destination) KIT.json has no sha256 for skinny_mx_v2_ext.so (no device-tested binary); refusing (install --build builds an untested one)
+[PASS] status flags an .so it cannot verify (KIT.json sha256 null) 
+[PASS] install refuses a prebuilt whose sha256 != KIT.json /var/folders/7j/j8m8l08574n5llm9vm62kgz00000gn/T/tmpjne9x_0f/bogus.so: sha256 6921a348cbd8002d814070d3e3b036ac75f46d364e45d8a5dab7e266a14a07f6 != KIT.json b3af28da9120e5efe1493814768fbf42a5d7194e343a5b9369e3214d9f1f9a92; refusing
+[PASS] install refuses a destination .so whose sha256 != KIT.json when the kit has no prebuilt /var/folders/7j/j8m8l08574n5llm9vm62kgz00000gn/T/tmpf9psbymj/home/dsv41-r2/skinny_mx_v2/build/skinny_mx_v2_ext.so: sha256 cba06b5736faf67e54b07b561eae94395e774c517a7d910a54369e1263ccfbd4 != KIT.json b3af28da9120e5efe1493814768fbf42a5d7194e343a5b9369e3214d9f1f9a92 and no prebuilt in the kit; refusing
+[PASS] status flags a destination .so mismatch 
+[INFO] round-1 kits with installers: ['r1-attn', 'r1-drafter', 'r1-eager', 'r1-pdl', 'r1-pf']; touching dsv41_r3_dense.py: none
+[PASS] composition: no round-1 kit edits dsv41_r3_dense.py, so its base after round 1 == live base 
+
+ALL PASS
+
+===== tests/test_emulation.py (512S1, exo-venv313, 2026-11-08T15:20:40Z)
+[PASS] fma32 == exact Fraction fp32 FMA (20000 triples)
+[PASS] bf16 RNE == torch on all finite bf16 
+[PASS] e4m3 RN == torch float8_e4m3fn cast on [-448, 448] incl. all ties (400508 values)
+[PASS] fused prologue mapping == FlashInfer quant + v1 dequant (hostile, ftz=False) 
+[PASS] fused prologue mapping == FlashInfer quant + v1 dequant (hostile, ftz=True) 
+[PASS] FTZ-mode scale differences confined to the amax*(1/448) subnormal band (hostile) (230 blocks differ)
+[PASS] fused prologue mapping == FlashInfer quant + v1 dequant (random, ftz=False) 
+[PASS] fused prologue mapping == FlashInfer quant + v1 dequant (random, ftz=True) 
+[INFO] random: FTZ and non-FTZ give identical scales on this input
+[PASS] quant codes == torch e4m3 cast of the clamped scaled values 
+[PASS] v2 A8 == v1  M=1 rand-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=1 rand-w rand-x grid48 (bf16 out + fp32 sums) (0.9s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=1 rand-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=1 rand-w hostile-x grid48 (bf16 out + fp32 sums) (0.9s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=2 rand-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=2 rand-w rand-x grid48 (bf16 out + fp32 sums) (1.0s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=2 rand-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=2 rand-w hostile-x grid48 (bf16 out + fp32 sums) (1.0s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=3 rand-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=3 rand-w rand-x grid48 (bf16 out + fp32 sums) (1.0s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=3 rand-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=3 rand-w hostile-x grid48 (bf16 out + fp32 sums) (1.1s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=4 rand-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=4 rand-w rand-x grid48 (bf16 out + fp32 sums) (1.1s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=4 rand-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=4 rand-w hostile-x grid48 (bf16 out + fp32 sums) (1.1s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=5 rand-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=5 rand-w rand-x grid48 (bf16 out + fp32 sums) (1.2s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=5 rand-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=5 rand-w hostile-x grid48 (bf16 out + fp32 sums) (1.2s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=6 rand-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=6 rand-w rand-x grid48 (bf16 out + fp32 sums) (1.2s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=6 rand-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=6 rand-w hostile-x grid48 (bf16 out + fp32 sums) (1.2s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=7 rand-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=7 rand-w rand-x grid48 (bf16 out + fp32 sums) (1.3s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=7 rand-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=7 rand-w hostile-x grid48 (bf16 out + fp32 sums) (1.3s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=8 rand-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=8 rand-w rand-x grid48 (bf16 out + fp32 sums) (1.3s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=8 rand-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=8 rand-w hostile-x grid48 (bf16 out + fp32 sums) (1.3s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=1 hostile-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=1 hostile-w rand-x grid48 (bf16 out + fp32 sums) (0.9s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=1 hostile-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=1 hostile-w hostile-x grid48 (bf16 out + fp32 sums) (0.9s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=2 hostile-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=2 hostile-w rand-x grid48 (bf16 out + fp32 sums) (1.1s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=2 hostile-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=2 hostile-w hostile-x grid48 (bf16 out + fp32 sums) (1.1s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=3 hostile-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=3 hostile-w rand-x grid48 (bf16 out + fp32 sums) (1.1s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=3 hostile-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=3 hostile-w hostile-x grid48 (bf16 out + fp32 sums) (1.1s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=4 hostile-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=4 hostile-w rand-x grid48 (bf16 out + fp32 sums) (1.2s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=4 hostile-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=4 hostile-w hostile-x grid48 (bf16 out + fp32 sums) (1.2s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=5 hostile-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=5 hostile-w rand-x grid48 (bf16 out + fp32 sums) (1.2s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=5 hostile-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=5 hostile-w hostile-x grid48 (bf16 out + fp32 sums) (1.1s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=6 hostile-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=6 hostile-w rand-x grid48 (bf16 out + fp32 sums) (1.1s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=6 hostile-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=6 hostile-w hostile-x grid48 (bf16 out + fp32 sums) (1.1s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=7 hostile-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=7 hostile-w rand-x grid48 (bf16 out + fp32 sums) (1.2s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=7 hostile-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=7 hostile-w hostile-x grid48 (bf16 out + fp32 sums) (1.2s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=8 hostile-w rand-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=8 hostile-w rand-x grid48 (bf16 out + fp32 sums) (1.2s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=8 hostile-w hostile-x grid48 (bf16 out + fp32 sums) 
+[PASS] v2 QF == v1(fi_quant) M=8 hostile-w hostile-x grid48 (bf16 out + fp32 sums) (1.2s, out zeros 0, -0 0, fp32 subnormal sums 0)
+[PASS] v2 A8 == v1  M=5 grid 56 (MAXR 5) (bf16 out + fp32 sums) 
+[PASS] v2 A8 == v1  M=5 grid 75 (MAXR 5) (bf16 out + fp32 sums) 
+[PASS] v2 A8 == v1  M=5 grid 28 (MAXR 8) (bf16 out + fp32 sums) 
+[PASS] negative control: mis-mapped second vectors MISMATCH (435 of 1120 differ)
+[PASS] negative control: SPLIT 4 (different reduction order) MISMATCHES v1 SPLIT 8 in the fp32 sums (fp32 sums: 458 of 1120 differ; bf16 outputs: 0 differ - why the device test compares on many inputs)
+
+ALL PASS  (39s)
+===== tests/test_routing.py (512S1, exo-venv313, 2026-11-08T15:20:40Z)
+[PASS] off: v1 + separate quant on every call, r2 module never imported, no _r2 attribute 
+[PASS] QFUSE=1 without V2: identical to off 
+[PASS] V2=1: quant kernel + v2 A8 (pdl off) on every call 
+[PASS] V2=pdl+QFUSE: fused v2 (pdl), no quant call; non-contiguous x -> quant + v2 A8; AG of [M,224] 
+[PASS] self-check: bad A8 M=3 and bad fused M=5 stay live, FTZ mode 1 picked when only it matches {"ok_a8": [1, 2, 4, 5, 6, 7, 8], "ok_q": [1, 2, 3, 4, 6, 7, 8], "ftz": 1}
+[PASS] self-check: fused quant matching in neither FTZ mode -> QFUSE off, v2 A8 still on 
+[PASS] DSV41_SKINNY_V2=2 is rejected at import of dsv41_r3_dense (no silent fallback) 
+[PASS] V2=1 with the r2 module missing: live v1 shard path kept (not the stock GEMM), warning logged 
+
+ALL PASS
+===== tests/test_device_harness_cpu.py (512S1, exo-venv313, 2026-11-08T15:20:40Z)
+Q: 1639 rows x 5120 = 8.4M elements (98263 constructed blocks), live quant in 5 chunks of <= 384 rows (4T/SF variant)
+/Users/jeweled/climb-r2/r2-skinny/tests/emu.py:35: RuntimeWarning: invalid value encountered in multiply
+  r = f32(a * b)
+/Users/jeweled/climb-r2/r2-skinny/tests/emu.py:22: RuntimeWarning: overflow encountered in cast
+  return np.asarray(x, dtype=np.float64).astype(np.float32).astype(np.float64)
+   ftz=0: codes == live, scales == live (0 scale bytes differ), deq == v1 formula
+   ftz=1: codes != live, scales != live (8456 scale bytes differ), deq != v1 formula
+[PASS] Q: fused quant == live quant (codes + scales + deq) exhaustively in >= 1 FTZ mode matching modes [0]
+[PASS] Q: the serving self-check's FTZ pick is an exhaustively matching mode pick 0
+pick 0 {'exhaustive_match_ftz': [0], 'self_check_pick': 0}
+Q live-quant chunk rows [103, 256, 384]
+ckpt acts (64, 5120) torch.bfloat16 row0 ok
+act sets [('random', (5, 5120), 'torch.bfloat16'), ('postnorm', (5, 5120), 'torch.bfloat16'), ('hostile', (5, 5120), 'torch.bfloat16'), ('zeros', (5, 5120), 'torch.bfloat16'), ('recorded0', (5, 5120), 'torch.bfloat16'), ('ckpt-L0', (5, 5120), 'torch.bfloat16')]
+hostile weights (224, 5120) 0 NaN codes
+ALL PASS

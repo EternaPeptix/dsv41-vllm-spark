@@ -1,0 +1,210 @@
+{
+ "name": "r7-comm2",
+ "round": "climb-r7 (2026-11-09)",
+ "supersedes": "climb-r6/comm r6-comm's .so (the r7 .so carries C1 + C2 unchanged; r6-comm's Python lines are reused byte-identically)",
+ "levers": [
+  {
+   "id": "HT13",
+   "flag": "DSV41_RDMA_PROJ",
+   "status": "built (source, Python fold + per-forward fold-count log, binary gates projgate + ordgate, 15 mutants, device test, mock harness, import check); refuses DSV41_GLUE_PDL 'proj' and DSV41_OBLIT_FOLD at import; NOT compiled (CLUSTER_LOCK held by the r5 windows all session), NOT device-tested, NOT served",
+   "title": "dsv41_oblit _proj_rows (2 per decoder layer, 76/step) folded into the all-reduce kernel's tail: same op order as the served Triton cubin, proven by gate/projgate.py"
+  },
+  {
+   "id": "N1",
+   "flag": "(DSV41_RDMA_PDL=trig gate)",
+   "status": "partial: PASS for the review's named consumers (mhc TileLang x3, _proj_rows, _q_kv_norm_quant) and 7 more t2 AR successors; OPEN: flashinfer MXFP8 quant (PDL-launched AR successor, no on-disk cubin) and 3 ATen/vLLM successors without SASS"
+  },
+  {
+   "id": "N2",
+   "flag": "(DSV41_RDMA_PDL=1 gate)",
+   "status": "partial: 22/26 t2 kernel names PASS (incl. A1g witness for 2 warp-role / row-range exits); OPEN: Kernel2 (cuBLAS), act_and_mul, flashinferquantization, fusedDeepseekV4QNormRopeKV (PDL-observed, SASS not collected: collection stopped when the r5-dw lock appeared)"
+  },
+  {
+   "id": "GATE-ENV",
+   "flag": "(gate)",
+   "status": "done: fpflow staging-copy proof with environments that enter the 4x-unrolled loop (16 CTAs, nvec 26112 / 60000) + coverage assertion; SASS-level m_stage caught on 8/8 grid-staging kernels, blind with the r6 environments; source mutant m_stage built for the window"
+  }
+ ],
+ "flags": [
+  {
+   "name": "DSV41_RDMA_PROJ",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "HT13 (needs DSV41_RDMA_TRIM=1 and RDMA_AR_EXT = the r7 .so): while dsv41_oblit has armed a direction, a bf16 [rows <= 6, 5120] rdma all-reduce also writes y = _proj_rows(out, d) in its tail; dsv41_oblit.project(out, d) returns y. Values 0/1/off/on/false/true/no/yes, else a startup error. Refused at import (dsv41_oblit) together with DSV41_GLUE_PDL enabling 'proj' or with DSV41_OBLIT_FOLD. Logs 'rdma_ar-r7 fwd: capturing=.. fwd_rows=.. folded=.. taken=.. wasted=..' per captured forward."
+  },
+  {
+   "name": "DSV41_RDMA_TRIM",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "r6-comm C1 (unchanged)"
+  },
+  {
+   "name": "DSV41_RDMA_PDL",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "r6-comm C2 (unchanged; arm only after N2 closes; never trig while N1 is open)"
+  },
+  {
+   "name": "RDMA_AR_EXT",
+   "default": "live .so",
+   "on_value": "/home/jeweled/dsv41-stage/r7comm2/build/rdma_ar_ext.so",
+   "meaning": "selects the r7 .so for an arm"
+  }
+ ],
+ "files": [
+  {
+   "path": "distributed/device_communicators/rdma_all_reduce.py",
+   "base_sha256_live": "26a5d834612c6ab487edfdfcfacb118248380b7c9739134ebf7da6298590993f",
+   "base_sha256_r6": "67498e6b7ddebd29e9625b0523d7fe53d3fc68cc7fdff98898e136fa380bfd79",
+   "patched_sha256": "7b174b53d6b450e9102938a2e86b326f187794992217b4884a2e6bb8db55514d",
+   "base_note": "live 26a5d834 identical 8/8 (read-only sha256sum spark-one 2026-11-09 ~12:40Z) and untouched by r1..r6 kits except r6-comm (67498e6b); from the live base install.py applies r6-comm's own edits first (r6/install.py, byte-identical) and records that in ~/dsv41-stage/r7comm2/state.json",
+   "action": "patch (83 lines '# r7-comm2' [+ r6-comm's 44 '# r6-comm' lines from the live base])",
+   "prior_patched_sha256": [
+    "b764fb042563026d2fb27b076a07c35329724f238721f8f78a4aa8a24d1a779f"
+   ],
+   "prior_patched_ref": "ref/r7prev/rdma_all_reduce.b764fb04.py",
+   "ht13_inference_fix": "2026-11-11: served decode runs under torch.inference_mode, whose tensors carry no version counter, so r7_take's in-place guard (out._version) raised at engine start (r7-w1-ht13 p1/p2 relaunch FAILED). _r7_fold now allocates y and the op's AR output under torch.inference_mode(False) (normal tensors, same values; no inference tensor is written in place outside inference mode) and r7_take refuses inference tensors before reading _version. install upgrades the prior patch in place (.so untouched); downgrade restores it byte-exact."
+  },
+  {
+   "path": "models/deepseek_v41/nvidia/dsv41_oblit.py",
+   "base_sha256_accepted": [
+    "7824af1f47388eefd6c1648ebdc5ebc08ad85102c1e044ae4007030fac94b70d"
+   ],
+   "patched_sha256": "8e8596d5cb93d48648e42f4a85e3534fe5465e416d68217a3eab6c61c763bd6a",
+   "base_note": "live 7824af1f (r1-pdl lines present, flag off) on spark-one 2026-11-09; no r5/r6 kit touches it",
+   "action": "patch (20 lines '# r7-comm2')"
+  },
+  {
+   "path": "$HOME/dsv41-stage/r7comm2/native/rdma_ar.cu",
+   "sha256": "14299953a36b37cda313c725489d4eb9a71b030a0431ed10551699325e2fab24",
+   "base_sha256": "2bff8a89d6c312238db4439ee108947f1901a7482f8730913581232d5e77d20e",
+   "base_note": "src/mk_r7.py applied to r6-comm 2bff8a89",
+   "action": "new"
+  },
+  {
+   "path": "$HOME/dsv41-stage/r7comm2/native/mk_r7.py",
+   "sha256": "b16aa7553be558eb704dd4369b78e734d6d3b3cc395380980c6dcc62786c0643",
+   "action": "new"
+  },
+  {
+   "path": "$HOME/dsv41-stage/r7comm2/build.sh",
+   "sha256": "cb875d356341ca0b71a260447ef7fe01dcf0e73693acd258f8399f14d23b75c5",
+   "action": "new"
+  },
+  {
+   "path": "$HOME/dsv41-stage/r7comm2/build/rdma_ar_ext.so",
+   "sha256": "b79ab9606c76d3a42d84718838cdd6008f9682588a9a87cff9f3258b51768481",
+   "note": "built once on spark-eight by ops/build8-r7.sh at 20261110T235910Z (build-logs/build8-20261110T235910Z.log); prebuilt/rdma_ar_ext.so, installed byte-identical on 8/8 by install.py",
+   "action": "new",
+   "source": "prebuilt/rdma_ar_ext.so"
+  }
+ ],
+ "mutant_so_sha256": {
+  "m_rev": "d3ac940c01c87eb953646cd43f51eaa68fecd0da7cbef0dee36c08854adb8628",
+  "m_seed0": "c2354795ed0b8bf2946344b485ed0222434c8fa99cf653c7c99c38ab01d253ed",
+  "m_negzero": "3084fbee6cc7adda8bacf43dd0166e8cf1e15ba9abaa6086a33b8f306bc32840",
+  "m_ffma": "a678d0fff72ffa8a1d2e976d3d03f01d1436f8850e43be0e978a902bc46a81cb",
+  "m_tree": "d4990bd98093f471d32f630a78a9d9c24d5d455552e4f14143a6d1fe85c020cd",
+  "m_waitlate": "9994d590201fdcbd62ade404bafebde7c1f7eabd9886517f6438807a27abeb1e",
+  "m_stage": "90075b6669d379473eff9b89c7afc273afddbeaee6ca568ae1faae19eef0f28d",
+  "mp_first": "bba91eda5d1c5d79b2bf50364a1002879c5acfb59b58c65752f39ecfd8605d11",
+  "mp_warp": "b1301d126026be232edaef78902527a7f76bf2cad12eb8d96520efe17dc0e521",
+  "mp_l2": "ee30104dfc1fd38b99cda2feee1df7c77498687d1c98beac6609a98b59156afd",
+  "mp_unfused": "cd3dbf9b693e031eb1a19fd3b8e2cb2b191b0e10a8fbc4711debeff2ed864eb8",
+  "mp_chunk": "84ba2797a6b6db1b8e4193a014205e88051a93e90073cd796ca476df82e7c3ce"
+ },
+ "mutant_src_sha256": {
+  "m_rev": "fd1eb56e5ae9263e",
+  "m_seed0": "b21ea3ee06b26e24",
+  "m_negzero": "35d3fdd8809d1fba",
+  "m_ffma": "907000a4bfcb9673",
+  "m_tree": "78dd1e1191805539",
+  "m_waitlate": "1b632670a87c3c4e",
+  "m_stage": "51ff7fc68dd7e284",
+  "mp_first": "8bc20345f5727464",
+  "mp_warp": "ee5957a47a4247a2",
+  "mp_l2": "0308cdfc573c7524",
+  "mp_unfused": "9b9e675f9fa3a37a",
+  "mp_chunk": "7f8ec1e137e4bda7",
+  "mo_nofence": "6923425eb7587ca5",
+  "mo_first": "76c0ae814581a586",
+  "mo_noacq": "6669b8ecdb92c7f1"
+ },
+ "live_untouched": [
+  "$HOME/dsv41-stage/g130/rdma/build/rdma_ar_ext.so (14d049dd)",
+  "$HOME/dsv41-stage/r6comm (r6-comm's stage dir)",
+  "$HOME/dsv41-tp8.sh (4f3cc1c6)"
+ ],
+ "install": "ops/window-r7.sh dw (build, gate, stage8, device) then ops/install8-r7.sh install inside a window; per node: python3 -I install.py install | uninstall | status | dry",
+ "depends_on": [
+  "climb-r6/comm install.py (copied to r6/install.py: its EDITS are applied when the node has the live base)"
+ ],
+ "conflicts_with": [
+  "climb-r3/r3-comm"
+ ],
+ "composes_with": "live 4f3cc1c6 (= 166d7aac + the promoted r5 glue DSV41_GLUE_RQPAD=1 DSV41_GLUE_RPSPLIT=split, no other launcher difference; the device test runs with both and refuses without them), the r5 kits and r6 head/step/skew (none touches rdma_all_reduce.py or dsv41_oblit.py; tests/importcheck7.py imports the r7 files in the live, composed-r6 and composed-r5+r6 trees); r6-comm (installed or not). NOT with DSV41_GLUE_PDL's 'proj' family (r1-pdl / r5 PDL v2.1: combined-env.json, all1/all2, pdl1/pdl2): the served projection would be the unproven PDL cubin, so dsv41_oblit refuses DSV41_RDMA_PROJ=1 at import (review B1). NOT with r2-oblit FOLD (DSV41_OBLIT_FOLD): the folded layers run only project_moe, the previous layer's direction stays armed and no fold is taken (zero gain, ~2 wasted tails per layer, still exact), so dsv41_oblit refuses that pair at import too (review item 3).",
+ "expected_gain_pct": {
+  "HT13": {
+   "low": 0.09,
+   "central": 0.47,
+   "high": 0.9,
+   "ms_per_step": [
+    0.019,
+    0.098,
+    0.188
+   ],
+   "note": "estimates/estimates7.py from ht13_t2c (t2, all 6 traces): 76.00 armed rdma ARs/step, 75.98 folds taken, wasted folds 0.022/step (the Engram AR is a gather, mode 3, and never folds); consumer slack: low = every consumer delay beyond the 0.26 us dependent-launch latency read as another dependency (tail 2.7 us), central = only delays > L + 1 us (14.8 % of pairs; tail 1.6 us), high = naive gap + dur - tail (tail 0.8 us). The tail is a model; projtime (INFO) measures it; only C-T-C-T decides. First estimate was 0.21 / 0.61 / 0.90 (no waste, no slack)."
+  },
+  "C1": {
+   "low": 0.23,
+   "central": 0.57,
+   "high": 1.18,
+   "ms_per_step": [
+    0.05,
+    0.12,
+    0.25
+   ],
+   "note": "r6 (carried)"
+  },
+  "C2": {
+   "low": 0.07,
+   "central": 0.11,
+   "high": 0.27,
+   "ms_per_step": [
+    0.014,
+    0.024,
+    0.058
+   ],
+   "note": "r6 (carried); N2 open"
+  }
+ },
+ "window_arms": [
+  {
+   "name": "pre (no window)",
+   "env": "bash ops/window-r7.sh pre"
+  },
+  {
+   "name": "r7-dw (stopped)",
+   "env": "bash ops/window-r7.sh dw"
+  },
+  {
+   "name": "c/t (C1)",
+   "env": "RDMA_AR_EXT=<r7 .so>[;DSV41_RDMA_TRIM=1]"
+  },
+  {
+   "name": "q/p (HT13 on C1)",
+   "env": "...;DSV41_RDMA_TRIM=1[;DSV41_RDMA_PROJ=1]"
+  }
+ ],
+ "device_checks": [
+  "ops/window-r7.sh pre: dev-TU SASS -> gate R0-R4, MR1-MR8, MP1-MP5, MO1-MO3",
+  "ops/window-r7.sh dw: 14 builds, RUN_GATE7 PASS + D7 (incl. D7_ord_r7so), 16 x R7_DEVICE_TEST PASS (r6 c1 x8, r6 mutants, r6 c2, stage, projmut x2, proj x2, projtime INFO); no node runs more than 2 parts",
+  "serving p1: ops/takecheck-r7.sh --watch -> TAKECHECK_R7 PASS (taken == 76, wasted == 0 per captured decode forward, 8/8 ranks) before p2 / promotion"
+ ],
+ "cpu_tests": "tests/run_tests7.py T1-T10 (512S1) + tests/importcheck7.py (512S1, r6 integrate trees) + gate/run_gate7.py --skip-missing (incl. O7 ordgate selftest) + tests/mock_device7.py + device_test7.py --cpu-selfcheck -> TEST-RESULTS.txt",
+ "retires": [
+  "climb-r6/comm/gate/run_gate.py (its sassir reads a predicated BRA.U as unconditional and skips the S1 staging region): gate with gate/run_gate7.py",
+  "climb-r6/comm window C: replaced by ops/window-r7.sh dw"
+ ],
+ "install_order": "LIFO: r7-comm2 installs LAST and uninstalls FIRST. climb-r6/install-all.sh status / stack-install / stack-uninstall see the r7 rdma_all_reduce.py as FOREIGN and refuse while r7 is installed: ops/install8-r7.sh uninstall before any install-all op. Never run r6-comm's own uninstall under r7 (install.py status reports HYBRID, exit 4). OPEN before promotion: install-all.sh's comm entry still names r6-comm (the swap to r7-comm2 is not done in this kit; it may only write under climb-r7/comm2)."
+}

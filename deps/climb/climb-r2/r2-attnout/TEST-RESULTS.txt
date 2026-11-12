@@ -1,0 +1,74 @@
+# r2-attnout test results (after review fixes, 2026-11-08T15:30:53Z)
+# module files/models/deepseek_v4/nvidia/ops/dsv41_attnout.py sha256 308942ebbed1fc121f74ea5b9820a941b7fed895edf7aae4d6d63480ba1d1bfc
+# (reviewed f70a1a0a did NOT compile: see REVIEW.md Fixes; lines 1-483 now byte-identical to the reviewer's fixA copy 2402341f)
+
+## tests/test_install.py (Mac, Python 3.14.7)
+PASS base copies match KIT.json base_sha256 (= live spark-one files)
+PASS live base: dry/install/idempotent/status/uninstall; patched files compile; patched shas o_proj=aee7bf1d sonar=b372c430
+PASS unknown base sha -> refused, nothing written
+PASS uninstall refuses when a patched file changed after install (nothing restored or removed)
+PASS live + r1-pdl: dry/install/idempotent/status/uninstall; patched files compile; patched shas o_proj=aee7bf1d sonar=38c044bd
+PASS r1-pdl anchors still apply on top of r2-attnout (supported order: install r1-pdl first, uninstall r2-attnout first)
+ALL PASS test_install
+
+## tests/test_flag_off.py (Mac)
+PASS flag expression: unset/''/0/off -> False; rope|1|rope,rq -> True
+PASS o_proj.py: only the flag line + one `if _DSV41_ATTNOUT_OP and ...` (flag evaluated first) added
+PASS sonar_bf16_bmm.py: try_project(+r2ao=None) + one `if r2ao is not None` before grouped_bmm; everything else identical
+PASS call sites: live code never passes r2ao; the kit module calls try_project once per projection
+ALL PASS test_flag_off
+
+## tests/test_jit_globals.py (Mac) -- NEW: catches review blocker 1 on CPU
+PASS kit module: every global read inside @triton.jit is tl.constexpr(...): {'_r2_wo_a_partial': [], '_r2_reduce_quant': ['_ASM_FP8', '_ASM_INV_SCALE', '_ASM_UE8M0']}
+PASS lint flags the shipped-before-fix pattern (plain str global in inline_asm_elementwise)
+ALL PASS test_jit_globals
+(the same lint on the reviewed f70a1a0a module reports: [('_r2_reduce_quant', '_ASM_FP8'), ('_r2_reduce_quant', '_ASM_INV_SCALE'), ('_r2_reduce_quant', '_ASM_UE8M0')])
+
+## tests/test_plan.py + tests/test_emulation.py (512S1, ~/exo-venv313, python 3.13.13, torch 2.11.0 CPU; module sha on 512S1 = 308942ebbed1fc12)
+PASS parse
+PASS sonar off -> o_proj returns None before any launch
+PASS rope eager: synthetic(4 M) + real self-check, one try_project, output = z
+PASS rope in capture after a passed check: folded partial only, no inverse-RoPE launch
+PASS rope first seen in capture -> live inverse RoPE + live partial
+PASS partial mismatch -> part disabled (ERROR logged), this call uses live kernels, later calls return None (live o_proj code)
+PASS rq: eager self-check vs live reduce+flashinfer quant, then capture = live partial + rq -> QuantizedActivation
+PASS rq mismatch -> disabled, wo_b gets the live z
+PASS rq on an ineligible wo_b layer -> live reduce + quant inside wo_b
+PASS try_project=False -> one inverse-RoPE launch + torch.bmm (live fallback), one try_project call
+PASS tune: live inverse RoPE, retuned partial, live reduce
+PASS budget spent + part never checked (eager) -> live kernels, part stays unchecked (rope, tune, rq)
+PASS exception in a real-call self-check (partial or rq) -> part disabled, ERROR logged, live result
+ALL PASS test_plan
+PASS fma32 emulation == exact rational RNE on 4000 hostile triples
+PASS A. inverse-RoPE fold: 512 [16,128] A tiles bit-identical (G=1/HPG=8 and G=2/HPG=4, M in 1,2,5,16,17,32, hostile bf16 incl. +-0, bf16 denormals, 65280, identity/signed-zero cos rows)
+PASS B. reduce: live layout order = evens chain + odds chain ([0, 2, 4].. / [1, 3, 5]..), new explicit order bit-identical on 4096 hostile columns (fp32 and bf16); sequential 0..31 differs in 2246, numpy pairwise in 2246 columns -> the test is order sensitive
+PASS C. MXFP8 quant: kit [8,32]-tile order == flashinfer 4T/SF order, 8x1024 hostile bf16 (zero / exact-448 / 2^100 / 2^-100 blocks, ties): e4m3 and UE8M0 bytes identical
+PASS D. swizzle offsets == flashinfer compute_sf_index_swizzled_128x4_gpu (rows 0..255, 32 cols); for every M in 1..32 each of the 128x32 scale bytes is written exactly once (pad rows -> 0)
+ALL PASS test_emulation
+
+All five CPU tests exited 0.
+
+## Device-side scripts (NOT run by me on the final kit)
+Correction to the previous TEST-RESULTS.txt: it said compile_check.py / interp_check.py were "written and
+syntax-checked". Neither could run as shipped: compile_check failed on rq (NameError _ASM_UE8M0, blocker 1),
+interp_check failed with ModuleNotFoundError 'vllm.models' (blocker 3). Both are fixed now.
+
+- scripts/compile_check.py: the REVIEWER ran it on spark-eight (Triton 3.7.1, cuda:121, 15:18 UTC) on fixA
+  (= the tl.constexpr fix only): COMPILE CHECK PASS. The script is unchanged (sha e476088a, same as the reviewer's
+  copy) and the kernel source + constants + launch helpers (module lines 1-483) are byte-identical to fixA, so
+  that result covers this kit's kernels. Output copied to ref/compile-review-fixA/ (summary.json sha 637b883f...).
+- scripts/interp_check.py: the REVIEWER ran it with an equivalent sys.modules harness fix: INTERP CHECK PASS,
+  12/12 partial buffers bit-identical (M 1/5/17 x rope, vs, bn128, rope,vs,bn128), 27 s. Log in
+  ref/compile-review-fixA/interp.log. The fix is now in the kit's script (registers the base sonar copy as
+  vllm.models.deepseek_v4.nvidia.ops.sonar_bf16_bmm).
+- I could not rerun either on the final kit: ~/dsv41-opt-20261021/CLUSTER_LOCK was held by window w2
+  (start 15:21:47Z, eta 19:21:47Z) for the whole fix session, and the brief forbids compiling during a window.
+  py_compile only (syntax) on device_test.py, scripts/compile_check.py, scripts/interp_check.py: OK.
+  Commands (spark-eight, lock absent):
+    mkdir -p ~/climb-scratch/r2-attnout   (copy the kit there)
+    cd ~/climb-scratch/r2-attnout && TRITON_CACHE_DIR=$PWD/tcache nice -n 19 ~/venvs/vllm032/bin/python scripts/compile_check.py out
+    TRITON_CACHE_DIR=$PWD/tcache nice -n 19 ~/venvs/vllm032/bin/python scripts/interp_check.py
+- device_test.py: never run anywhere (the builder has no GPU). HARD GATE for the lead, on a STOPPED node:
+    DSV41_ATTNOUT_KIT=<kit dir> ~/venvs/vllm032/bin/python device_test.py --variants all     (exit 0 required)
+  No rq-containing arm before 'rq' and 'rope,rq' are bit-identical there. A variant that raises is now
+  recorded as failed (exit 1) and the remaining variants still run.

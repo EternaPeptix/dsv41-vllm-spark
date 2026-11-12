@@ -1,0 +1,134 @@
+--- base/rdma_all_reduce.py.9056dcdf	2026-10-26 06:14:06
++++ site/vllm/distributed/device_communicators/rdma_all_reduce.py	2026-10-26 06:30:18
+@@ -31,6 +31,15 @@
+ #                              env, this file, the .so and the l2 prefetch module at init and refuse
+ #                              to start on any mismatch (a per-rank difference in the rdma call
+ #                              sequence is a guaranteed seq desync = 600 s hang).
++#   DSV41_RDMA_AG_COLS         g2 colltrim (a) (default 0): 1 = all-gathers along dim > 0 (the 40
++#                              qkv_a shard gathers per step, logits / Engram / main_proj gathers) are
++#                              written in place by the kernel: rank r's [outer, seg] slice lands in
++#                              columns [r*seg, (r+1)*seg) of the final tensor, so the [world, ...]
++#                              staging tensor and cuda_communicator's movedim/reshape copy disappear.
++#                              Pure data movement (bitwise the same tensor). Loads the g2 build
++#                              ~/rdma_ar_dsv41/build-g2ct/rdma_ar_ext.so (= the k1 parallel-load
++#                              kernels, SASS-identical, + the column mode; DSV41_RDMA_PARLOAD picks
++#                              parload vs legacy kernels inside it). Same wire protocol and op sequence.
+ #   (read by the .so itself: RDMA_AR_THP, RDMA_AR_VEC_PER_CTA, RDMA_AR_SPIN_US,
+ #    RDMA_AR_MAX_SLEEP_US, RDMA_AR_TIMING)
+ #
+@@ -52,12 +61,15 @@
+ # r4 l2-prefetch (DSV41_L2_PREFETCH=1, default off): side-stream L2 prefetch of the next weights
+ # while the collective spins. Off = this block does nothing and the hooks below are skipped.
+ _L2PF = None
++_L2PF_AFTER = None  # g2 colltrim: post-collective fork hook (None with an older prefetch module)
+ if os.environ.get("DSV41_L2_PREFETCH", "0").strip().lower() in ("1", "on", "true"):
+     try:
+         from vllm.distributed.device_communicators import dsv41_l2_prefetch as _l2pf_mod
+ 
+         if _l2pf_mod.init():
+             _L2PF = _l2pf_mod
++            if getattr(_l2pf_mod, "G2", False):
++                _L2PF_AFTER = getattr(_l2pf_mod, "after_collective", None)
+     except Exception as _e:  # noqa: BLE001 - the prefetch is optional; never block the collective
+         logger.warning("DSV41_L2_PREFETCH: disabled (%s)", _e)
+ 
+@@ -68,6 +80,10 @@
+ _K1PL_EXT = os.path.join(
+     os.path.expanduser("~"), "rdma_ar_dsv41", "build-k1pl", "rdma_ar_ext.so"
+ )
++# g2 colltrim (a): k1 kernels + column all-gather, installed next to the live builds (never over them)
++_G2_EXT = os.path.join(
++    os.path.expanduser("~"), "rdma_ar_dsv41", "build-g2ct", "rdma_ar_ext.so"
++)
+ _EXT = None
+ _EXT_PATH = None
+ 
+@@ -80,10 +96,16 @@
+     return os.environ.get("DSV41_RDMA_PARLOAD", "0").strip().lower() in ("1", "on", "true")
+ 
+ 
++def _ag_cols_requested() -> bool:
++    return os.environ.get("DSV41_RDMA_AG_COLS", "0").strip().lower() in ("1", "on", "true")
++
++
+ def _ext_path() -> str:
+     explicit = os.environ.get("RDMA_AR_EXT", "")
+     if explicit:
+         return explicit
++    if _ag_cols_requested():
++        return _G2_EXT
+     return _K1PL_EXT if _parload_requested() else _DEFAULT_EXT
+ 
+ 
+@@ -166,6 +188,7 @@
+         self._streams_seen: set[int] = set()
+         self._xs_last = None  # rel-2: stream of the previous eager (non-capturing) call
+         self.h = None
++        self.ag_cols = False  # g2 colltrim (a): set below once the extension is up
+ 
+         # rel-2 RDMA_AR_FINGERPRINT=1: refuse to start when ranks differ (exchanged before phase 1)
+         if os.environ.get("RDMA_AR_FINGERPRINT", "0") == "1":
+@@ -236,6 +259,16 @@
+             world, self.max_reduce_bytes, self.twoshot_min_bytes, self.max_bytes,
+             self.allow_fp32, self.use_gather, arena,
+         )
++        # g2 colltrim (a): the g2 build carries both kernel sets; keep DSV41_RDMA_PARLOAD's choice
++        if _ag_cols_requested():
++            if hasattr(self.h, "all_gather_cols"):
++                if _EXT_PATH == _G2_EXT and hasattr(self.h, "set_parload"):
++                    self.h.set_parload(_parload_requested())
++                self.ag_cols = True
++            else:  # identical on every rank (the fingerprint covers env + .so), so no partial enable
++                logger.warning("DSV41_RDMA_AG_COLS=1 but %s has no all_gather_cols; column gathers off", _EXT_PATH)
++            logger.info("rdma_ar g2 column all-gather: %s (variant %s)", "ON" if self.ag_cols else "off",
++                        getattr(_EXT, "G2_VARIANT", None))
+         # k1/3-rdma-loads: which build is live (the legacy .so has no parload())
+         parload = self.h.parload() if hasattr(self.h, "parload") else None
+         logger.info(
+@@ -327,7 +360,10 @@
+         self._audit("all_reduce", x, " two_shot" if two_shot else "")
+         if _L2PF is not None:
+             _L2PF.before_collective("ar")
+-        return self.h.all_reduce(x, two_shot)
++        out = self.h.all_reduce(x, two_shot)
++        if _L2PF_AFTER is not None:
++            _L2PF_AFTER("ar")
++        return out
+ 
+     # -- all-gather (dim 0 into [world, *x.shape]) ------------------------------------------
+     def should_gather(self, x: torch.Tensor) -> bool:
+@@ -347,7 +383,34 @@
+         if _L2PF is not None:
+             _L2PF.before_collective("ag")
+         self.h.all_gather_into(out, x)
++        if _L2PF_AFTER is not None:
++            _L2PF_AFTER("ag")
+         return out
+ 
++    def all_gather_cols(self, x: torch.Tensor, dim: int) -> torch.Tensor | None:
++        """g2 colltrim (a): concat of every rank's x along `dim` (0 < dim < x.dim()) as one contiguous
++        tensor, written in place by the kernel. None = not applicable (the caller then uses
++        all_gather_stacked + movedim/reshape); checked before any side effect, so a None call issued
++        nothing. Caller has already passed should_gather(x) and x is contiguous."""
++        shape = tuple(x.shape)
++        if not self.ag_cols or not 0 < dim < len(shape):
++            return None
++        seg = x.element_size()
++        for d in shape[dim:]:
++            seg *= d
++        if seg <= 0 or seg % 16:
++            return None
++        if _XS_MODE != "off":
++            self._xstream_guard("all_gather", x)
++        self._audit("all_gather", x, " cols")
++        out = torch.empty(shape[:dim] + (self.world * shape[dim],) + shape[dim + 1:], dtype=x.dtype,
++                          device=x.device)
++        if _L2PF is not None:
++            _L2PF.before_collective("ag")
++        self.h.all_gather_cols(out, x, seg)
++        if _L2PF_AFTER is not None:
++            _L2PF_AFTER("ag")
++        return out
++
+     def stats(self, reset: bool = False) -> list:
+         return [] if self.h is None else list(self.h.stats(reset))

@@ -1,0 +1,279 @@
+r2-moeback CPU test results (review-fix rerun 2026-11-08T14:52Z-14:57Z). Hosts: 512S1 (Python 3.13.13, numpy 2.4.4, torch 2.11.0 CPU, ~/exo-venv313) for every file below; test_install/test_ptx_rule/test_compose_r1 were also run on this Mac (stdlib) with the same result.
+Commands (from the kit dir): python3 tests/test_install.py . | tests/test_ptx_rule.py . | tests/test_compose_r1.py . | tests/test_plan_g25.py . | tests/emul_add_exhaustive.py --procs 8 | tests/emul_gather_fold.py | device_test.py --kit . --plan
+
+SUMMARY
+  test_install.py      67 PASS (was 42; +25 review-fix checks: preflight, PDL gate, vet-pdl)
+  test_ptx_rule.py     16 PASS (new: G25 PTX epilogue rule incl. the known-wrong lowering)
+  test_compose_r1.py   20 PASS (was 10; +real r1-pdl/r2-moeback installers, LIFO, wrong orders)
+  test_plan_g25.py     30 PASS
+  emul_add_exhaustive  4,261,739,522 pairs, 0 differences
+  emul_gather_fold     518,400 elements, 0 differences; negative control differs on 88,586
+  device_test --plan   11/11 OK
+
+===== tests/out_emul_add_exhaustive.txt
+<512S1-run>/climb-r2/r2-moeback/tests/emul_add_exhaustive.py:50: RuntimeWarning: overflow encountered in cast
+  y32 = y.astype(np.float32)             # exact: y has <= 8 significant bits and is in bf16 range or inf
+pairs compared (non-NaN result): 4261739522
+A(torch f32 add + c10 RNE) != B(f32 add + IEEE cvt.rn): 0
+A(torch) != C(native add.bf16, single rounding of exact sum): 0
+elapsed 10.9s  quick=False
+PASS: all three lowerings are bit-identical
+
+===== tests/out_emul_gather_fold.txt
+<512S1-run>/climb-r2/r2-moeback/tests/emul_gather_fold.py:39: RuntimeWarning: overflow encountered in cast
+  r = s.astype(np.float32)                                      # RNE f64 -> f32 (subnormals kept)
+<512S1-run>/climb-r2/r2-moeback/tests/emul_gather_fold.py:38: RuntimeWarning: invalid value encountered in subtract
+  e = (p - (s - bb)) + (a - bb)                                 # TwoSum: p + a == s + e exactly
+<512S1-run>/climb-r2/r2-moeback/tests/emul_add_exhaustive.py:50: RuntimeWarning: overflow encountered in cast
+  y32 = y.astype(np.float32)             # exact: y has <= 8 significant bits and is in bf16 range or inf
+normal         ok
+wide           ok
+subnormal      ok
+zeros          ok
+maxmag         ok
+ties           ok
+cancel         ok
+neg_ids        ok
+status_failed  ok
+fma emulation: 4000/4000 equal to exact-rational rounding
+elements compared: 518400; OLD != NEW: 0; NEGATIVE CONTROL (shared folded into fp32 acc) differs from OLD on 88586 elements
+PASS
+
+===== tests/out_test_install.txt
+PASS [moe_runner] live base sha256 recorded in KIT.json 20b69fe514bebd67
+PASS [moe_runner] anchor x1: 'logger = init_logger(__name__)'
+PASS [moe_runner] anchor x1: 'self._maybe_apply_shared_experts('
+PASS [moe_runner] anchor x1: 'if shared_experts_overlapping:'
+PASS [moe_runner] anchor x1: 'if shared_output is not None:'
+PASS [moe_runner] patched compiles; 10 tagged lines
+PASS [moe_runner] inverse edit restores base bytes
+PASS [moe_runner] every changed line carries the tag []
+PASS [gather] live base sha256 recorded in KIT.json 733c3a87ff0fa487
+PASS [gather] anchor x1: '@torch.no_grad()'
+PASS [gather] anchor x1: 'grid = (triton.cdiv(input_tensor.shape[1], block_d), min(n, '
+PASS [gather] patched compiles; 6 tagged lines
+PASS [gather] inverse edit restores base bytes
+PASS [gather] every changed line carries the tag []
+PASS [site] live base sha256 recorded in KIT.json 733bdbe0e82566a3
+PASS [site] anchor x1: 'sys.path.insert(0, os.path.expanduser("~/dsv41-fc2"))'
+PASS [site] patched compiles; 9 tagged lines
+PASS [site] inverse edit restores base bytes
+PASS [site] every changed line carries the tag []
+PASS install rc 0
+PASS new module copied
+PASS all three targets patched
+PASS second install is a no-op
+PASS status lists PATCHED x3 c8b333b6adf8cab9 PATCHED <tmp>/vllm/model_executor/layers/fused_moe/runner/moe_runner.py
+b182b57beebc7b2b PATCHED <tmp>/fc2/fc2_status_gated_gather_trial.py
+376bf15668a689eb PATCHED <tmp>/fc2/site/sitecustomize.py
+a6c66c1a08fd5332 present <tmp>/vllm/model_executor/layers/fused_moe/runner/dsv41_moe_fold.py
+- absent  <tmp>/fc2/athena_tp8_fc2_packed_graph_pdl_sm121.so
+- absent  <tmp>/fc2/athena_tp8_fc2_packed_graph_pdl_sm121.so.sha256
+
+PASS uninstall rc 0
+PASS uninstall restores base bytes
+PASS new module removed
+PASS unknown base sha refused
+PASS uninstall keeps a later kit's edit
+PASS [moe_runner] every tagged statement is the flag definition or flag-gated
+PASS [gather] every tagged statement is the flag definition or flag-gated
+PASS [site] every tagged statement is the flag definition or flag-gated
+PASS trial overlay sha unchanged (launcher pin ae2089724597)
+PASS Athena transform_apply anchors apply to live DeepGemmFP4Experts.apply
+PASS kit targets exclude trial overlay and deep_gemm_moe.py {'moe_runner.py', 'fc2_status_gated_gather_trial.py', 'sitecustomize.py'}
+PASS _gated_gather kernel lines 1..51 identical and unmoved
+PASS site flag off: trial installed, GRAPH_SO untouched, no trigger TRIAL /live.so None
+
+PASS site flag on: GRAPH_SO -> pdl .so, trigger=start TRIAL <tmp>/dsv41-fc2/athena_tp8_fc2_packed_graph_pdl_sm121.so start
+DSV41_FC2_PDL on: <tmp>/dsv41-fc2/athena_tp8_fc2_packed_graph_pdl_sm121.so 05067a1051ea trigger=start
+
+PASS site flag on: explicit DSV41_MOE_PDL_TRIGGER=0 kept TRIAL <tmp>/dsv41-fc2/athena_tp8_fc2_packed_graph_pdl_sm121.so 0
+
+PASS site flag on + sha mismatch: exit 97 97
+PASS site flag on + missing .so: exit 97 97
+PASS site flag off with missing .so: still boots
+PASS preflight: bad base on the last target refuses the whole install 3/w83wrx_j3q14flpx952v9nd80000gn/T/tmp2_dr8etr/fc2/site/sitecustomize.py: base sha256 5462a4b7927e7269e25e506b169a18776f92182a75b4b63053a6a0058e8ddb7a not in KIT.json accepted bases for site
+refusing
+
+PASS preflight: no target written, no backup, no new module
+PASS no build/ .so: install rc 0, binary skipped with warning mpj6yyqego/vllm/model_executor/layers/fused_moe/runner/dsv41_moe_fold.py: a6c66c1a
+WARNING: G18 binary not installed: <tmp>/kit/build/athena_tp8_fc2_packed_graph_pdl_sm121.so missing (G18 binary not built); DSV41_FC2_PDL=1 would exit 97 at boot
+
+PASS uninstall after skip restores bases
+PASS build/ .so with pdl_binary_sha256 null: install REFUSED o/kit/build/athena_tp8_fc2_packed_graph_pdl_sm121.so is present but KIT.json pdl_binary_sha256 is null: unvetted binary; run `python3 install.py vet-pdl <build_pdl.sh out dir>` or remove it; refusing
+
+PASS   ... and nothing written (targets, module, binary)
+PASS build/ .so sha != KIT.json: install REFUSED, nothing written ed_graph_pdl_sm121.so: sha256 351d821ddc062d46f80b0bb10a7a616022f6414d2e9e88b83ad14ad071a5b6cd != KIT.json pdl_binary_sha256 0000000000000000000000000000000000000000000000000000000000000000; refusing
+
+PASS vetted but no device stamp: install rc 0, binary skipped, stale installed copy removed 80000gn/T/tmpj6yyqego/fc2/athena_tp8_fc2_packed_graph_pdl_sm121.so.sha256
+WARNING: G18 binary not installed: no device gate stamp (<tmp>/kit/build/DEVICE-G18.json: FileNotFoundError); run tools/g18_gate.py; DSV41_FC2_PDL=1 would exit 97 at boot
+
+PASS stamp failed racecheck: binary skipped 8 binary not installed: device gate stamp <tmp>/kit/build/DEVICE-G18.json does not pass: ['racecheck_rc']; DSV41_FC2_PDL=1 would exit 97 at boot
+
+PASS stamp pass=false: binary skipped NING: G18 binary not installed: device gate stamp <tmp>/kit/build/DEVICE-G18.json does not pass: ['pass']; DSV41_FC2_PDL=1 would exit 97 at boot
+
+PASS stamp quick reps: binary skipped  G18 binary not installed: device gate stamp <tmp>/kit/build/DEVICE-G18.json does not pass: ['reps>=200']; DSV41_FC2_PDL=1 would exit 97 at boot
+
+PASS stamp too few graph cases: binary skipped binary not installed: device gate stamp <tmp>/kit/build/DEVICE-G18.json does not pass: ['graph_cases>=8']; DSV41_FC2_PDL=1 would exit 97 at boot
+
+PASS stamp stamp for another sha: binary skipped  binary not installed: device gate stamp <tmp>/kit/build/DEVICE-G18.json does not pass: ['pdl_so_sha256']; DSV41_FC2_PDL=1 would exit 97 at boot
+
+PASS vetted + passing device stamp: binary installed with matching sidecar ched (376bf156)
+<tmp>/vllm/model_executor/layers/fused_moe/runner/dsv41_moe_fold.py: a6c66c1a
+<tmp>/fc2/athena_tp8_fc2_packed_graph_pdl_sm121.so: 351d821d (+ .sha256; vetted + device-gated)
+
+PASS uninstall removes binary + sidecar and restores bases
+PASS vet-pdl: STRICT accepted folders/y3/w83wrx_j3q14flpx952v9nd80000gn/T/tmpvcd2jsqu/out: mode STRICT; live 300 control 300 pdl 302 instructions; pdl .so bb4422df38e219e4
+vet-pdl OK (STRICT): KIT.json pdl_binary_sha256 = bb4422df38e219e49fab25322ee80271c3c93a7f0a3d01957b63dcc3b35ecf0f; next: tools/g18_gate.py on a stopped node
+
+PASS vet-pdl: SCHEDULE-ONLY accepted wrx_j3q14flpx952v9nd80000gn/T/tmpaxnlre15/out: mode SCHEDULE-ONLY; live 300 control 300 pdl 301 instructions; pdl .so bb4422df38e219e4
+vet-pdl OK (SCHEDULE-ONLY): KIT.json pdl_binary_sha256 = bb4422df38e219e49fab25322ee80271c3c93a7f0a3d01957b63dcc3b35ecf0f; next: tools/g18_gate.py on a stopped node
+
+PASS vet-pdl: live != control refused vet-pdl <tmp>/out: mode STRICT; live 300 control 300 pdl 302 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  live vs control SASS NOT IDENTICAL (toolchain does not reproduce production)
+
+PASS vet-pdl: extra FFMA refused vet-pdl <tmp>/out: mode DIFFERENT; live 300 control 300 pdl 303 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  opcode multiset differs beyond the wait: control-only {}, pdl-only {'FFMA': 1}
+
+PASS vet-pdl: changed opcode refused vet-pdl <tmp>/out: mode DIFFERENT; live 300 control 300 pdl 302 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  opcode multiset differs beyond the wait: control-only {'IMAD': 9}, pdl-only {'IADD3': 9}
+
+PASS vet-pdl: no ACQBULK refused vet-pdl <tmp>/out: mode STRICT; live 300 control 300 pdl 300 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  PDL SASS has no griddepcontrol.wait (ACQBULK)
+
+PASS vet-pdl: ACQBULK in control refused vet-pdl <tmp>/out: mode STRICT; live 300 control 300 pdl 300 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  control already has 1 wait instructions
+
+PASS vet-pdl: STG before wait refused 52v9nd80000gn/T/tmp9r38ghsa/out: mode DIFFERENT; live 300 control 300 pdl 302 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  global write before the first wait in listing order: ['STG.E']
+  opcode multiset differs beyond the wait: control-only {}, pdl-only {'STG.E': 1}
+
+PASS vet-pdl: live .so not pinned refused 3q14flpx952v9nd80000gn/T/tmpl5u3duu7/out: mode STRICT; live 300 control 300 pdl 302 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  live .so in COMPILE-LOG is 3333333333333333333333333333333333333333333333333333333333333333, not the pinned production binary 85d888ae36fd
+
+PASS vet-pdl: .so not the one hashed refused vet-pdl <tmp>/out: mode STRICT; live 300 control 300 pdl 302 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  PDL .so on disk is not the one COMPILE-LOG hashed
+
+ALL PASS
+
+===== tests/out_test_ptx_rule.txt
+PASS live census parsed {'cvt.f32.bf16': 96, 'fma.rn.f32x2': 48, 'cvt.rn.bf16x2.f32': 8}
+PASS identity (no epilogue) rejected none
+PASS accept A: f32 add + 2nd RN (add.f32 x16) path=A fails=[]
+PASS accept A: f32x2 add (add.rn.f32x2 x8) path=A fails=[]
+PASS accept A: scalar 2nd RN (cvt.rn.bf16.f32 x16) path=A fails=[]
+PASS accept B: native add.rn.bf16x2 x8 path=B fails=[]
+PASS accept B: native add.bf16 x16 path=B fails=[]
+PASS reject WRONG: shared into fp32 acc (8 cvt + 16 add.f32) path=none fails=['epilogue is neither A (f32 add + 2nd RN) nor B (native bf16 add): per thread 16 elements, extra roundings 0, extra f32-add elements 16, bf16-add elements 0']
+PASS reject WRONG: shared as acc init (no add) path=none fails=['epilogue is neither A (f32 add + 2nd RN) nor B (native bf16 add): per thread 16 elements, extra roundings 0, extra f32-add elements 0, bf16-add elements 0']
+PASS reject WRONG: f32 add but only half the 2nd roundings path=none fails=['epilogue is neither A (f32 add + 2nd RN) nor B (native bf16 add): per thread 16 elements, extra roundings 8, extra f32-add elements 16, bf16-add elements 0']
+PASS reject WRONG: both epilogues (f32 add + bf16 add) path=none fails=['epilogue is neither A (f32 add + 2nd RN) nor B (native bf16 add): per thread 16 elements, extra roundings 16, extra f32-add elements 16, bf16-add elements 16']
+PASS reject WRONG: extra fma (shared via fma) path=none fails=['accumulation fma count differs', 'fma census differs: fma.rn.f32x2 live 48 add 56', "unexpected fp ops in the fold kernel: ['fma.rn.f32x2']", 'epilogue is neither A (f32 add + 2nd RN) nor B (native bf16 add): per thread 16 elements, extra roundings 0, extra f32-add elements 0, bf16-add elements 0']
+PASS reject WRONG: stray mul.f32 path=A fails=["unexpected fp ops in the fold kernel: ['mul.rn.f32']"]
+PASS reject WRONG: scalar fma for the add path=none fails=['fma census differs: fma.rn.f32 live 0 add 16', "unexpected fp ops in the fold kernel: ['fma.rn.f32']", 'epilogue is neither A (f32 add + 2nd RN) nor B (native bf16 add): per thread 16 elements, extra roundings 16, extra f32-add elements 0, bf16-add elements 0']
+PASS reject A with .ftz ['add: .ftz present', "unexpected fp ops in the fold kernel: ['add.ftz.f32']", 'epilogue is neither A (f32 add + 2nd RN) nor B (native bf16 add): per thread 16 elements, extra roundings 16, extra f32-add elements 0, bf16-add elements 0']
+PASS reject a live census that is not production's
+ALL PASS
+
+===== tests/out_test_compose_r1.txt
+other kits touching our targets: {'fc2_status_gated_gather_trial.py': ['r1-pdl']}
+PASS only r1-pdl touches one of our targets (the gather) {'fc2_status_gated_gather_trial.py': {'r1-pdl'}}
+PASS r1-pdl records the same live gather base ['733c3a87ff0fa487a1f394fb429e2fef4e85a8ec1eab791162a4e6c183286459']
+PASS ours applies on top of r1-pdl 
+PASS r1-pdl applies on top of ours 
+PASS both orders give the same file 
+live gather sha 733c3a87ff0fa487a1f394fb429e2fef4e85a8ec1eab791162a4e6c183286459 r1-pdl gather sha 4fc6960be159c61faff94cb697b99cbaa6031fc67c03527b840e7d1c47ec0f72
+PASS KIT.json accepts the live and the r1-pdl-installed gather 
+PASS removing ours leaves exactly r1-pdl's file 
+PASS removing r1-pdl (inverse of its edits) leaves exactly our file 
+PASS removing both restores the live base 
+PASS gated_gather with both flags off executes exactly the base statements 
+PASS A: r1-pdl real install on the base tree 
+PASS A: r1-pdl's gather == its patch of the base (sha in our KIT.json) 
+PASS A: ours installs on top of r1-pdl 
+PASS A: gather now carries both kits' tags 
+PASS A: r1-pdl status flags the gather as not its exact patch while ours is on top y
+71256c140662 TAGGED, NOT OUR EXACT PATCH (!)  <tmp>/home/dsv41-fc2/fc2_status_gated_gather_trial.py
+f8c8fc319044 present                          <tmp>/vllm/triton_utils/dsv41_glue_pdl.py
+
+PASS A: ours uninstall (LIFO) restores exactly r1-pdl's state (backups aside) 
+PASS A: r1-pdl status PATCHED again for the gather 7824af1f4738 PATCHED                          <tmp>/vllm/models/deepseek_v41/nvidia/dsv41_oblit.py
+67ee71a6cf31 PATCHED                          <tmp>/vllm/models/deepseek_v4/nvidia/ops/sonar_bf16_bmm.py
+902e3996e42c PATCHED                          <tmp>/vllm/model_executor/layers/quantization/utils/fp8_utils.py
+c3a05cca1b4f PATCHED                          <tmp>/vllm/model_executor/layers/fused_moe/deep_gemm_utils.py
+b566eb62cf07 PATCHED                          <tmp>/vllm/models/deepseek_v41/common/ops/cache_utils.py
+4fc6960be159 PATCHED                          <tmp>/home/dsv41-fc2/fc2_status_gated_gather_trial.py
+f8c8fc319044 present                          <tmp>/vllm/triton_utils/dsv41_glue_pdl.py
+
+PASS A: r1-pdl real uninstall -> every original file byte-identical to base 
+PASS B: r1-pdl after ours: refused, nothing written /folders/y3/w83wrx_j3q14flpx952v9nd80000gn/T/tmpdx99nsnr/home/dsv41-fc2/fc2_status_gated_gather_trial.py: sha256 b182b57beebc7b2b != recorded base 733c3a87ff0fa487 (and not our patch of it); refusing
+
+   C: r1-pdl uninstall with ours on top -> rc 1; REFUSED, nothing changed: dsv41-fc2/fc2_status_gated_gather_trial.py: sha256 71256c1406626e87 is not this kit's patch of .bak-r1-pdl (sha 733c3a87ff0fa487); something changed it after install (another kit?). Refusing to revert it; restore by hand
+PASS C: wrong-order uninstall leaves no half-state (refuses untouched, or G25 inert) 
+ALL PASS
+
+===== tests/out_test_plan_g25.txt
+DSV41_FC2_GATHER_ADD: first folded MoE call (M=1, event=yes)
+PASS [overlap m=1] flag-off log == base 
+PASS [overlap m=1] flag-off AR input bits == base 
+PASS [overlap m=1] flag-on AR input bits == base 
+PASS [overlap m=1] flag-on log == base with gather+add -> wait+gather_add 
+PASS [overlap m=1] base has exactly one add [('torch', 'add', 'main')]
+DSV41_FC2_GATHER_ADD: first folded MoE call (M=6, event=yes)
+PASS [overlap m=6] flag-off log == base 
+PASS [overlap m=6] flag-off AR input bits == base 
+PASS [overlap m=6] flag-on AR input bits == base 
+PASS [overlap m=6] flag-on log == base with gather+add -> wait+gather_add 
+PASS [overlap m=6] base has exactly one add [('torch', 'add', 'main')]
+DSV41_FC2_GATHER_ADD: first folded MoE call (M=48, event=yes)
+PASS [overlap m=48] flag-off log == base 
+PASS [overlap m=48] flag-off AR input bits == base 
+PASS [overlap m=48] flag-on AR input bits == base 
+PASS [overlap m=48] flag-on log == base with gather+add -> wait+gather_add 
+PASS [overlap m=48] base has exactly one add [('torch', 'add', 'main')]
+DSV41_FC2_GATHER_ADD: first folded MoE call (M=96, event=no)
+PASS [no-overlap m=96 (> stream threshold 64)] flag-off log == base 
+PASS [no-overlap m=96 (> stream threshold 64)] flag-off AR input bits == base 
+PASS [no-overlap m=96 (> stream threshold 64)] flag-on AR input bits == base 
+PASS [no-overlap m=96 (> stream threshold 64)] flag-on log == base with gather+add -> wait+gather_add 
+PASS [no-overlap m=96 (> stream threshold 64)] base has exactly one add [('torch', 'add', 'main')]
+DSV41_FC2_GATHER_ADD: first folded MoE call (M=4, event=yes)
+PASS [status failed m=4] flag-off log == base 
+PASS [status failed m=4] flag-off AR input bits == base 
+PASS [status failed m=4] flag-on AR input bits == base 
+PASS [status failed m=4] flag-on log == base with gather+add -> wait+gather_add 
+PASS [status failed m=4] base has exactly one add [('torch', 'add', 'main')]
+PASS [drafter/non-Athena experts] flag-on == base (no fold) 
+PASS [routed_scaling_factor 2.5] flag-on == base (no fold) 
+PASS [fused output pre-reduced] flag-on == base (no fold) 
+PASS [padded routed width (declined)] flag-on == base (no fold) 
+DSV41_FC2_GATHER_ADD: first folded MoE call (M=6, event=yes)
+PASS [double gather] raises DSV41_FC2_GATHER_ADD: second Athena gather under one armed MoE call
+ALL PASS
+
+===== tests/out_device_test_plan.txt
+== G25: fold of the routed+shared add into the Athena gather
+OK   g25 eager kind=normal M=1..2048 (32 sizes) []
+OK   g25 eager kind=wide M=1..2048 (32 sizes) []
+OK   g25 eager kind=subnormal M=1..2048 (32 sizes) []
+OK   g25 eager kind=zeros M=1..2048 (32 sizes) []
+OK   g25 eager kind=maxmag M=1..2048 (32 sizes) []
+OK   g25 eager kind=ties M=1..2048 (32 sizes) []
+OK   g25 eager kind=cancel M=1..2048 (32 sizes) []
+OK   g25 eager kind=neg_ids M=1..2048 (32 sizes) []
+OK   g25 eager kind=status_failed M=1..2048 (32 sizes) []
+OK   g25 plan: 288 cases built on CPU 
+== G18: Athena FC2 PDL early-B vs live FC2
+OK   g18 plan: inputs built on CPU 
+elapsed 69.8s; 11/11 OK
+
+===== NOT RUN (need hardware / lock)
+CLUSTER_LOCK on spark-one held at every check this session (14:45Z, 14:54Z: owner=claude, window w1d, eta 18:35:59Z), so per brief rule 4 nothing was compiled: build_pdl.sh, vet-pdl on a real build and tools/ptx_check_g25.py (Triton lowering) are NOT run. device_test.py --part g25/g18 and tools/g18_gate.py need a GPU on a stopped node (the lead's job; this agent has no GPU). G18 therefore stays partial and fail-closed: install.py refuses an unvetted binary and installs one only after vet-pdl + the device gate.

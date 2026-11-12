@@ -131,6 +131,11 @@ if os.environ.get("DSV41_MHC_OVERLAP", "0").strip().lower() not in (
     # Rebinding the module global keeps the L2-prefetch wrapper (it wraps this name, fn at
     # position 4) in front of the dispatcher.
     mhc_shifted_post_pre = _DSV41_MHC_OVL.wrap_shifted_post_pre(mhc_shifted_post_pre)
+# climb r5 (r5-ffnfront): successor hook for DSV41_MHC_OVERLAP_FORK_LATE=1 / DSV41_L2_PREFETCH_R1_POST_EVENT=succ  # r5-ffnfront
+_DSV41_R5_SUCC = None  # r5-ffnfront
+if os.environ.get("DSV41_MHC_OVERLAP_FORK_LATE", "0").strip().lower() in ("1", "on", "true") or os.environ.get(  # r5-ffnfront
+        "DSV41_L2_PREFETCH_R1_POST_EVENT", "").strip().lower() == "succ":  # r5-ffnfront
+    from vllm.distributed.device_communicators.dsv41_ffnfront import after_successor as _DSV41_R5_SUCC  # r5-ffnfront
 
 
 def _dsv41_mhc_max_tokens() -> int:
@@ -140,6 +145,7 @@ if typing.TYPE_CHECKING:
     from vllm.v1.attention.backends.mla.sparse_swa import DeepseekSparseSWAMetadata
 
 logger = init_logger(__name__)
+_DSV41_PRIO_EH = __import__("os").environ.get("DSV41_PRIO_ENGRAM_HOIST", "").strip().lower() not in ("", "0", "off", "false", "no")  # r5-prio
 
 # r4 small-kernels flags (default off; see vllm/models/deepseek_v41/nvidia/dsv41_r4_small.py)
 _DSV41_R4 = any(
@@ -163,6 +169,11 @@ _DSV41_R4 = any(
 import contextlib
 import threading
 from vllm.models.deepseek_v41.nvidia import dsv41_steer as _dsv41_steer  # dsv41-steer
+from vllm.models.deepseek_v41.nvidia import dsv41_oblit as _dsv41_oblit  # dsv41-oblit
+_R2O = None  # r2-oblit
+if os.environ.get("DSV41_OBLIT_FOLD", "0").strip().lower() not in ("", "0", "off", "false", "no"):  # r2-oblit
+    from vllm.models.deepseek_v41.nvidia import dsv41_oblit_fold as _R2O  # r2-oblit
+_R2O_NOKW: dict = {}  # r2-oblit
 
 _DSV41_SP_MODE = {
     "1": "fast",
@@ -858,6 +869,7 @@ class DeepseekV4DecoderLayer(nn.Module):
 
         self.engram: Engram | None = None
         self._dsv41_layer = next((int(t) for t in str(prefix).split(".") if t.isdigit()), -1)  # dsv41-steer
+        self._oblit_l = _dsv41_oblit.layer_for(prefix)  # dsv41-oblit
         if engram_layout is not None:
             layer_id = extract_layer_index(prefix)
             if layer_id in engram_layout.layer_ids:
@@ -1031,6 +1043,7 @@ class DeepseekV4DecoderLayer(nn.Module):
         torch.Tensor | None,
     ]:
         previous_aux: torch.Tensor | None = None
+        _r2o_attn = False  # r2-oblit
         mhc_stream = self.mhc_stream
         if mhc_stream is not None and (
             in_piecewise_cudagraph()
@@ -1287,6 +1300,7 @@ class DeepseekV4DecoderLayer(nn.Module):
                     x_in.device,
                 )
             else:
+                _r2o_attn = _R2O is not None and self._oblit_l >= 0 and _R2O.attn_ok(self._oblit_l, x, residual, pre_mix, self.attn_norm.weight, mhc_stream, self.fuse_mhc_all_reduce)  # r2-oblit
                 residual, post_mix, res_mix, x, attn_pre, aux = mhc_shifted_post_pre(
                     x,
                     residual,
@@ -1306,10 +1320,15 @@ class DeepseekV4DecoderLayer(nn.Module):
                     capture_aux=capture_previous_aux,
                     stream=mhc_stream,
                     reduce_results=self.fuse_mhc_all_reduce,
+                    **(_R2O.kw(self._oblit_l, x, False, True) if _r2o_attn else _R2O_NOKW),  # r2-oblit
                 )
                 if capture_previous_aux:
                     previous_aux = aux
 
+        if self._oblit_l >= 0 and not _r2o_attn:  # dsv41-oblit  # r2-oblit
+            x = _dsv41_oblit.project(x, self._oblit_l)  # dsv41-oblit
+        if _DSV41_R5_SUCC is not None:  # r5-ffnfront
+            _DSV41_R5_SUCC(mhc_stream)  # r5-ffnfront
         if dsv41_sp:
             # r4 prefill-sp: x is this rank's rows; returns this rank's rows.
             x = _dsv41_sp_attn(self.attn, positions, x)
@@ -1322,6 +1341,9 @@ class DeepseekV4DecoderLayer(nn.Module):
         # sequence-parallel shard (see DeepseekV4Attention._wo_b_proj).
         if self.use_sequence_parallel and self.attn.gemm_rs is None:
             x = sp_reduce_scatter(x)
+        _r2o_ffn = _R2O is not None and self._oblit_l >= 0 and not sp_check and _R2O.ffn_ok(self._oblit_l, x, residual, attn_pre, self.ffn_norm.weight, mhc_stream, self.fuse_mhc_all_reduce)  # r2-oblit
+        if self._oblit_l >= 0 and not _r2o_ffn:  # dsv41-oblit  # r2-oblit
+            x = _dsv41_oblit.project(x, self._oblit_l)  # dsv41-oblit
 
         if mhc_stream is not None:
             if _DSV41_MHC_OVL is not None:
@@ -1404,7 +1426,12 @@ class DeepseekV4DecoderLayer(nn.Module):
                 norm_eps=self.ffn_norm.variance_epsilon,
                 stream=mhc_stream,
                 reduce_results=self.fuse_mhc_all_reduce,
+                **(_R2O.kw(self._oblit_l, x, True, True) if _r2o_ffn else _R2O_NOKW),  # r2-oblit
             )
+        if self._oblit_l >= 0 and not _r2o_ffn:  # dsv41-oblit  # r2-oblit
+            x = _dsv41_oblit.project(x, self._oblit_l)  # dsv41-oblit
+        if _DSV41_R5_SUCC is not None:  # r5-ffnfront
+            _DSV41_R5_SUCC(mhc_stream)  # r5-ffnfront
         if dsv41_sp:
             x = _dsv41_sp_ffn(
                 self.ffn, x, positions.shape[0], input_ids, mega_gate_metadata
@@ -1414,6 +1441,8 @@ class DeepseekV4DecoderLayer(nn.Module):
             x = self.ffn.forward_unfinalized(x, input_ids)
         else:
             x = self.ffn(x, input_ids, mega_gate_metadata)
+        if self._oblit_l >= 0:  # dsv41-oblit
+            x = _dsv41_oblit.project_moe(x, self._oblit_l)  # dsv41-oblit
         if mhc_stream is not None:
             if _DSV41_MHC_OVL is not None:
                 _DSV41_MHC_OVL.join(mhc_stream)
@@ -1453,6 +1482,8 @@ class DeepseekV4DecoderLayer(nn.Module):
             norm_eps=self.attn_norm.variance_epsilon,
             reduce_results=self.fuse_mhc_all_reduce,
         )
+        if self._oblit_l >= 0:  # dsv41-oblit
+            x = _dsv41_oblit.project(x, self._oblit_l)  # dsv41-oblit
         self.attn.forward_kv(positions, x)
 
 
@@ -1591,6 +1622,9 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
             ],
             vllm_config.scheduler_config.max_num_batched_tokens,
         )
+        if _DSV41_PRIO_EH:  # r5-prio
+            from vllm.models.deepseek_v41.nvidia import dsv41_prio as _prio  # r5-prio
+            _prio.engram_install(self)  # r5-prio
         if self.fuse_mhc_all_reduce:
             # A MoE's top-k finalize folds into the next layer's first mHC
             # boundary, which the last local layer lacks and an engram layer
@@ -2669,6 +2703,8 @@ class DeepseekV41LLMForCausalLM(
         self,
         hidden_states: torch.Tensor,
     ) -> torch.Tensor | None:
+        if _dsv41_oblit.ON:  # dsv41-oblit
+            hidden_states = _dsv41_oblit.project_head(hidden_states)  # dsv41-oblit
         if _DSV41_R4:
             # r4 small-kernels: certified (screened) target head; None -> stock.
             from vllm.models.deepseek_v41.nvidia import dsv41_r4_small as _r4
@@ -2683,6 +2719,8 @@ class DeepseekV41LLMForCausalLM(
         self,
         hidden_states: torch.Tensor,
     ) -> torch.Tensor:
+        if _dsv41_oblit.ON:  # dsv41-oblit
+            hidden_states = _dsv41_oblit.project_head(hidden_states)  # dsv41-oblit
         if _DSV41_R4:
             from vllm.models.deepseek_v41.nvidia import dsv41_r4_small as _r4
 

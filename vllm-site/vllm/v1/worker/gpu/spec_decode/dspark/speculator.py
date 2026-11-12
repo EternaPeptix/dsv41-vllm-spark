@@ -67,6 +67,9 @@ _DSV41_GREEDY_SHARDED = os.environ.get("DSV41_DSPARK_GREEDY_SHARDED", "0") == "1
 # g130 boundary, default off: unset = dsv41_boundary.py is never imported.
 _DSV41_MK_FOLD = os.environ.get("DSV41_MK_FOLD", "0").strip().lower() not in ("", "0", "off")
 _DSV41_CTXKV_FOLD = os.environ.get("DSV41_CTXKV_FOLD", "0").strip().lower() not in ("", "0", "off")
+# climb-r1 r1-drafter G12 / G21, default off: unset = dsv41_drafter_sched.py is never imported.  # dsv41-r1-drafter
+_DSV41_MAINPROJ_HOIST = os.environ.get("DSV41_MAINPROJ_HOIST", "0").strip().lower() not in ("", "0", "off", "false", "no")  # dsv41-r1-drafter
+_DSV41_DRAFT_PROLOGUE_FORK = os.environ.get("DSV41_DRAFT_PROLOGUE_FORK", "0").strip().lower() not in ("", "0", "off", "false", "no")  # dsv41-r1-drafter
 
 
 class DSparkSpeculator(DFlashSpeculator):
@@ -121,6 +124,9 @@ class DSparkSpeculator(DFlashSpeculator):
         self._dsv41_temp_np = None
         self._dsv41_greedy_steps = 0
         self._dsv41_mixed_steps = 0
+        if _DSV41_MAINPROJ_HOIST:  # dsv41-r1-drafter
+            from vllm.models.deepseek_v41.nvidia.dsv41_drafter_sched import install_mainproj_hoist  # dsv41-r1-drafter
+            install_mainproj_hoist()  # dsv41-r1-drafter
 
     def load_draft_model(
         self,
@@ -257,6 +263,9 @@ class DSparkSpeculator(DFlashSpeculator):
             from vllm.models.deepseek_v41.nvidia.dsv41_boundary import prebuild
 
             prebuild(self)
+        if _DSV41_DRAFT_PROLOGUE_FORK:  # dsv41-r1-drafter
+            from vllm.models.deepseek_v41.nvidia.dsv41_drafter_sched import prepare_fork  # dsv41-r1-drafter
+            prepare_fork(self)  # dsv41-r1-drafter
         super().capture()
         if (
             self._sharded_markov_greedy is None
@@ -314,6 +323,9 @@ class DSparkSpeculator(DFlashSpeculator):
 
             if e7x_step_skipped(input_batch):
                 return self.draft_tokens[: input_batch.num_reqs]
+        if _DSV41_MAINPROJ_HOIST:  # dsv41-r1-drafter
+            from vllm.models.deepseek_v41.nvidia.dsv41_drafter_sched import mainproj_consume  # dsv41-r1-drafter
+            args, kwargs = mainproj_consume(self, args, kwargs)  # dsv41-r1-drafter
         if (
             self.query_cudagraph_manager_greedy is None
             or kwargs.get("dummy_run", False)
@@ -342,6 +354,11 @@ class DSparkSpeculator(DFlashSpeculator):
             self.query_cudagraph_manager = stock_mgr
             self._sharded_markov = stock_sm
 
+    if _DSV41_DRAFT_PROLOGUE_FORK:  # dsv41-r1-drafter
+        def _prepare_graph_forward(self, num_reqs, attn_metadata):  # dsv41-r1-drafter
+            from vllm.models.deepseek_v41.nvidia.dsv41_drafter_sched import fork_prologue  # dsv41-r1-drafter
+            if not fork_prologue(self, num_reqs, attn_metadata):  # dsv41-r1-drafter
+                super()._prepare_graph_forward(num_reqs, attn_metadata)  # dsv41-r1-drafter
     def _sample_logits(
         self,
         logits: torch.Tensor,
@@ -572,4 +589,7 @@ class DSparkSpeculator(DFlashSpeculator):
             num_tokens_across_dp,
             cudagraph_runtime_mode,
         )
+        if _DSV41_DRAFT_PROLOGUE_FORK:  # dsv41-r1-drafter
+            from vllm.models.deepseek_v41.nvidia.dsv41_drafter_sched import fork_join_fallback  # dsv41-r1-drafter
+            fork_join_fallback()  # dsv41-r1-drafter
         self._sample_sequential(num_reqs, head_hidden)

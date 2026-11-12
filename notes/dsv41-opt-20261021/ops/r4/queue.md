@@ -400,7 +400,7 @@ One model copy per host (476G). No duplicates.
 **Notes:**
 - r4 itself needs under 50 MB per rank. The exception is O1's optional cutlass-dsl side install (about 200 MB per rank).
 - spark-two's docker has a broken container (rw layer snapshot missing) that needs a separate look.
-- Security observation for the user: 512S2 `authorized_keys` has 7 keys, with comments that include kevinvegda@gmail.com, sufithaire@gmail.com and ultor@olympusmons. The temporary queenmove key is gone. These should be recognised by the user.
+- Security observation for the user: 512S2 `authorized_keys` has 7 keys, with comments that include <email>, <email> and ultor@olympusmons. The temporary queenmove key is gone. These should be recognised by the user.
 - The request's "sure" is not item-specific, so no deletion has been performed or is implied. Each item needs an explicit go.
 
 ## Critic corrections

@@ -1,0 +1,20 @@
+13:40:57 [promote-climb-w1] editing launcher on 8/8: DSV41_L2_PREFETCH_WOB_MB=6 DSV41_L2_PREFETCH_PACE_KINDS=ar,attn,ag
+13:40:58 [promote-climb-w1]   spark-one launcher -> 08a249da
+13:40:58 [promote-climb-w1]   spark-two launcher -> 08a249da
+13:40:59 [promote-climb-w1]   spark-three launcher -> 08a249da
+13:40:59 [promote-climb-w1]   spark-four launcher -> 08a249da
+13:40:59 [promote-climb-w1]   spark-five launcher -> 08a249da
+13:41:00 [promote-climb-w1]   spark-six launcher -> 08a249da
+13:41:01 [promote-climb-w1]   spark-seven launcher -> 08a249da
+13:41:01 [promote-climb-w1]   spark-eight launcher -> 08a249da
+13:41:01 [promote-climb-w1] new launcher 08a249da on 8/8 (was fda6d05a); diff:
+105c105,106
+< export DSV41_L2_PREFETCH_PACE_GBPS=${DSV41_L2_PREFETCH_PACE_GBPS:-125} DSV41_L2_PREFETCH_PACE_KINDS=${DSV41_L2_PREFETCH_PACE_KINDS:-ar} DSV41_L2_PREFETCH_PACE_CHUNK=${DSV41_L2_PREFETCH_PACE_CHUNK:-65536}
+---
+> export DSV41_L2_PREFETCH_PACE_GBPS=${DSV41_L2_PREFETCH_PACE_GBPS:-125} DSV41_L2_PREFETCH_PACE_KINDS=${DSV41_L2_PREFETCH_PACE_KINDS:-ar,attn,ag} DSV41_L2_PREFETCH_PACE_CHUNK=${DSV41_L2_PREFETCH_PACE_CHUNK:-65536}  # climb-w1: climb W1/W1b: paced attn+ag L2 prefetch incl. wo_b, +3.8% G1 exact (was ar)
+> export DSV41_L2_PREFETCH_WOB_MB=${DSV41_L2_PREFETCH_WOB_MB:-6}  # climb-w1: climb W1/W1b: paced attn+ag L2 prefetch incl. wo_b, +3.8% G1 exact
+13:41:02 [claude-promote-climb-w1] preflight: site manifest c2fc7d8a2982 and launcher 08a249da identical on 8/8
+13:43:51 [claude-promote-climb-w1] HEALTHY: /health 200 + startup complete at +153s after systemd-run (downtime 168s)
+13:47:56 [promote-climb-w1] verify: G1 123.736 code 125.05 prose 89.78 math 156.38 digest 2f7fdccbd388225a | exact ec2f4437f8e1ed09 | det ALL==REF
+13:47:56 [promote-climb-w1] PROMOTED: launcher 08a249da
+13:47:57 [promote-climb-w1] lock released

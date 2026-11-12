@@ -1,0 +1,23 @@
+21:50:24 [promote-r8head] editing launcher on 8/8: DSV41_R6_HEAD_SCREEN=1 DSV41_R6_HEAD_SCREEN_DQ=2 DSV41_R6_HEAD_SCREEN_CFG=64,256,4,2 DSV41_R6_HEAD_SELFCHECK=1 DSV41_R6_HEAD_REFINE=row
+21:50:24 [promote-r8head]   spark-one launcher -> 18e1f503
+21:50:25 [promote-r8head]   spark-two launcher -> 18e1f503
+21:50:25 [promote-r8head]   spark-three launcher -> 18e1f503
+21:50:25 [promote-r8head]   spark-four launcher -> 18e1f503
+21:50:26 [promote-r8head]   spark-five launcher -> 18e1f503
+21:50:26 [promote-r8head]   spark-six launcher -> 18e1f503
+21:50:26 [promote-r8head]   spark-seven launcher -> 18e1f503
+21:50:27 [promote-r8head]   spark-eight launcher -> 18e1f503
+21:50:27 [promote-r8head] new launcher 18e1f503 on 8/8 (was 58899745); diff:
+105a106,110
+> export DSV41_R6_HEAD_REFINE=${DSV41_R6_HEAD_REFINE:-row}  # r8head: r8 HEAD r6-head screen DQ2 64,256,4,2 + refine=row selfcheck: +0.37% G1 (131.776 vs 131.295, reps +0.57/+0.39) bit-exact
+> export DSV41_R6_HEAD_SELFCHECK=${DSV41_R6_HEAD_SELFCHECK:-1}  # r8head: r8 HEAD r6-head screen DQ2 64,256,4,2 + refine=row selfcheck: +0.37% G1 (131.776 vs 131.295, reps +0.57/+0.39) bit-exact
+> export DSV41_R6_HEAD_SCREEN_CFG=${DSV41_R6_HEAD_SCREEN_CFG:-64,256,4,2}  # r8head: r8 HEAD r6-head screen DQ2 64,256,4,2 + refine=row selfcheck: +0.37% G1 (131.776 vs 131.295, reps +0.57/+0.39) bit-exact
+> export DSV41_R6_HEAD_SCREEN_DQ=${DSV41_R6_HEAD_SCREEN_DQ:-2}  # r8head: r8 HEAD r6-head screen DQ2 64,256,4,2 + refine=row selfcheck: +0.37% G1 (131.776 vs 131.295, reps +0.57/+0.39) bit-exact
+> export DSV41_R6_HEAD_SCREEN=${DSV41_R6_HEAD_SCREEN:-1}  # r8head: r8 HEAD r6-head screen DQ2 64,256,4,2 + refine=row selfcheck: +0.37% G1 (131.776 vs 131.295, reps +0.57/+0.39) bit-exact
+21:50:28 [claude-promote-r8head] preflight: site manifest 63fcd559c69b and launcher 18e1f503 identical on 8/8
+21:53:16 [claude-promote-r8head] HEALTHY: /health 200 + startup complete at +153s after systemd-run (downtime 167s)
+21:57:15 [promote-r8head] verify: G1 130.136 code 132.84 prose 91.96 math 165.60 digest dfbb2a362ba3e4cd | exact ec2f4437f8e1ed09 | det ALL==REF
+21:57:15 [promote-r8head] G1 floor check FAILED: measured '130.136' < 131.0 (lever not active?)
+21:57:15 [promote-r8head] VERIFY FAILED: rolling back to 58899745 on 8/8
+22:00:03 [claude-promote-r8head-rollback] HEALTHY: /health 200 + startup complete at +148s after systemd-run (downtime 163s)
+22:00:04 [promote-r8head] lock released

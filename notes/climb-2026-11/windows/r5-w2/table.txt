@@ -1,0 +1,8 @@
+identity - | G1 130.280 code 131.47 prose 95.19 math 164.19 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF
+c1 RDMA_AR_AUDIT=200 | G1 129.969 code 131.22 prose 94.93 math 163.76 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | G4 min 55.52 mean 72.44
+gh1 RDMA_AR_AUDIT=200;DSV41_GLUE_RQPAD=1;DSV41_GLUE_RPSPLIT=hoist | G1 130.363 code 131.55 prose 95.35 math 164.19 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF | G4 min 56.80 mean 71.61
+gs1 RDMA_AR_AUDIT=200;DSV41_GLUE_RQPAD=1;DSV41_GLUE_RPSPLIT=split | G1 130.485 code 131.59 prose 95.60 math 164.27 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | G4 min 55.82 mean 72.47
+c2 RDMA_AR_AUDIT=200 | G1 130.098 code 131.30 prose 95.00 math 163.99 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | G4 min 56.24 mean 71.47
+gs2 RDMA_AR_AUDIT=200;DSV41_GLUE_RQPAD=1;DSV41_GLUE_RPSPLIT=split | G1 130.433 code 131.60 prose 95.55 math 164.15 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | G4 min 56.88 mean 73.06
+gh2 RDMA_AR_AUDIT=200;DSV41_GLUE_RQPAD=1;DSV41_GLUE_RPSPLIT=hoist | G1 130.560 code 131.80 prose 95.52 math 164.36 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF | G4 min 55.98 mean 71.56
+c3 RDMA_AR_AUDIT=200 | G1 130.185 code 131.34 prose 95.15 math 164.06 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | G4 min 56.49 mean 72.08

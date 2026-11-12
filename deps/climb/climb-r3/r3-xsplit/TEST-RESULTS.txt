@@ -1,0 +1,198 @@
+r3-xsplit TEST RESULTS (2026-11-08). Everything below was actually run; nothing here ran on a GPU.
+
+== Not run (needs a stopped node, lead's window) ==
+device_test.py (bitwise vs live JIT kernel: normal + 6 hostile classes, poisoned workspace, stale epochs,
+grids 1..64, SM-hogging co-runner, l2pf stand-in, epoch wrap, 256 graph replays, exact bench variants, gate
+phase with the flag on) and bench/xsplit_bench.py (S0 / c / barrier / write-back / B / rope / prefetch costs,
+step model). No exactness or timing claim about the real kernel on hardware is made until they run.
+
+== Build (spark-eight, 2026-11-08 ~15:16-15:45Z, no CLUSTER_LOCK, nice 19, nvcc 13.0.88 --threads=1,
+   live sparse_mla_sm120 cuda_cflags; ops/build_guarded.sh kills the build if a lock appears) ==
+all 7 libraries built, rc=0. Warnings: 2 x #177 (unused variable) in the timing-only arms a3r1 / a0r1p0.
+resource usage (cuobjdump --dump-resource-usage): every XSPLIT kernel REG:168 STACK:0 LOCAL:0 (no spills),
+same as the live dual kernel; dynamic smem 96,928 B (live 96,912 + 16).
+ldd libdsv41_xsplit.so: libcudart.so.13 => /usr/local/cuda/targets/sbsa-linux/lib/libcudart.so.13
+build/SHA256SUMS:
+c1eb2aea3de9ca4c762c49d5ddb20f8303027883ea6cf89eead174f11e3f1824  libdsv41_xsplit_bench_a0r0.so
+13a134be4c9f528abd3a68513993283f7ec97e31a7ebfe2b33b8720bcdffdb31  libdsv41_xsplit_bench_a0r1.so
+d6a42a01c4f81ad71fcabc891ee618675bb78cb8923b12e9b04226000beb74ee  libdsv41_xsplit_bench_a0r1p0.so
+13b425e41ebdd19f05d8da8c343865c8e401e7ef77e56bf1db7b80d99c609557  libdsv41_xsplit_bench_a1r1.so
+c830648d9bab2edcd277223229704ef27a8fe9d77fdde30e00a6c2790ad89890  libdsv41_xsplit_bench_a2r1.so
+e0e8bbf7e438753e0172dd8f41d8940544ee8c9614403064426fa4cd61002b15  libdsv41_xsplit_bench_a3r1.so
+d5250d7949fa7caef4221966d6fced38f4c71ae03d8ab3bb22245ad91cb65747  libdsv41_xsplit.so
+
+Serving library libdsv41_xsplit.so sha256 d5250d7949fa7caef4221966d6fced38f4c71ae03d8ab3bb22245ad91cb65747 (KIT.json).
+The XSPLIT kernels in libdsv41_xsplit.so and libdsv41_xsplit_bench_a0r1.so have IDENTICAL SASS with operands
+(3498 instr each, PBSX 64 and 32), so the device test of the bench library covers the serving library's kernels.
+
+== tools/sass_check.py build/libdsv41_xsplit.sass build/libdsv41_xsplit_bench_a0r1.sass base/sass/dual64.full base/sass/dual32.full ==
+C0 dual64: bench-lib live kernel 2429 instr vs JIT live 2429 instr: IDENTICAL with operands (uniform-predicated instructions excluded on both sides)
+C0 dual32: bench-lib live kernel 2429 instr vs JIT live 2429 instr: IDENTICAL with operands (uniform-predicated instructions excluded on both sides)
+FTZ xsplit64: 3498 instr, FP32 ops without .FTZ: 0
+   opcode histogram xsplit64 vs live dual64 (count xsplit / live):
+     ATOMG.E.ADD.STRONG.GPU                       3 /     0
+     BAR.ARV                                      4 /     2
+     BAR.SYNC.DEFER_BLOCKING                     44 /    22
+     BPT.TRAP                                     4 /     0
+     CCTL.IVALL                                  11 /     0
+     ERRBAR                                       8 /     0
+     F2FP.BF16.F32.PACK_AB                       65 /    76
+     F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C     32 /    28
+     FADD.FTZ                                    36 /    30
+     FFMA.FTZ                                    15 /    29
+     FMNMX.FTZ                                   33 /    31
+     FMUL.FTZ                                   214 /   240
+     FSEL                                        12 /    13
+     HMMA.16816.F32.BF16                         36 /    40
+     LDG.E.64.STRONG.GPU                          2 /     0
+     LDG.E.CONSTANT                              12 /     7
+     LDG.E.STRONG.GPU                            74 /     0
+     LDG.E.U16.CONSTANT                           8 /     6
+     LDS                                        161 /   167
+     LDS.128                                      3 /     2
+     LDSM.16.M88.4                               50 /    54
+     MEMBAR.ALL.CTA                               8 /     0
+     MEMBAR.ALL.GPU                               3 /     0
+     MEMBAR.SC.GPU                                5 /     0
+     MUFU.EX2                                    11 /     7
+     MUFU.RCP                                    21 /    16
+     NANOSLEEP                                    3 /     0
+     SHFL.BFLY                                   11 /     8
+     STG.E                                       32 /     1
+     STG.E.64                                    29 /     0
+     STG.E.64.STRONG.GPU                          1 /     0
+     STG.E.STRONG.GPU                            31 /     0
+     STS                                         24 /    31
+     STS.U16                                     24 /    20
+     SYNCS.ARRIVE.TRANS64.A1T0                    2 /     0
+     SYNCS.EXCH.64                                2 /     0
+     SYNCS.PHASECHK.TRANS64.TRYWAIT               2 /     4
+   LDG flavours: {'LDG.E.STRONG.GPU': 74, 'LDG.E.CONSTANT': 12, 'LDG.E.64.CONSTANT': 4, 'LDG.E.U16.CONSTANT': 8, 'LDG.E': 43, 'LDG.E.64.STRONG.GPU': 2, 'LDG.E.U16': 32}
+FTZ xsplit32: 3498 instr, FP32 ops without .FTZ: 0
+   opcode histogram xsplit32 vs live dual32 (count xsplit / live):
+     ATOMG.E.ADD.STRONG.GPU                       3 /     0
+     BAR.ARV                                      4 /     2
+     BAR.SYNC.DEFER_BLOCKING                     44 /    22
+     BPT.TRAP                                     4 /     0
+     CCTL.IVALL                                  11 /     0
+     ERRBAR                                       8 /     0
+     F2FP.BF16.F32.PACK_AB                       65 /    76
+     F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C     32 /    28
+     FADD.FTZ                                    36 /    30
+     FFMA.FTZ                                    15 /    29
+     FMNMX.FTZ                                   33 /    31
+     FMUL.FTZ                                   214 /   240
+     FSEL                                        12 /    13
+     HMMA.16816.F32.BF16                         36 /    40
+     LDG.E.64.STRONG.GPU                          2 /     0
+     LDG.E.CONSTANT                              12 /     7
+     LDG.E.STRONG.GPU                            74 /     0
+     LDG.E.U16.CONSTANT                           8 /     6
+     LDS                                        161 /   167
+     LDS.128                                      3 /     2
+     LDSM.16.M88.4                               50 /    54
+     MEMBAR.ALL.CTA                               8 /     0
+     MEMBAR.ALL.GPU                               3 /     0
+     MEMBAR.SC.GPU                                5 /     0
+     MUFU.EX2                                    11 /     7
+     MUFU.RCP                                    21 /    16
+     NANOSLEEP                                    3 /     0
+     SHFL.BFLY                                   11 /     8
+     STG.E                                       32 /     1
+     STG.E.64                                    29 /     0
+     STG.E.64.STRONG.GPU                          1 /     0
+     STG.E.STRONG.GPU                            31 /     0
+     STS                                         24 /    31
+     STS.U16                                     24 /    20
+     SYNCS.ARRIVE.TRANS64.A1T0                    2 /     0
+     SYNCS.EXCH.64                                2 /     0
+     SYNCS.PHASECHK.TRANS64.TRYWAIT               2 /     4
+   LDG flavours: {'LDG.E.STRONG.GPU': 74, 'LDG.E.CONSTANT': 12, 'LDG.E.64.CONSTANT': 4, 'LDG.E.U16.CONSTANT': 8, 'LDG.E': 43, 'LDG.E.64.STRONG.GPU': 2, 'LDG.E.U16': 32}
+SASS CHECK PASS
+
+(a0r0 and a0r1p0 bench variants: FP32 ops without .FTZ: 0, SASS CHECK PASS.)
+Reading: C0 = the live kernel instantiated in the bench library is the production JIT kernel instruction for
+instruction (so the bench's "live" arm and device_test's in-library reference are the production kernel). FFMA.FTZ
+15 = 14 replay FFMAs (acc_o live row) + 1 sink FFMA (live 29 = 28 + 1: no new FFMA anywhere, i.e. the A unit did
+not contract qk*scale - nm and the l replay is not an FFMA). HMMA 36 = 28 QK nope + 4 QK rope + 4 rope XV (live 40
+has the rope-XV block twice, main/extra). The B guard compiles to the live form: FMNMX.FTZ(min alpha0,alpha1) +
+FSETP.GEU.FTZ ..., 1. Workspace loads are LDG.E.STRONG.GPU / LDG.E.64.STRONG.GPU (acquire, .cg), with CCTL.IVALL;
+.CONSTANT loads are only on read-only inputs.
+
+== CPU tests (512S1) ==
+=== tests/test_install.py  (2026-11-08T15:19:53Z, 512S1, python 3.13.13 torch 2.11.0 numpy 2.4.4)
+PASS base copy sha256 == KIT.json base_sha256
+PASS accepted base list = the live base (no other kit patches this file)
+PASS anchor count 1: 'import torch\n\nfrom ..api_logging import flashinfer_api'
+PASS anchor count 1: 'if planned.variant is KernelVariant.DECODE_SPLITK:'
+PASS every inserted line carries the TAG
+PASS 8 tagged lines (got 8)
+PASS AST(patched minus tagged lines) == AST(base)
+PASS one module-level _DSV41_ATTN_XSPLIT assignment
+PASS gate sits before the decode/prefill dispatch
+PASS gate module imported only inside the branch
+PASS flag is one module-level bool read from the environment at import
+PASS dry prints 8 tagged lines
+PASS install rc=0 ()
+PASS target patched
+PASS gate copied
+PASS library + sidecar installed
+PASS second install is a no-op
+PASS patched module and gate compile
+PASS status reports patched + lib OK
+PASS uninstall restores the base bytes
+PASS uninstall removes the gate
+PASS uninstall removes the library
+PASS refuses a drifted base
+
+ALL PASS
+exit=0
+=== tests/test_gate.py  (2026-11-08T15:19:54Z, 512S1, python 3.13.13 torch 2.11.0 numpy 2.4.4)
+PASS production dual64 shape accepted (nmax 10)
+PASS dual32 topkx 1024 accepted (nmax 18)
+PASS strided out_lse view keeps its row stride
+PASS 4D HND main cache accepted
+PASS envelope refuses: heads 16
+PASS envelope refuses: no lengths
+PASS envelope refuses: no extra cache
+PASS envelope refuses: pbsx 2
+PASS envelope refuses: main pbs 32
+PASS envelope refuses: T 65
+PASS envelope refuses: T 0
+PASS envelope refuses: fp8 query
+PASS envelope refuses: model dsv3_2
+PASS envelope refuses: non-contig indices
+PASS envelope refuses: topk 96
+PASS envelope refuses: sink f16
+PASS envelope refuses: out wrong shape
+PASS envelope refuses: int64 lengths
+PASS envelope refuses: bf16 kv cache
+PASS first call inside capture: no workspace yet, nothing allocated -> live kernel
+PASS first eager call (profile-run shape, refused) still allocates the workspace once
+PASS first eager call: self-check runs live + xsplit, equal -> routed
+PASS checked shape: xsplit only
+PASS checked shape inside capture: routed into the graph
+PASS unchecked shape inside capture -> live kernel kept
+PASS T*nmax > cap -> live kernel
+PASS out of envelope -> live kernel
+PASS mismatch: live result restored, RuntimeError
+PASS mismatch with ON_MISMATCH=disable: live result kept, gate disabled
+PASS disabled gate never routes again
+PASS missing library -> live kernel, logged once
+
+ALL PASS
+exit=0
+=== tests/test_devtest_cpu.py  (2026-11-08T15:19:55Z, 512S1, python 3.13.13 torch 2.11.0 numpy 2.4.4)
+input sets checked: 924
+ALL PASS
+exit=0
+=== tests/emu_xsplit.py  (2026-11-08T15:20:02Z, 512S1, python 3.13.13 torch 2.11.0 numpy 2.4.4)
+exact decomposition: runs=401 mismatches=0
+negative controls (inputs on which the broken variant is detected):
+  l_ffma       7
+  rope_split   7
+  stale_epoch  16
+  max_order    0 (fmax is order-insensitive on these values: the fold order is safe, F5)
+  no_alpha1    1
+EMULATION PASS
+exit=0

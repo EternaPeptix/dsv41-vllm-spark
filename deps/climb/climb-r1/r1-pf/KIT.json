@@ -1,0 +1,287 @@
+{
+ "name": "r1-pf",
+ "summary": "Climb round 1 L2-prefetch levers for launcher 08a249da: G13 (DSpark drafter graph + E-phase), G15 (shared w2 post-AR burst), G11a (kv-source compressor weight in the post-MoE AR window). G29 (indexer wq_b AG tail) is built for burst all-gather windows only and refuses itself (logged INACTIVE, no plan change) on 08a249da, where 'ag' is paced. G01 (in-order wo_b) is dropped: superseded by 08a249da WOB_MB=6. One base patch (4 anchors, 16 tagged lines) + one new module; every lever default off, hints only, fail-closed planning.",
+ "levers": [
+  {
+   "gid": "G13",
+   "members": [
+    "mem:M2",
+    "attn:L-DR",
+    "dense:D5",
+    "spec:C6(a)",
+    "mem:M5"
+   ],
+   "flag": "DSV41_L2_PREFETCH_R1_DRAFT",
+   "status": "built",
+   "variant": "skeptic best_variant: D5 scope (drafter graph + E-phase) + M5 main_proj; drafter windows paced at PACE_GBPS (125); wq_b moved to the previous paced window (qbprev); drafter WOA window; draft head in the last model AR window; no mHC fn hints (and no Markov-embedding hints); both DSpark graph sets (greedy-sharded included). C6(b) persisting-L2 not built."
+  },
+  {
+   "gid": "G29",
+   "members": [
+    "mem:M4"
+   ],
+   "flag": "DSV41_L2_PREFETCH_R1_IDXTAIL",
+   "status": "skipped",
+   "variant": "built for BURST all-gather windows only (launcher fda6d05a, PACE_KINDS=ar): in-order tail on the indexer-layer qkv_a all-gather windows (rest of the indexer wq_b after the 6 MiB cut), second burst on side stream 1, IDXTAIL_SPLIT CTAs, joined at the post-attention AR. bind() REFUSES it when 'ag' is in PACE_KINDS with PACE_GBPS>0 (08a249da): there the tail would queue on pacer stream 3 between the paced AG window and the promoted paced wo_a+wo_b window and delay the latter ~36 us in each indexer layer. No window arm on 08a249da; re-plan for paced AG needs a trace."
+  },
+  {
+   "gid": "G15",
+   "members": [
+    "moe:L-B (b)"
+   ],
+   "flag": "DSV41_L2_PREFETCH_R1_SHW2",
+   "status": "built",
+   "variant": "shared-expert w2 (down_proj scales + codes, 1.52 MB/layer) as a burst in a post fork right after the post-attention AR (base after_collective machinery). Variant (a) (cross-step FC1 expert prefetch) not built."
+  },
+  {
+   "gid": "G11",
+   "members": [
+    "mem:M3 (a)"
+   ],
+   "flag": "DSV41_L2_PREFETCH_R1_KVSRC",
+   "status": "partial",
+   "variant": "part (a) only: first 2.5 MiB of compressor.fused_wkv_wgate as a paced part appended to the preceding post-MoE AR window (nearest earlier AR; layer 14 skips its Engram AG). Part (b) (graph node priority / join move) not built (outside this kit's file and needs a device test)."
+  },
+  {
+   "gid": "G01",
+   "members": [
+    "mem:M1 (in-order form)"
+   ],
+   "flag": "DSV41_L2_PREFETCH_R1_WOB",
+   "status": "skipped",
+   "variant": "DROPPED in the review fix: launcher 08a249da promoted the paced wo_a+wo_b window (WOB_MB=6), so the in-order fallback always refused itself and a valid A/B would need WOB_MB=0 (reverting climb-w1). The code is removed and DSV41_L2_PREFETCH_R1_WOB is no longer a master flag: alone it imports nothing; next to a live lever it is only named as ignored in the bind() log line."
+  }
+ ],
+ "flags": [
+  {
+   "name": "DSV41_L2_PREFETCH_R1_DRAFT",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "G13: drafter-graph L2 prefetch (paced, qbprev, WOA, head) + eager E-phase prefetch of main_proj split shard and ctxkv fold weight after the CERT screen"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_IDXTAIL",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "G29: in-order indexer wq_b tail on the indexer-layer qkv_a all-gather windows; only with burst AG windows ('ag' not in PACE_KINDS). Refused (INACTIVE, no effect) on 08a249da"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_SHW2",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "G15: shared-expert w2 burst right after the post-attention all-reduce"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_KVSRC",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "G11a: kv-source compressor weight paced into the preceding post-MoE all-reduce window"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_DRAFT_GRAPH",
+   "default": "1",
+   "on_value": "0",
+   "meaning": "sub-knob of G13: 0 = E-phase only"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_DRAFT_EPH",
+   "default": "1",
+   "on_value": "0",
+   "meaning": "sub-knob of G13: 0 = drafter graph only"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_DRAFT_QBPREV",
+   "default": "1",
+   "on_value": "0",
+   "meaning": "sub-knob of G13: 0 = drafter wq_b stays in its (paced) all-gather window"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_DRAFT_HEAD_MB",
+   "default": "5",
+   "on_value": "0..6",
+   "meaning": "sub-knob of G13: draft-head bytes in the last model AR window"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_DRAFT_WOA_BURST",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "sub-knob of G13: drafter WOA window as a burst on the WOA stream instead of paced"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_DRAFT_GBPS",
+   "default": "0 (= PACE_GBPS)",
+   "on_value": "e.g. 150",
+   "meaning": "sub-knob of G13: drafter pacing rate"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_EPH_MB",
+   "default": "18",
+   "on_value": "MB",
+   "meaning": "sub-knob of G13: E-phase bytes (main_proj shard first, then ctxkv fold)"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_EPH_GBPS",
+   "default": "0 (= PACE_GBPS)",
+   "on_value": "GB/s",
+   "meaning": "sub-knob of G13: E-phase pacing rate"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_EPH_MAX_US",
+   "default": "200",
+   "on_value": "us",
+   "meaning": "sub-knob of G13: E-phase pacer stop time"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_IDXTAIL_MB",
+   "default": "6",
+   "on_value": "MB",
+   "meaning": "sub-knob of G29: tail cap"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_IDXTAIL_SPLIT",
+   "default": "2",
+   "on_value": "1..4",
+   "meaning": "sub-knob of G29: tail segments (= CTAs of the burst kernel; G29 is burst-only)"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_SHW2_MB",
+   "default": "2",
+   "on_value": "MB",
+   "meaning": "sub-knob of G15: cap per layer"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_KVSRC_MB",
+   "default": "2.5",
+   "on_value": "MB",
+   "meaning": "sub-knob of G11a: compressor bytes per kv-source layer"
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_R1_WOB",
+   "default": "0",
+   "on_value": "(none)",
+   "meaning": "G01 DROPPED: not a master flag, no effect (logged as ignored if another r1 flag is on)"
+  }
+ ],
+ "files": [
+  {
+   "path": "distributed/device_communicators/dsv41_l2_prefetch.py",
+   "root": "site-packages/vllm",
+   "action": "patch",
+   "base_sha256": "63737f9c413ebfa2c408b13cb0cbecddac2b42c6a5e219e6bad43bde095f4bee",
+   "patched_sha256": "8bc9a1b5b73c808580a350fe8618fd6abb34a6f629de11c2053f640a7cd15596",
+   "edits": "4 anchors, 16 lines tagged '# r1-pf' (lines 322-323, 783-784, 1064-1065, 1174-1183 of the patched file); removing them gives the base byte for byte; _R1_FLAGS = DRAFT, IDXTAIL, SHW2, KVSRC",
+   "reviewed_patched_sha256_before_fix": "49f27151b70e204ed8f1c3840f5d87552e0ae9f0ab04d7d3d9f4633f7fb0a10b"
+  },
+  {
+   "path": "distributed/device_communicators/dsv41_l2pf_r1.py",
+   "root": "site-packages/vllm",
+   "action": "new",
+   "base_sha256": null,
+   "kit_sha256": "5af558fe96edfcd630caa3e673b71788587649a4e0bf9b45b4e8963b39e10548",
+   "note": "not in the supervisor manifest nor the rdma fingerprint: verify 8/8 with 'python3 install.py status' (last line INSTALLED, exit 0)"
+  }
+ ],
+ "runtime_wrapped_not_edited": [
+  {
+   "path": "v1/worker/gpu/spec_decode/dspark/speculator.py",
+   "sha256": "ea4911fe320937ed871a105a700f7323a3d75f431121d6b23e6edc6b51b08e00",
+   "what": "DSparkSpeculator._generate_draft, _sample_sequential (G13 only, when its flag is on)"
+  },
+  {
+   "path": "models/deepseek_v41/nvidia/dsv41_r4_small.py",
+   "sha256": "c46e66bd1c6a8fb45a0c1ee5c833e9a64fdd6b1bfcb702ac6b13818eb8d71546",
+   "what": "module global certified_logits (G13 E-phase only)"
+  },
+  {
+   "path": "models/deepseek_v41/attention.py",
+   "sha256": "f2f48198de81ebc7eb4ead6d145cbeea5bf867c632d9d9aa8b237a6801b857ca",
+   "what": "DeepseekV4Attention._run_parallel_input_projections (G11a only; records the compressor weight in learn mode)"
+  }
+ ],
+ "install": "python3 install.py install",
+ "uninstall": "python3 install.py uninstall   (refuses, touching nothing, if either file differs from what was installed; --force overrides)",
+ "depends_on": [
+  "launcher 08a249da (8/8 since 2026-11-08 13:40:58Z, climb-w1) l2pf config: DSV41_L2_PREFETCH=1, DSV41_L2_PREFETCH_PACE_GBPS=125 (G2 mode; needed by G15/G11a and the pacer for G13), DSV41_L2_PREFETCH_PACE_KINDS=ar,attn,ag, DSV41_L2_PREFETCH_PACE_CHUNK=65536, DSV41_L2_PREFETCH_WOB_MB=6, DSV41_L2_PREFETCH_WOA=1, DSV41_L2_PREFETCH_PRUNE_SHARED=1 (G15), DSV41_L2_PREFETCH_MHC=0",
+  "libdsv41_l2pf.so (~/dsv41-stage/r4/l2-prefetch) and libdsv41_l2pf_g2.so (~/rdma_ar_dsv41/build-g2ct), both live",
+  "G13 E-phase: DSV41_R4_CERT_HEAD=1 (hook point), DSV41_R4_MAINPROJ_SPLIT=1 and DSV41_CTXKV_FOLD=1 (targets; it falls back to the stock main_proj weight and no ctxkv otherwise)",
+  "G29 would need 'ag' removed from DSV41_L2_PREFETCH_PACE_KINDS (i.e. climb-w1's AG pacing reverted); otherwise it is refused"
+ ],
+ "conflicts_with": [
+  "any other kit that edits distributed/device_communicators/dsv41_l2_prefetch.py (base sha pinned; installer refuses on drift). No other climb-r1 kit does.",
+  "a drafter kit that replaces DSparkSpeculator._generate_draft/_sample_sequential at runtime after this kit's install hook: the G13 graph part then never brackets (visible: no 'R1_DRAFT captured' lines); source edits of speculator.py are fine",
+  "untested compositions (A/B separately): G13 with r1-drafter MAINPROJ_HOIST / DRAFT_PROLOGUE_FORK (extra drafter streams, main_proj is an E-phase target); target levers with r1-attn IDXPAR (forks from the wq_b post-hook)"
+ ],
+ "expected_gain_pct": {
+  "low": 0.13,
+  "central": 0.8,
+  "high": 1.6,
+  "per_lever": {
+   "G13": {
+    "low": 0.13,
+    "central": 0.3,
+    "high": 0.56
+   },
+   "G15": {
+    "low": 0.0,
+    "central": 0.56,
+    "high": 0.95
+   },
+   "G11a": {
+    "low": 0.0,
+    "central": 0.08,
+    "high": 0.17
+   },
+   "G29": {
+    "low": 0.0,
+    "central": 0.0,
+    "high": 0.0,
+    "note": "refused on 08a249da; was +0.13/+0.28/+0.39 on fda6d05a"
+   },
+   "G01": {
+    "low": 0.0,
+    "central": 0.0,
+    "high": 0.0,
+    "note": "dropped"
+   }
+  },
+  "note": "per-lever numbers are the skeptic verdicts (G11a: the (a)-only part of M3, 10-40 us/step); the kit total on 08a249da (G13+G15+G11a) is discounted for shared MoE front-chain DRAM headroom (G15/G11a)"
+ },
+ "window_arms": [
+  {
+   "name": "G13-draft",
+   "env": "DSV41_L2_PREFETCH_R1_DRAFT=1"
+  },
+  {
+   "name": "G13-graph-only",
+   "env": "DSV41_L2_PREFETCH_R1_DRAFT=1 DSV41_L2_PREFETCH_R1_DRAFT_EPH=0"
+  },
+  {
+   "name": "G13-eph-only",
+   "env": "DSV41_L2_PREFETCH_R1_DRAFT=1 DSV41_L2_PREFETCH_R1_DRAFT_GRAPH=0"
+  },
+  {
+   "name": "G15-shw2",
+   "env": "DSV41_L2_PREFETCH_R1_SHW2=1"
+  },
+  {
+   "name": "G11a-kvsrc",
+   "env": "DSV41_L2_PREFETCH_R1_KVSRC=1"
+  }
+ ],
+ "device_checks": [
+  "flags-off relaunch after install 8/8: exact.py ec2f4437f8e1ed09, G1 outputs_digest 2f7fdccbd388225a, and rank0.log has NO 'DSV41_L2_PREFETCH_R1' line (module not imported); the rdma fingerprint changes (it hashes dsv41_l2_prefetch.py) but must be identical on 8/8",
+  "8/8 'python3 install.py status' last line 'r1-pf status: INSTALLED' (the new module is outside the supervisor manifest and the fingerprint)",
+  "per arm, rank0.log: 'DSV41_L2_PREFETCH_R1 (r1-pf) levers: {...}' shows the lever true and no INACTIVE for it; no 'target planning failed' / 'drafter planning failed' warnings",
+  "G13: 'R1_DRAFT plan set=stock|greedy' for every captured drafter shape (missing lines = the drafter collectives do not reach the RdmaAllReduce before_collective hook: no gain) and 'R1_DRAFT captured ... forks X (planned X)' with no MISMATCH for BOTH sets; 'E-phase table: main_proj_split:... ctxkv_fold:...' and 'E-phase forks: 1' after the first greedy request",
+  "target levers: the 'g2 plan tokens=N {...} r1={...}' line: shw2_n=40, kvsrc_n=4 (layers 2/8/14/20); 'g2 captured tokens=N forks {...} (planned {...})' equal",
+  "every arm: exact.py a8 + G1 digest 2f7fdccbd388225a + the 9 long-prompt hashes (G11a touches kv-source layers that write the compressed KV: long-prompt hashes matter)",
+  "G11a on 08a249da: in nsys, the paced qkv_a AG window of layers 2/8/14/20 starts at its AG fork, not queued on side stream 3 behind the kvsrc part",
+  "G13 WOA window (longer l2pf CTAs next to wo_a_partial / MXQ / inv-rope / QNormRope): optional g5co co-runner stress beside an l2pf co-runner, as the G01 exactness verifier suggested",
+  "nsys mid-request window per arm (see README 'Reading the effect in nsys')"
+ ],
+ "status": "python3 install.py status   (verdict line INSTALLED | CLEAN | INCONSISTENT; exit 2 on INCONSISTENT)",
+ "window_arms_removed": [
+  "G29-idxtail, G29-idxtail-4cta (refused on 08a249da)",
+  "G01-wob-inorder, G01-wob-inorder-paced160 (dropped)"
+ ]
+}

@@ -29,6 +29,10 @@ from vllm.model_executor.parameter import (
 from vllm.model_executor.utils import set_weight_attrs
 from vllm.platforms import current_platform
 from vllm.triton_utils import tl, triton
+_DSV41_GLUE_PDL = __import__('os').environ.get('DSV41_GLUE_PDL', '0').strip().lower() not in ('', '0', 'off')  # r1-pdl
+if _DSV41_GLUE_PDL:  # r1-pdl
+    from vllm.triton_utils import dsv41_glue_pdl as _dsv41_glue_pdl  # r1-pdl
+    _DSV41_GLUE_PDL = _dsv41_glue_pdl.enabled('silu')  # r1-pdl
 from vllm.utils.deep_gemm import (
     get_tma_aligned_size,
     is_deep_gemm_e8m0_used,
@@ -362,6 +366,9 @@ def silu_mul_quant_fp8_packed_triton(
         assert expert_alignment == 0
 
     has_clamp = clamp_limit is not None
+    if _DSV41_GLUE_PDL:  # r1-pdl
+        _dsv41_glue_pdl.silu_mul_quant(grid=grid, input=input, output_q=output_q, output_scale_packed=output_scale_packed, expert_ends=expert_ends, M=M, has_clamp=has_clamp, clamp_limit=clamp_limit, alpha=alpha, beta=beta, N=N, groups_per_row=groups_per_row, packs_per_row=packs_per_row, fp8_min=fp8_min, fp8_max=fp8_max, group_size=group_size, packs_per_cta=packs_per_cta, BM=BM, expert_alignment=expert_alignment, _DSV41_PDL_TRIGGER=_DSV41_PDL_TRIGGER, _DSV41_PDL_TRIGGER_MAX_ROWS=_DSV41_PDL_TRIGGER_MAX_ROWS, num_warps=num_warps, num_stages=num_stages)  # r1-pdl
+        return output_q, output_scale_packed  # r1-pdl
     _silu_mul_quant_fp8_packed_kernel[grid](
         input,
         output_q,

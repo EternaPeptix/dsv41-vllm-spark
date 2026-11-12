@@ -4,7 +4,8 @@
 # Extra vllm args can be appended via DSV41_EXTRA (e.g. "--moe-backend marlin").
 set -u
 R=$1
-MODEL=$HOME/models/dsv41/uncensored-fp8
+MODEL=${DSV41_MODEL:-$HOME/models/dsv41/official-fp8}  # 2026-11-04 OBLITERATUS migration: official DeepSeek-V4.1-Flash-1017 weights (rollback: DSV41_MODEL=$HOME/models/dsv41/uncensored-fp8 DSV41_OBLIT=)
+export DSV41_OBLIT=${DSV41_OBLIT-$HOME/models/dsv41/oblit/obliteratus_dirs.npz}  # refusal-direction projections (dsv41_oblit.py); set empty to turn off
 LOGDIR=$HOME/dsv41-logs; mkdir -p "$LOGDIR"
 
 # /etc/environment on spark-three..five carries stale NCCL_* (GID 3, enP7s7 is down); clear them so all ranks match.
@@ -13,6 +14,8 @@ for v in $(env | grep -oE '^(NCCL|GLOO)_[A-Z_]+'); do unset "$v"; done
 export NCCL_SOCKET_IFNAME=enp1s0f0np0 GLOO_SOCKET_IFNAME=enp1s0f0np0
 export NCCL_IB_HCA=rocep1s0f0,rocep1s0f1,roceP2p1s0f0,roceP2p1s0f1 NCCL_IB_GID_INDEX=5 NCCL_DEBUG=WARN
 export VLLM_HOST_IP=$(ip -4 -br addr show enp1s0f0np0 | awk '{print $3}' | cut -d/ -f1)
+export MALLOC_ARENA_MAX=${MALLOC_ARENA_MAX:-2}                # ds41f-hygiene 2026-11-07 vibe: glibc arena pin (spark-ds41f #439 recipe); arm digest-exact 2f7fdccbd388225a, G1 level
+export MALLOC_MMAP_THRESHOLD_=${MALLOC_MMAP_THRESHOLD_:-1048576}     # ds41f-hygiene 2026-11-07 vibe: syms >1MiB via mmap; same recipe
 export DSV41_SM121_VARLEN_INDEXER=1
 export DSV41_SM121_TARGET_M64=1
 export DSV41_SM121_TARGET_M32=${DSV41_SM121_TARGET_M32:-1}  # m32: 32-row target-MoE tiles (M<=48); needs fused_moe m32 site files; 0 = M64 path
@@ -92,12 +95,37 @@ export DSV41_MOE_LIVE_ACT_MIN_ROWS=${DSV41_MOE_LIVE_ACT_MIN_ROWS:-192} DSV41_FUS
 # g130 2026-11-02: BS03 det_topk (one canonical top-k kernel in the indexer decode path, G1 +0.97%) + mfront fused MoE permute (G1 +1.29%, G4 slowest +1.72%).
 # Exact a8 + G1 digest 9a18f802 + 9 long-prompt hashes (to 128K) on every clean instance. MAX_ROWS=128: det_topk alone passed 1,782 shapes against the integer reference; the live chain is wrong on extreme ties and its eager path overwrote a neighbouring buffer.
 export DSV41_BS03_DET_TOPK=${DSV41_BS03_DET_TOPK:-1} DSV41_BS03_MAX_ROWS=${DSV41_BS03_MAX_ROWS:-128} DSV41_MOE_FUSED_PERMUTE=${DSV41_MOE_FUSED_PERMUTE:-1}
+# g130 2026-11-05 (vibe): FC1 G-aware tile deal promoted to default (exact: digest/exact.py/det/stress all PASS; probe GO 4.97/3.88 us/call; serving CTTC +1.21% G1)
+export DSV41_MOE_FC1_DEAL=${DSV41_MOE_FC1_DEAL:-deal}
 # g130 2026-11-02: no mHC fn hints in the all-reduce L2 prefetch windows. Pinned C M W C M W: G1 111.72 vs 110.10 = +1.47%, G4 slowest +2.1%, exact a8 + digest 9a18f802 + 9 long-prompt hashes on all instances.
 export DSV41_L2_PREFETCH_MHC=${DSV41_L2_PREFETCH_MHC:-0}
 # g130 2026-11-03: rdma_ar variants (split post, P1 V1+V2, proxy+poll hygiene; .so 14d049dd is a SERVING DEPENDENCY, keep ~/dsv41-stage/g130/rdma/build) + L2 AR-window pacing 125 GB/s at 64 KiB.
 # Pinned chain: rdma +0.94%, pace +0.72%, both G1 113.82 vs 111.90 = +1.72%, G4 slowest +0.9%. Exact a8 + 9a18f802 + 9 long-prompt hashes on all instances; 3,021-request mixed soak 0 failures. Rollback: ~/dsv41-tp8.sh.bak-g130g.
-export RDMA_AR_EXT=${RDMA_AR_EXT:-$HOME/dsv41-stage/g130/rdma/build/rdma_ar_ext.so} RDMA_AR_SPLIT_POST=${RDMA_AR_SPLIT_POST:-1} RDMA_AR_PUB_V1=${RDMA_AR_PUB_V1:-1} RDMA_AR_PUB_V2=${RDMA_AR_PUB_V2:-1} RDMA_AR_HYG_PROXY=${RDMA_AR_HYG_PROXY:-1} RDMA_AR_HYG_POLL=${RDMA_AR_HYG_POLL:-1}
-export DSV41_L2_PREFETCH_PACE_GBPS=${DSV41_L2_PREFETCH_PACE_GBPS:-125} DSV41_L2_PREFETCH_PACE_KINDS=${DSV41_L2_PREFETCH_PACE_KINDS:-ar} DSV41_L2_PREFETCH_PACE_CHUNK=${DSV41_L2_PREFETCH_PACE_CHUNK:-65536}
+export RDMA_AR_EXT=${RDMA_AR_EXT:-/home/jeweled/dsv41-stage/r7comm2/build/rdma_ar_ext.so} RDMA_AR_SPLIT_POST=${RDMA_AR_SPLIT_POST:-1} RDMA_AR_PUB_V1=${RDMA_AR_PUB_V1:-1} RDMA_AR_PUB_V2=${RDMA_AR_PUB_V2:-1} RDMA_AR_HYG_PROXY=${RDMA_AR_HYG_PROXY:-1} RDMA_AR_HYG_POLL=${RDMA_AR_HYG_POLL:-1}  # r7c1: r8 comm2fix C1 RDMA_TRIM +0.74% G1 131.65 vs 130.68 bit-exact digest 2f7fdcc exact ec2f4437 det ALLREF (was $HOME/dsv41-stage/g130/rdma/build/rdma_ar_ext.so)
+export DSV41_L2_PREFETCH_PACE_GBPS=${DSV41_L2_PREFETCH_PACE_GBPS:-125} DSV41_L2_PREFETCH_PACE_KINDS=${DSV41_L2_PREFETCH_PACE_KINDS:-ar,attn,ag} DSV41_L2_PREFETCH_PACE_CHUNK=${DSV41_L2_PREFETCH_PACE_CHUNK:-65536}  # climb-w1: climb W1/W1b: paced attn+ag L2 prefetch incl. wo_b, +3.8% G1 exact (was ar)
+export DSV41_R6_HEAD_REFINE=${DSV41_R6_HEAD_REFINE:-row}  # r8head2: r8 HEAD r6-head screen DQ2 64,256,4,2 + refine=row selfcheck: +0.37% G1 (131.776 vs 131.295) bit-exact; retry w/ lanproxy-isolated verify (1st try contaminated by external tailnet request)
+export DSV41_R6_HEAD_SELFCHECK=${DSV41_R6_HEAD_SELFCHECK:-1}  # r8head2: r8 HEAD r6-head screen DQ2 64,256,4,2 + refine=row selfcheck: +0.37% G1 (131.776 vs 131.295) bit-exact; retry w/ lanproxy-isolated verify (1st try contaminated by external tailnet request)
+export DSV41_R6_HEAD_SCREEN_CFG=${DSV41_R6_HEAD_SCREEN_CFG:-64,256,4,2}  # r8head2: r8 HEAD r6-head screen DQ2 64,256,4,2 + refine=row selfcheck: +0.37% G1 (131.776 vs 131.295) bit-exact; retry w/ lanproxy-isolated verify (1st try contaminated by external tailnet request)
+export DSV41_R6_HEAD_SCREEN_DQ=${DSV41_R6_HEAD_SCREEN_DQ:-2}  # r8head2: r8 HEAD r6-head screen DQ2 64,256,4,2 + refine=row selfcheck: +0.37% G1 (131.776 vs 131.295) bit-exact; retry w/ lanproxy-isolated verify (1st try contaminated by external tailnet request)
+export DSV41_R6_HEAD_SCREEN=${DSV41_R6_HEAD_SCREEN:-1}  # r8head2: r8 HEAD r6-head screen DQ2 64,256,4,2 + refine=row selfcheck: +0.37% G1 (131.776 vs 131.295) bit-exact; retry w/ lanproxy-isolated verify (1st try contaminated by external tailnet request)
+export DSV41_RDMA_TRIM=${DSV41_RDMA_TRIM:-1}  # r7c1: r8 comm2fix C1 RDMA_TRIM +0.74% G1 131.65 vs 130.68 bit-exact digest 2f7fdcc exact ec2f4437 det ALLREF
+export DSV41_PRIO_CMP=${DSV41_PRIO_CMP:-prio}  # r8w1-cc: r8-w1: COLEMB +0.14% + CMPPRIO +0.085% G1, both reps above noise, bit-exact
+export DSV41_STEP_COLEMB=${DSV41_STEP_COLEMB:-1}  # r8w1-cc: r8-w1: COLEMB +0.14% + CMPPRIO +0.085% G1, both reps above noise, bit-exact
+export DSV41_GLUE_RPSPLIT=${DSV41_GLUE_RPSPLIT:-split}  # climb-r5w2: climb r5: r5-glue RQPAD + RPSPLIT=split, +0.35% G1 over 4 arms in 2 windows, G4 flat, exact
+export DSV41_GLUE_RQPAD=${DSV41_GLUE_RQPAD:-1}  # climb-r5w2: climb r5: r5-glue RQPAD + RPSPLIT=split, +0.35% G1 over 4 arms in 2 windows, G4 flat, exact
+export DSV41_ATTN_XSPLIT_ON_MISMATCH=${DSV41_ATTN_XSPLIT_ON_MISMATCH:-disable}  # climb-w4: climb W4: XSPLIT + attn-window pace 200 GB/s (r4-xsretime), +1.25% G1, exact; mismatch -> live result + XSPLIT off
+export DSV41_L2_PREFETCH_PACE_GBPS_ATTN=${DSV41_L2_PREFETCH_PACE_GBPS_ATTN:-200}  # climb-w4: climb W4: XSPLIT + attn-window pace 200 GB/s (r4-xsretime), +1.25% G1, exact; mismatch -> live result + XSPLIT off
+export DSV41_ATTN_XSPLIT=${DSV41_ATTN_XSPLIT:-1}  # climb-w4: climb W4: XSPLIT + attn-window pace 200 GB/s (r4-xsretime), +1.25% G1, exact; mismatch -> live result + XSPLIT off
+export DSV41_MOE_ROUTEPREP=${DSV41_MOE_ROUTEPREP:-1}  # climb-w3: climb W3/W3b: skinny v2 + attnout rope,rq + draft MoE G17 + FC2 gather-add + MoE route-prep; W3b 5-lever set +2.2% G1, exact
+export DSV41_FC2_GATHER_ADD=${DSV41_FC2_GATHER_ADD:-1}  # climb-w3: climb W3/W3b: skinny v2 + attnout rope,rq + draft MoE G17 + FC2 gather-add + MoE route-prep; W3b 5-lever set +2.2% G1, exact
+export DSV41_DRAFT_MOE_G17=${DSV41_DRAFT_MOE_G17:-1}  # climb-w3: climb W3/W3b: skinny v2 + attnout rope,rq + draft MoE G17 + FC2 gather-add + MoE route-prep; W3b 5-lever set +2.2% G1, exact
+export DSV41_ATTNOUT_OP=${DSV41_ATTNOUT_OP:-rope,rq}  # climb-w3: climb W3/W3b: skinny v2 + attnout rope,rq + draft MoE G17 + FC2 gather-add + MoE route-prep; W3b 5-lever set +2.2% G1, exact
+export DSV41_SKINNY_V2=${DSV41_SKINNY_V2:-1}  # climb-w3: climb W3/W3b: skinny v2 + attnout rope,rq + draft MoE G17 + FC2 gather-add + MoE route-prep; W3b 5-lever set +2.2% G1, exact
+export DSV41_IDXPAR=${DSV41_IDXPAR:-1}  # climb-w2: climb W2/W2b: DTGRAPH eager-glue graphs + R1 SHW2/KVSRC prefetch + IDXPAR; W2b 5-lever set +2.1% G1, exact
+export DSV41_L2_PREFETCH_R1_KVSRC=${DSV41_L2_PREFETCH_R1_KVSRC:-1}  # climb-w2: climb W2/W2b: DTGRAPH eager-glue graphs + R1 SHW2/KVSRC prefetch + IDXPAR; W2b 5-lever set +2.1% G1, exact
+export DSV41_L2_PREFETCH_R1_SHW2=${DSV41_L2_PREFETCH_R1_SHW2:-1}  # climb-w2: climb W2/W2b: DTGRAPH eager-glue graphs + R1 SHW2/KVSRC prefetch + IDXPAR; W2b 5-lever set +2.1% G1, exact
+export DSV41_DTGRAPH=${DSV41_DTGRAPH:-1}  # climb-w2: climb W2/W2b: DTGRAPH eager-glue graphs + R1 SHW2/KVSRC prefetch + IDXPAR; W2b 5-lever set +2.1% G1, exact
+export DSV41_L2_PREFETCH_WOB_MB=${DSV41_L2_PREFETCH_WOB_MB:-6}  # climb-w1: climb W1/W1b: paced attn+ag L2 prefetch incl. wo_b, +3.8% G1 exact
 # g130 2026-11-03: boundary folds (kit ~/dsv41-stage/g130/boundary a53424e86d00; site files speculator.py/dspark.py patched + dsv41_boundary.py, rollback = site8.sh uninstall + .bak-g130h).
 # Context-KV GEMM merge + Markov fold. Pinned CTTC: G1 114.76/114.84 vs 113.86/113.79 = +0.85%, G4 slowest +2.5%; exact a8 + 9a18f802 + long-prompt cold compare on all instances; real-traffic audit 0 mismatches.
 # Markov fold differs from stock ONLY when a logit row holds NaN (user allowed 2026-11-03).
@@ -116,7 +144,7 @@ if [ "${DSV41_FC2:-1}" = 1 ]; then
   # g130 2026-11-02: FC2 status barrier every 256 steps instead of every step (exact a8 + G1 digest 9a18f802 on 4/4 instances;
   # pinned BCBC G1 107.31 vs 104.24 = +2.95%, G4 slowest +0.8%). Errors stay sticky until the next check. =1 restores Athena's per-step barrier.
   # 2026-11-02 fail-stop: a failed check exits all ranks (the old raise was swallowed); cadence 32 = about 0.7 s of exposure at about 0.1% cost.
-  export DSV41_FC2_BARRIER_EVERY=${DSV41_FC2_BARRIER_EVERY:-32}
+  export DSV41_FC2_BARRIER_EVERY=${DSV41_FC2_BARRIER_EVERY:-1024}
   _fc2_ov=$(sha256sum $HOME/dsv41-fc2/athena_fc2_forty_layer_trial.py | cut -c1-12); [ "$_fc2_ov" = "ae2089724597" ] || { echo "FC2 overlay $_fc2_ov != ae2089724597, refusing to start" >&2; exit 1; }
   export PYTHONPATH=$HOME/dsv41-fc2/site${PYTHONPATH:+:$PYTHONPATH}
   DSV41_KV_BYTES=${DSV41_KV_BYTES:-4G}

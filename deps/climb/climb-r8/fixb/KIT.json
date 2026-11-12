@@ -1,0 +1,157 @@
+{
+ "name": "r8-fixb",
+ "round": "climb r8 (2026-11-09): repairs of the round-6 head / skew / step kits after r6-dwA and r6-w1; production launcher 4f3cc1c6",
+ "summary": "head: the ksplit mutant rewritten as two sequential K-half loops (same order change, same shared memory: compiled for sm_121 at all 192 (mutant, cfg) pairs, ksplit == r6 refine smem at every cfg; the r6 form reproduces 147456 B), a per-config mutant sweep (fit + caught), the composed head->step dsv41_r4_small.py ebe73cdb accepted. skew: T4c cause measured (the arch_mem_timer broadcast IRQ 307 retargets itself about once a second; irqbalance is inactive on every Spark), every differing key printed and classified, a write/exec audit (BLOCKS and records any mutation attempt) added, 4 audit + 4 classifier mutants. step: COLEMB / PACK cannot race at prefill sizes (pure pass-through above T 128; proved in code and gated); PACK=all pairing hardened (operand identity, once per forward); a long-prompt determinism gate (decode T 1..128, prefill T 129..16384, adversarial timing, live Engram prefetch methods, 6 must-fail mutants); COLEMB-solo and PACK-solo serving arms with the 9-case check on every T arm.",
+ "levers": [
+  {
+   "id": "COLEMB",
+   "flag": "DSV41_STEP_COLEMB=1",
+   "status": "built (r6 code unchanged; r8 det gate + solo arm); device test and serving NOT run",
+   "estimate_ms_per_step": {
+    "low": 0.008,
+    "central": 0.02,
+    "high": 0.028
+   },
+   "estimate_pct_g1": {
+    "low": 0.04,
+    "central": 0.09,
+    "high": 0.13
+   },
+   "basis": "8-rank census (climb-windows/r6skew-census/prod x*.tsv.gz -> scripts/c3_rebase.py -> scripts/c3_rebase_census.txt). The collective spans include the wait for the last rank, which an AG keeps, so the saving is the transfer-alone part (pooled p5): eager target embedding AR p5 24.7 / 16.1 / 24.9 us (code / prose / maths) vs an eager [T,640] AG ~16-18 us (rows-AG p5 15.5-18.2 at a similar payload) -> 0 / 6 / 10 us; drafter in-graph embedding AR p5 25.8-26.2 us vs an in-graph drafter AG ~12 us (t2 p50 12.0-12.3) -> 8 / 14 / 18 us. Total 8 / 20 / 28 us. r6-w1: s1 (C4+COLEMB+PACK) - k1 (C4) = +0.32 tok/s (+0.25 %) for COLEMB+PACK together, one unpaired pair (noise ~0.2 %)."
+  },
+  {
+   "id": "PACK",
+   "flag": "DSV41_STEP_ENGRAM_PACK=all",
+   "status": "built (r8 pairing hardened); device test and serving NOT run",
+   "estimate_ms_per_step": {
+    "low": -0.006,
+    "central": 0.014,
+    "high": 0.027
+   },
+   "estimate_pct_g1": {
+    "low": -0.03,
+    "central": 0.07,
+    "high": 0.13
+   },
+   "basis": "census transfer-alone (pooled p5): Engram rows AG 15.5-18.2 us, wkv AG 18.2-24.0 us (medians 20.8-24.5 / 24.6-31.1 incl. the skew wait, which stays). look: one rows AG removed (16-18) - doubled payload + cat + split (6-8) - lost paced-prefetch hiding (0-17; t2: the rows-AG windows are 100 % prefetch) = -6 / 5 / 11 us; all adds one wkv AG removed (18-24) - (8-12) - lost hiding (0-11) = 0 / 9 / 16 us. Total -6 / 14 / 27 us. The wkv GEMMs (82.5-84.4 us, unchanged) stay on main. Interplay: r7-l2pf HT10 degrades to the stock plan if PACK=all is promoted."
+  },
+  {
+   "id": "HEAD (r6 HEADREF + SCREENDQ, unblocked)",
+   "flag": "DSV41_R6_HEAD_REFINE=row|tile, DSV41_R6_HEAD_SCREEN=1 (+ ELIGIBLE-ENV CFG lines)",
+   "status": "device test repaired (ksplit fits, per-config mutant sweep, composed sha); r6 module unchanged; device test NOT run",
+   "estimate_ms_per_step": {
+    "low": -0.009,
+    "central": 0.037,
+    "high": 0.115
+   },
+   "estimate_pct_g1": {
+    "low": -0.04,
+    "central": 0.17,
+    "high": 0.53
+   },
+   "basis": "r6-head's built-set estimate, re-checked on the census: _screen_kernel 460-486 us/step (t2 462-480), _refine_kernel 21-59 us (t2 22-49; the maths excess the row refine recovers is if anything larger), so the r6 range stands."
+  },
+  {
+   "id": "ISO (r6-skew, unblocked)",
+   "flag": "RDMA_AR_PROXY_CORE=<P> + skew/node/iso.py apply (window ISO_ARMS)",
+   "status": "device test repaired (T4c classified + audited); iso.py unchanged; device test NOT run",
+   "estimate_ms_per_step": {
+    "low": 0.0,
+    "central": 0.017,
+    "high": 0.086
+   },
+   "estimate_pct_g1": {
+    "low": 0.0,
+    "central": 0.08,
+    "high": 0.4
+   },
+   "basis": "r6-skew's range; census: ranks wait 1328 / 1417 / 1390 us per step for the last arrival at 142 collectives, per-op arrival SD 4.5-5.4 us, rank 6 last 16-19 % of the time, RDMA proxy thread unpinned. ISO removes only the OS-noise share of that wait."
+  }
+ ],
+ "install_files": [
+  {
+   "path": "models/deepseek_v41/nvidia/dsv41_step.py",
+   "action": "replace (r6-step module -> r8 module; backup .bak-r8-fixb)",
+   "base_sha256": "ebe2f7bbebefe91633079260e8e56d8b9f750b24ebe8df97fd17fb0ecf35128d",
+   "sha256": "425c651509c46d0557ed019a8be19bfb2cffbb3c1c4764e1f577f94f33273cb2",
+   "requires": {
+    "models/deepseek_v41/common/engram.py": [
+     "34cf684e87b650f7a7d28b66649bf32b8f6620502297453ee3e0ac621a004077",
+     "e99f623d3c461fa6d82002750f573dfac2a9f13ffc1e5b5341d090d9c322a148"
+    ],
+    "models/deepseek_v41/nvidia/dsv41_r4_small.py": [
+     "d9bf5d596c261771379d1ce5c8fb505cd3b5edff19540f7d8ccf1973fa845e74",
+     "ebe73cdb57f06670370fb539ce77a836eadce74f51da29c1a15767086990247c"
+    ]
+   }
+  }
+ ],
+ "not_installed": "head/ and skew/ changes are device-test-only (staged by ops/stage.sh to ~/climb-scratch/r8-fixb/ inside a window); the installed r6 dsv41_head_r6.py ad775bc1 and ~/dsv41-iso/iso.py 7060ef48 are unchanged.",
+ "install": "bash ops/fleet.sh install   (8/8; refuses without CLUSTER_LOCK owner=claude; node by node with rollback). One node: python3 install.py install|uninstall|status|dry|pins",
+ "uninstall": "bash ops/fleet.sh uninstall (LIFO: before ANY climb-r6/install-all.sh or climb-r7/install-all.sh action, which pin dsv41_step.py at ebe2f7bb and report 425c6515 as FOREIGN)",
+ "composition": "integrate/compose_fixb.py on copies of climb-r7/integrate/composed/{base,r5,r6,r5r6,r5r6c}{,-pre}: installs on every r6-step state with and without r7, refuses on base / r5 (no r6-step), touches only dsv41_step.py (+ its backup), byte-exact uninstall, idempotent; no r7 kit touches dsv41_step.py, engram.py or dsv41_r4_small.py.",
+ "window_arms": [
+  {
+   "name": "device window (stopped)",
+   "env": "EXPECT=4f3cc1c6 WIN=r8-fixb-dw bash ops/plan.sh; then WIN=r8-fixb-dw EXPECT=4f3cc1c6 NODE_PLAN=ops/device-plan.node MAC_PLAN=ops/device-plan.mac bash climb-common/device-window.sh  (head synth+real on spark-two, step on spark-three, skew on spark-four; installs the r8 module 8/8 only if the step device test passed)"
+  },
+  {
+   "name": "serving: COLEMB solo + PACK solo",
+   "env": "EXPECT=4f3cc1c6 bash ops/serve.sh  -> c1 e1 c2 p1 c3 e2 c4 p2 c5 (all RDMA_AR_AUDIT=200), e = DSV41_STEP_COLEMB=1, p = DSV41_STEP_ENGRAM_PACK=all, DET on e1 p1 e2 p2, G4 on c1 e1 p1"
+  },
+  {
+   "name": "head arms (after the device window prints ELIGIBLE-ENV lines)",
+   "env": "as climb-r6/head/KIT.json window_arms (hcheck first, then hrow / htile / hscr / hall), each with DET"
+  },
+  {
+   "name": "ISO arms (after skew passes)",
+   "env": "as climb-r6/skew/KIT.json window_arms (census picks P, then c1 iso1 c2 iso2 with DET_ARMS='iso1 iso2')"
+  }
+ ],
+ "tests": {
+  "cpu": [
+   "step/tests/test_r8_fixb.py + step/tests/test_step.py (512S1 exo-venv313, torch CPU)",
+   "step/device_test.py --cpu-selftest (det gate on the latest-possible-scheduler simulation)",
+   "skew/tests/test_r8_t4c.py (512S1 pytest; spark-eight shim run incl. the Linux affinity case)",
+   "integrate/compose_fixb.py",
+   "integrate/test_fleet.sh (local transport)"
+  ],
+  "spark-eight CPU (no GPU, no lock)": [
+   "head/tools/mutfit.py (sm_121 compile of every mutant at every swept cfg)",
+   "head/device_test.py --smoke",
+   "skew audit of the real hostcensus.py / iso.py plan, T4c classifier dry run"
+  ],
+  "device": [
+   "head/device_test.py (synthetic + real weights)",
+   "step/device_test.py --part all (incl. det)",
+   "skew/device_test.py"
+  ]
+ },
+ "pins": {
+  "install.py": "f769cab86ef6f39e9cc8e6f4c1725dbfbe58cb425326e60815001d0654095c31",
+  "device_test.py": "616c76b72c221490eb6f4d9cac7a4dbd2627873b9dc105af398ac9d5131b0bcc",
+  "tests/run_cpu.sh": "e71046713f63371be8fbb27c85780a64dffa61935e275b4deb941c5be39feb51",
+  "ops/fleet.sh": "c4739c7a77fda29f09089d506d281ef260963b73091eb268707aba0b85be32ac",
+  "ops/inline_kit.py": "225d2c1236511e27798e1cfd674062013185669f32ec3952fb378c54bc725241",
+  "ops/stage.sh": "78d6107b95ad396f9a8ac4ee5780470b14ed1510b536e4c86dc8e207c4b6740c",
+  "ops/plan.sh": "79e0c4778cc43c2e5fa5238eb15c5ba71a47a36f7314b0adc7efa00f571b2623",
+  "ops/serve.sh": "b0614cf5a2cc095878b0b71945863ab78060b24dc55010d99a75ddb0e73b2ae4",
+  "ops/arms-fixb.txt": "9c254ea8a0d2d46eb99e854cd0c8ce11219ed7b40d5394d9988e9a463165e10b",
+  "common/prodenv.py": "4ba9933882a6aa99397e16c9c57f571966faeb1feb74ce3517af7c93141c194f",
+  "head/device_test.py": "d5da129f9f7fe8daf607c7ba8388180f10f2a9efc1427066898355aa2ea1a29b",
+  "head/tools/mutfit.py": "6d4318cb177aa9faeb0254489495e6af22ddcdb854c7772e43b9c1a648f1833f",
+  "head/install.py": "b3289b29a7fa475a541051513ed91e2bbd6aa1a22fba0823c8508561cf930470",
+  "head/files/vllm/models/deepseek_v41/nvidia/dsv41_head_r6.py": "ad775bc186f12277e13e272477e9e2b969ac7912531b549699f6fa0294842eca",
+  "head/base/vllm/models/deepseek_v41/nvidia/dsv41_r4_small.py": "3364d8c877db7e532923fe03d6da5fa2763867d06d18f575c4c8835556faae8e",
+  "step/device_test.py": "f86a95ccdb7ba7c248d57de6d8bd25d19aa2e07ba85bb8b59a48d8f2362cb4fd",
+  "step/det_gate.py": "301c71127648f0ddef843bf5a376b2a057f65d2c106fe638942200ca4979fa43",
+  "step/install.py": "779593d4371c87ea772d65df20d1c54f0a52ef995697ca6723bb036537b995c3",
+  "step/files/vllm/models/deepseek_v41/nvidia/dsv41_step.py": "425c651509c46d0557ed019a8be19bfb2cffbb3c1c4764e1f577f94f33273cb2",
+  "step/prev/dsv41_step.py.r6-ebe2f7bb": "ebe2f7bbebefe91633079260e8e56d8b9f750b24ebe8df97fd17fb0ecf35128d",
+  "skew/device_test.py": "afe7f55730eb1605610d74df9867932a53b719e8f861821dc98c849c380f56d4",
+  "skew/node/iso.py": "7060ef48825b7673d15aecdb03dbee6c7241e53b762cd4e91a83ffaf6770fc5e",
+  "skew/node/hostcensus.py": "9c97cd48b83b4d38ebc8e0843234021934bd8095481b4c41ae87cc4ee046e87f",
+  "skew/node/nsx_extract.py": "885f20f9bb9d132d012bf55213d03ca1d732dacee4bcc3a5cffb05a147ba128e",
+  "skew/node/auditrun.py": "11c1daa6de9c936679501ee6999fefe2208b917723678e722ea4027d5a05aebb"
+ }
+}

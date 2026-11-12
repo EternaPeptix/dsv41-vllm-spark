@@ -1,0 +1,14 @@
+== G25: fold of the routed+shared add into the Athena gather
+OK   g25 eager kind=normal M=1..2048 (32 sizes) []
+OK   g25 eager kind=wide M=1..2048 (32 sizes) []
+OK   g25 eager kind=subnormal M=1..2048 (32 sizes) []
+OK   g25 eager kind=zeros M=1..2048 (32 sizes) []
+OK   g25 eager kind=maxmag M=1..2048 (32 sizes) []
+OK   g25 eager kind=ties M=1..2048 (32 sizes) []
+OK   g25 eager kind=cancel M=1..2048 (32 sizes) []
+OK   g25 eager kind=neg_ids M=1..2048 (32 sizes) []
+OK   g25 eager kind=status_failed M=1..2048 (32 sizes) []
+OK   g25 plan: 288 cases built on CPU 
+== G18: Athena FC2 PDL early-B vs live FC2
+OK   g18 plan: inputs built on CPU 
+elapsed 69.8s; 11/11 OK

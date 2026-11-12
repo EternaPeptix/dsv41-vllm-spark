@@ -1,0 +1,224 @@
+{
+ "name": "r5-prio",
+ "summary": "Climb round 5: graph stream-priority gate + three scheduling-only levers on launcher 166d7aac. (1) device microtest: does a captured CUDA graph honour stream/node priority (backlog flood vs a 48-CTA high-priority probe)? gates the prio variants. (2) DSV41_PRIO_CMP: KV-source qkv_a shard GEMM above the replicated compressor GEMM (prio) or the compressor ordered after it (serial, no gate needed). (3) DSV41_PRIO_SHARED: MoE shared experts on a dedicated high-priority stream (composes with ffnfront GATE_FIRST; standalone t2 says ~0). (4) DSV41_PRIO_ENGRAM_HOIST: Engram wkv local GEMM of layers 1/14 issued at the start of layers 0/13 on a side stream; both all-gathers keep their op, payload and the main stream. Five anchor patches + one new module; every flag default off and inert when off.",
+ "levers": [
+  {
+   "id": "PRIO-GATE",
+   "flag": "(device_test.py T1)",
+   "status": "built"
+  },
+  {
+   "id": "CMPPRIO",
+   "flag": "DSV41_PRIO_CMP=prio|serial",
+   "status": "built"
+  },
+  {
+   "id": "SHPRIO",
+   "flag": "DSV41_PRIO_SHARED=1",
+   "status": "built"
+  },
+  {
+   "id": "ENGRAM-HOIST",
+   "flag": "DSV41_PRIO_ENGRAM_HOIST=1",
+   "status": "built"
+  }
+ ],
+ "flags": [
+  {
+   "name": "DSV41_PRIO_CMP",
+   "default": "unset (off)",
+   "on_value": "prio | serial",
+   "meaning": "layers with a compressor (KV sources 2/8/14/20). prio: fi_mxfp8_quant + skinny shard GEMM of qkv_a on a greatest-priority stream (fork before the quant, join before the all-gather, which stays on main); needs the T1 gate. serial: no priority; the compressor torch.mm on aux stream 0 waits for an event recorded on main right after the shard GEMM. Falls back to the live execute_in_parallel call when the r3 shard path is not taken (M > DSV41_QKV_A_SHARD_MAX_M, stock GEMM, first use inside a capture)."
+  },
+  {
+   "name": "DSV41_PRIO_SHARED",
+   "default": "unset (off)",
+   "on_value": "1",
+   "meaning": "SharedExperts._stream = a dedicated greatest-priority stream instead of vLLM's global aux_stream(); same kernels, same input/output events, same join at the FC2 gather-add. Refused (aux_stream kept) if the shared MLP reduces its own output. Needs the T1 gate to do anything."
+  },
+  {
+   "name": "DSV41_PRIO_ENGRAM_HOIST",
+   "default": "unset (off)",
+   "on_value": "1",
+   "meaning": "Engram layers 1 and 14 (non-batch, TP-gathered rows): Engram.embed (prefetch wait + rows all-gather, main stream) and the wkv quant+GEMM (wkv.quant_method.apply on a least-priority side stream) are issued at the start of the host layer; Engram.forward joins the GEMM's event and issues the wkv output all-gather on main exactly where ColumnParallelLinear.forward did. Decode-sized forwards only (<= DSV41_PRIO_ENGRAM_MAX_TOKENS), never under SP or a breakable (piecewise) capture."
+  },
+  {
+   "name": "DSV41_PRIO_ENGRAM_HOIST_AT",
+   "default": "1:0,14:13",
+   "on_value": "e.g. 1:0,14:12",
+   "meaning": "engram_layer:host_layer pairs (host < engram, both local)."
+  },
+  {
+   "name": "DSV41_PRIO_ENGRAM_MAX_TOKENS",
+   "default": "128",
+   "on_value": "int",
+   "meaning": "largest forward that hoists"
+  },
+  {
+   "name": "DSV41_PRIO_HI",
+   "default": "max",
+   "on_value": "max | int",
+   "meaning": "priority of the high streams (max = torch.cuda.Stream.priority_range()[1])"
+  }
+ ],
+ "files": [
+  {
+   "path": "models/deepseek_v41/attention.py",
+   "action": "patch",
+   "base_sha256": "0e4b6e91bc54d88f71b239d85e5fba5458466adf0b84c3f98ea2ac75c83514fd",
+   "patched_sha256": "434905c2ddda2f4e06de74fc45fe88b704ca82ad70f40cabf07d2a2755b6e31e",
+   "compose_sha256": [],
+   "base_note": "live 8/8 on 2026-11-08 (launcher 166d7aac; r1-attn + r3-dense installed)"
+  },
+  {
+   "path": "models/deepseek_v41/nvidia/dsv41_r3_dense.py",
+   "action": "patch",
+   "base_sha256": "1ad5c4e817db5ff0de0ad671dc90609115813fe7aa622e8f93d9c6f5a4dbf14f",
+   "patched_sha256": "602c6ef71e7985cdebef8a700d42637e935c2848134f9c93410173026c39c8b7",
+   "compose_sha256": [],
+   "base_note": "live 8/8 (r2-skinny installed)"
+  },
+  {
+   "path": "model_executor/layers/fused_moe/runner/shared_experts.py",
+   "action": "patch",
+   "base_sha256": "2f0bca4bb5a1971ed0fbbc5297d3271ee7891d66e72027ca0990cb81530d0ec7",
+   "patched_sha256": "3e51975a89393fd09575d14cabfb0bc22ee4e1f342a7969dd040c229de92c87c",
+   "compose_sha256": [],
+   "base_note": "live 8/8 (ds41f-we2 shared fold glue installed). r5-ffnfront may patch this file too: install it first, run compose-check, review, add its sha here"
+  },
+  {
+   "path": "models/deepseek_v41/common/engram.py",
+   "action": "patch",
+   "base_sha256": "aa8aad1ba64ff9b84d64a763ab2de615e4ac09a5bb9d578f31620bf4a78981e1",
+   "patched_sha256": "c8170bd9355f7c7f25ad4f3416334207fc85cb6b047ac4a4e7a4fc32c8da1021",
+   "compose_sha256": [],
+   "base_note": "live 8/8"
+  },
+  {
+   "path": "models/deepseek_v41/nvidia/model.py",
+   "action": "patch",
+   "base_sha256": "dd46a65ee820d47f192bb1f96167a2edd3386a9f76beb338a610912c3734b8d5",
+   "patched_sha256": "6d34ceb74185efd3561050a6da588bf1b9722647c0a5dd1ac5be6fff97ec35df",
+   "compose_sha256": [],
+   "base_note": "live 8/8. r5-ffnfront may patch this file too (see compose-check). Review r5: composes with r5-ffnfront edits.py in either order, byte-identical; compose sha (ffnfront first) 6960efb2acd04421... -- add the full sha from compose-check once ffnfront's own sha is final"
+  },
+  {
+   "path": "models/deepseek_v41/nvidia/dsv41_prio.py",
+   "action": "new",
+   "kit_sha256": "30a0cbbb1cbef1c82979619d235da391bf434340a83029911f8854c133469657"
+  }
+ ],
+ "install": "python3 install.py install   (8/8; status: python3 install.py status)",
+ "uninstall": "python3 install.py uninstall   (LIFO: uninstall r5-prio before any older kit; never --force on a composed node, it drops later kits' edits)",
+ "depends_on": [
+  "r3-dense DSV41_QKV_A_SHARD=1 (live) for CMPPRIO; r2-skinny (live) optional",
+  "rdma-ar all-gather (live) unchanged"
+ ],
+ "conflicts_with": [],
+ "composes_with": [
+  "r5-ffnfront GATE_FIRST (DSV41_PRIO_SHARED only swaps the stream object; no moe_runner.py edit)",
+  "r4-xsretime / r1-pf L2 prefetch (plans are re-learned at the eager warm-up of each capture; with ENGRAM_HOIST the wkv weight is no longer recorded in a collective window)"
+ ],
+ "expected_gain_pct": {
+  "CMPPRIO_prio": {
+   "low": -0.1,
+   "central": 0.1,
+   "high": 0.2,
+   "basis": "review r5 (t2 q0.2/q4.1/q0.3): the prio_t2.py model (0.05/0.2/0.45) shifts the _q_kv_norm end earlier by the whole skinny wait and clamps per-layer losses at 0; the qkv_a rdma all-gather (ar_kernel_pl 1x512, 96 regs) must stay on main and cannot co-reside with ~5 compressor CTAs/SM, so it meets the ~37 us backlog. <= half the model, and ONLY if T1 PASS; T1 is expected to FAIL (torch instantiates without cudaGraphInstantiateFlagUseNodePriority) -> 0 in serving"
+  },
+  "CMPPRIO_serial": {
+   "low": -0.1,
+   "central": 0.0,
+   "high": 0.05,
+   "basis": "review r5 (t2): the compressor then starts at skinny's end = when ar_kernel_pl is issued on main, so the ~37 us backlog moves from skinny to the all-gather; the old 35-40 us/step model ignored that and clamped losses"
+  },
+  "SHPRIO": {
+   "low": -0.1,
+   "central": 0.0,
+   "high": 0.15,
+   "basis": "t2: the shared chain ends 31-81 us before FC2 in every starved layer and the gather-add join wait is <=0.6 us/layer; the cp4 'N640->moe_act' edge (44-92 us/step) is not a true dependency. Value is as GATE_FIRST insurance"
+  },
+  "ENGRAM_HOIST": {
+   "low": -0.2,
+   "central": 0.05,
+   "high": 0.6,
+   "basis": "t2: wkv GEMM 84-85 us x 2 = 167-170 us/step + quant 5-6 us on the CP (ceiling ~0.8%); DRAM-bound (19.7 MB fp8 at ~234 GB/s, ~85% of GB10 peak) so it takes bandwidth from layer 0/13 almost one-for-one, and the hoist loses the ~6 MB wkv L2 prefetch of the ag4 window; review r5 central 0 to +0.1. Engram prefetch-wait shift a few us at most (t2 _engram_lookup_kernel 3-14 us). Still the best arm: the only lever whose CP removal does not depend on scheduler priority"
+  },
+  "combined_central": 0.05,
+  "vs": "production 166d7aac (G1 130.23); 1% G1 ~ 0.21 ms/step",
+  "combined_note": "engram-hoist ~0.05 + cmp-serial ~0 + prio/shared 0 while T1 FAILs (expected)"
+ },
+ "window_arms": [
+  {
+   "name": "control",
+   "env": {
+    "RDMA_AR_AUDIT": "200"
+   },
+   "note": "kit installed, flags off; RDMA_AR_AUDIT=200 in every arm (host-side log of the first 200 routed calls + every new stream; nothing on the replayed graph) so pairs stay matched"
+  },
+  {
+   "name": "engram-hoist",
+   "env": {
+    "RDMA_AR_AUDIT": "200",
+    "DSV41_PRIO_ENGRAM_HOIST": "1"
+   },
+   "priority": 1,
+   "note": "run first. rank0.log: 'DSV41_PRIO_ENGRAM_HOIST: engram 0@layer 0, engram 1@layer 13'; NEW_STREAM count must equal control's"
+  },
+  {
+   "name": "cmp-serial",
+   "env": {
+    "RDMA_AR_AUDIT": "200",
+    "DSV41_PRIO_CMP": "serial"
+   },
+   "priority": 2,
+   "note": "no device gate needed; expected flat (backlog moves to the qkv_a all-gather)"
+  },
+  {
+   "name": "cmp-prio",
+   "env": {
+    "RDMA_AR_AUDIT": "200",
+    "DSV41_PRIO_CMP": "prio"
+   },
+   "priority": 3,
+   "note": "only if device_test T1 GATE PASS (expected FAIL -> skip)"
+  },
+  {
+   "name": "shared-prio+gatefirst",
+   "env": {
+    "RDMA_AR_AUDIT": "200",
+    "DSV41_PRIO_SHARED": "1"
+   },
+   "priority": 3,
+   "note": "only with ffnfront GATE_FIRST armed in the same arm and its own GATE_FIRST control; T1 GATE PASS required. Moves the shared MLP off vLLM aux_stream (rdma_ar's refuse-on-aux net): any extra NEW_STREAM line in rank0.log vs control = FAIL"
+  },
+  {
+   "name": "cmp+hoist",
+   "env": {
+    "RDMA_AR_AUDIT": "200",
+    "DSV41_PRIO_CMP": "prio",
+    "DSV41_PRIO_ENGRAM_HOIST": "1"
+   },
+   "priority": 4,
+   "note": "after both pass alone (serial instead of prio if T1 fails)"
+  }
+ ],
+ "device_checks": [
+  "device_test.py on a stopped spark-eight with the mandatory env (source ~/venvs/vllm032/bin/activate; export PATH=/usr/local/cuda/bin:$PATH CUDA_HOME=/usr/local/cuda); exit 0 = all gated checks pass, 4 = T2-T4 pass but T1 FAIL (expected), 3 = T1 inconclusive, 1 = failure (incl. B1: DSV41_SKINNY_V2 on but the r2 v2 build failed/None or does not cover every served M, or skinny_v2_a8 not launched once per call at M=1..QKV_MAX_M)",
+  "T1 verdict line 'GATE graph-priority: PASS|FAIL|INCONCLUSIVE' decides whether the cmp-prio and shared arms are worth a window",
+  "rank0.log per arm: 'DSV41_PRIO r5-prio: cmp=... shared=... engram_hoist=...' line; for hoist 'DSV41_PRIO_ENGRAM_HOIST: engram ...@layer ...' and no 'unconsumed hoist' error",
+  "exact.py ec2f4437f8e1ed09, G1 outputs_digest 2f7fdccbd388225a and 9/9 long prompts in every arm",
+  "l2pf: 'g2 captured ... planned' equal, no MISMATCH (collective order changes identically on every rank with ENGRAM_HOIST)",
+  "every arm incl. control with RDMA_AR_AUDIT=200: the NEW_STREAM lines in rank0.log must match control's; an extra one means a collective reached rdma_ar on a side stream = FAIL (stop the arm)"
+ ],
+ "tests": "tests/test_prio.py (CPU, on 512S1 ~/exo-venv313): 67 passed after the B1 fix (60 + 7 B1 serving-qkv-GEMM tests); device_test.py --cpu-selftest OK (incl. B1 verdicts). device_test.py T0-T4 NOT run on a GPU; no serving arm run. See TEST-RESULTS.txt.",
+ "install_note": "writes are not transactional across files: a mid-way write error leaves earlier files patched; status then reports INCONSISTENT (every edit inert while flags are off) -> re-run install or uninstall",
+ "review": {
+  "round": "r5 prio:review 2026-11-08",
+  "verdict": "fix",
+  "blocking_fixed": [
+   "B1"
+  ],
+  "fixes": "REVIEW.md 'Fixes' section"
+ }
+}

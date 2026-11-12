@@ -1,0 +1,168 @@
+r2-draftmoe CPU test results (all runs real; output pasted verbatim below). Fix pass after the adversarial review,
+2026-11-08 ~15:00Z.
+test_install.py and test_compose.py run on the Mac (stdlib only). They need ~/Documents/dsv41-offline/climb-r1/r1-pdl and
+~/Documents/dsv41-offline/climb-r2/r2-moefront, whose REAL installers test_compose.py runs on scratch copies.
+The torch tests run on the Mac Studio 512S1 (~/exo-venv313/bin/python3) from ~/climb-r2/r2-draftmoe (rsync of this folder).
+device_test.py (GPU) has NOT been run: it is run by the lead on a stopped node (README "Window protocol").
+No nvcc or Triton compile was run in this pass. The only cluster access was read-only DeepGEMM cache-key computation on
+spark-eight (COMPILE-LOG.txt "Fix pass"). The 4 live base files on spark-eight were re-checked read-only at 14:58Z
+(67339029 / 9364f121 / a17d574a / 58e264c8, unchanged; spark-one was unreachable). KIT.json was edited after the
+runs only to list tests/test_compose.py under "tests"; no test reads that field.
+
+sha256 of the kit files these results belong to:
+  e36a7011bc302bf4004ba1ca46d7721240cd2354d82a3d000035e2e50ad86dd2  install.py
+  60c56d3dd5251d14075ee5f3593ba0c7fbda3e5acba37bf3e1615729f064d242  KIT.json
+  f83e055cc058a9d40e688b962dd749f81ec0b7de0123a6498f149e389c4c17f0  new/model_executor/layers/fused_moe/experts/dsv41_r2_draftmoe.py
+  9bfc2b59272e1bd4244970bb380702e43c73eb408a5809724b7f9791a2869e39  tests/test_compose.py
+  a249feec4bc5573eedcfc923b4d950bb1b76d38d7acde893f166c36c56e87f35  tests/test_device_harness.py
+  cf2c56c849f26268a9ad924a4e6503fa2dca0ca83689eb597d660441773d747c  tests/test_emulation.py
+  6e0fd6f690a5cae0c1cc440011dd1ae4332313936be2181a8622e4d73a9f69db  tests/test_install.py
+  9227edb6104c9f6aff6878f79732586d62b758e1a5d0fce18a309bbbfb479202  tests/test_plan.py
+  6707937182dd059981a788ca69077a925c03a6dfc4a3d251f0d2912f59ef4fe9  device_test.py
+
+===== tests/test_install.py (Mac, 2026-11-08T14:57:57Z, Python 3.14.7)
+PASS  base sha256 model_executor/layers/quantization/mxfp4.py  -- 67339029
+PASS  base sha256 model_executor/layers/fused_moe/experts/deep_gemm_moe.py  -- 9364f121
+PASS  base sha256 model_executor/layers/fused_moe/experts/dsv41_draft_m32.py  -- a17d574a
+PASS  base sha256 model_executor/layers/fused_moe/deep_gemm_utils.py  -- 58e264c8
+PASS  dry runs and reports all bases OK
+PASS  install exit 0  -- or/layers/fused_moe/experts/deep_gemm_moe.py: patched (9364f121 -> 21e3f9af), 11 tagged lines
+model_executor/layers/fused_moe/experts/dsv41_draft_m32.py: patched (a17d574a -> bf836f55), 6 tagged lines
+model_executor/layers/fused_moe/deep_gemm_utils.py: patched (58e264c8 -> d42686d0), 17 tagged lines
+PASS  install created the new module
+PASS  patched model_executor/layers/quantization/mxfp4.py compiles
+PASS  pure tagged insertion in model_executor/layers/quantization/mxfp4.py: strip('# r2-draftmoe') == base bytes, every tagged line ends with the tag  -- 9 tagged lines
+PASS  patched model_executor/layers/fused_moe/experts/deep_gemm_moe.py compiles
+PASS  pure tagged insertion in model_executor/layers/fused_moe/experts/deep_gemm_moe.py: strip('# r2-draftmoe') == base bytes, every tagged line ends with the tag  -- 11 tagged lines
+PASS  patched model_executor/layers/fused_moe/experts/dsv41_draft_m32.py compiles
+PASS  pure tagged insertion in model_executor/layers/fused_moe/experts/dsv41_draft_m32.py: strip('# r2-draftmoe') == base bytes, every tagged line ends with the tag  -- 6 tagged lines
+PASS  patched model_executor/layers/fused_moe/deep_gemm_utils.py compiles
+PASS  pure tagged insertion in model_executor/layers/fused_moe/deep_gemm_utils.py: strip('# r2-draftmoe') == base bytes, every tagged line ends with the tag  -- 17 tagged lines
+PASS  second install is idempotent
+PASS  status reports PATCHED x4 + new module  -- /.cache/vllm/deep_gemm/cache/sm120_m_grouped_fp8_fp4_gemm_contiguous_1d1d.3a6d4662641d78cb41691c5a89306f93
+prejit dg128b: absent /var/folders/7j/j8m8l08574n5llm9vm62kgz00000gn/T/r2dm-v-du6yi76z/.cache/vllm/deep_gemm/cache/sm120_m_grouped_fp8_fp4_gemm_contiguous_1d1d.5a63770a66faeaa4f1203886b22d547d
+
+PASS  uninstall restores byte-identical bases
+PASS  install refuses a base whose sha256 is not recorded
+PASS  uninstall refuses (changes nothing) when our tagged lines are not our patch
+PASS  install refuses a tagged file that is not our patch
+PASS  round-1 kit directory present (composition is really tested)  -- /Users/jeweled/Documents/dsv41-offline/climb-r1
+PASS  round-1 kits scanned; those touching our files are composed below  -- r1 kits scanned: ['r1-attn', 'r1-drafter', 'r1-eager', 'r1-pdl', 'r1-pf']; overlap {'r1-pdl': ['model_executor/layers/fused_moe/deep_gemm_utils.py']}
+      composed r1-pdl edits onto model_executor/layers/fused_moe/deep_gemm_utils.py
+PASS  r1-composed base of model_executor/layers/fused_moe/deep_gemm_utils.py (c3a05cca) is recorded in KIT.json base_sha256_with_r1  -- c3a05cca1b4f439314c7470621706dee54e37a7ad86a609feb1c2b21bea56765
+PASS  our anchors apply exactly once on the r1-composed model_executor/layers/fused_moe/deep_gemm_utils.py
+PASS  Athena transform_apply anchors match exactly once on the base apply()
+PASS  Athena transform_apply anchors match exactly once on the patched apply()
+PASS  flag-off AST of model_executor/layers/quantization/mxfp4.py == base AST (flags folded to off)
+PASS  flag-off AST of model_executor/layers/fused_moe/experts/deep_gemm_moe.py == base AST (flags folded to off)
+PASS  flag-off AST of model_executor/layers/fused_moe/experts/dsv41_draft_m32.py == base AST (flags folded to off)
+PASS  flag-off AST of model_executor/layers/fused_moe/deep_gemm_utils.py == base AST (flags folded to off)
+PASS  flag-off AST of r1-composed model_executor/layers/fused_moe/deep_gemm_utils.py + ours == r1-composed base AST
+PASS  prelude with DSV41_DRAFT_MOE_G17=None: flags off, module not imported
+PASS  prelude with DSV41_DRAFT_MOE_G17='0': flags off, module not imported
+PASS  prelude with DSV41_DRAFT_MOE_G17='': flags off, module not imported
+PASS  prelude with DSV41_DRAFT_MOE_G17='off': flags off, module not imported
+PASS  parse() accepted values  -- {'0': (False, ''), '': (False, ''), '1': (True, '1'), 'fc1': (True, ''), 'perm': (False, '1'), 'fc1,perm': (True, '1'), ' FC1 , Perm ': (True, '1'), 'permverify': (False, 'verify'), 'fc1,permverify': (True, 'verify'), 'on': (True, '1')}
+PASS  parse() rejects 2, verify, fc2, perm+permverify, unknown tokens
+PASS  module-level flags off with env unset
+
+39/39 passed
+exit=0
+
+===== tests/test_compose.py (Mac, 2026-11-08T14:57:57Z, Python 3.14.7)
+PASS  r1-pdl and r2-moefront kits present
+PASS  S1 r1-pdl install on live bases
+PASS  S1 r1-pdl composed deep_gemm_utils == c3a05cca (recorded)
+PASS  S1 r2-moefront install on top of r1-pdl
+PASS  S1 r1-pdl + r2-moefront composed shas recorded in KIT.json
+PASS  S1 r2-draftmoe install on top of r1-pdl + r2-moefront
+PASS  S1 our status: 4 PATCHED + module
+INFO  S1 today's r2-moefront `status` with our lines on top (its strip list lacks '# r2-draftmoe'): FOREIGN-PATCHED | FOREIGN-PATCHED
+PASS  S1 r2-moefront(+our tag) status: 'patched' for both files with our lines on top
+PASS  S1 composed mxfp4.py compiles; flag-off AST == r1+moefront AST
+PASS  S1 composed deep_gemm_moe.py compiles; flag-off AST == r1+moefront AST
+PASS  S1 composed dsv41_draft_m32.py compiles; flag-off AST == r1+moefront AST
+PASS  S1 composed deep_gemm_utils.py compiles; flag-off AST == r1+moefront AST
+PASS  S1 our second install is idempotent on the composed files
+PASS  S1 our uninstall -> exact r1-pdl + r2-moefront state (all files, bytes)
+PASS  S1 r2-moefront uninstall -> exact r1-pdl state
+PASS  S1 r1-pdl uninstall -> live bases (all files, bytes)
+PASS  S2 r1-pdl uninstall refuses while our lines are present, changes nothing
+PASS  S2 r2-moefront uninstall (today's) refuses while our lines are present, changes nothing
+PASS  S2 our uninstall still gives the exact r1+moefront state
+PASS  S2 then moefront + r1-pdl uninstall -> live bases
+PASS  S3 ours on top of r1-pdl
+PASS  S3 after a blind restore our uninstall exits 0 and leaves deep_gemm_utils at the live 58e264c8 (no c3a05cca)
+PASS  S3 our other 3 files back at live bases, module removed
+PASS  S4 today's r2-moefront installer refuses a file with our lines (documented: install it first) and changes nothing
+PASS  S4 r2-moefront that strips '# r2-draftmoe' installs on top of ours
+PASS  S4 our status with moefront on top: 4 PATCHED + module (not FOREIGN)
+PASS  S4 our install idempotent with moefront on top
+PASS  S4 FIFO: our uninstall first -> exactly moefront-alone files
+PASS  S4 then moefront uninstall -> live bases
+PASS  S4 LIFO: moefront uninstall first -> exactly ours-alone files
+PASS  S4 then our uninstall -> live bases
+PASS  S5 r1-pdl -> ours -> moefront(+tag) all install
+PASS  S5 our uninstall -> exactly r1-pdl -> moefront files
+
+33/33 passed
+exit=0
+
+===== tests/test_plan.py (512S1, 2026-11-08T14:58:00Z, 3.13.13 torch 2.11.0)
+PASS  flags off: apply() call log == base for target-compact at M=[1, 2, 5, 10, 32, 64, 96, 97, 160, 161, 300]
+PASS  flags off: apply() call log == base for drafter-padded at M=[1, 2, 5, 10, 32, 64, 96, 97, 160, 161, 300]
+PASS  flags off: apply() call log == base for drafter-compact at M=[1, 2, 5, 10, 32, 64, 96, 97, 160, 161, 300]
+PASS  flags on: apply() call log == base for target-compact (lever only touches the compact drafter)
+PASS  flags on: apply() call log == base for drafter-padded (lever only touches the compact drafter)
+PASS  flags on, compact drafter: FC1 N=576, compact SiLU writer (576 -> 384, padded_output_size=384), FC2 and gather calls identical to the padded drafter's, M32 for M<=160 / 128-row above, LIVE_ACT at M_sum>=192
+PASS  documented: compact drafter weights without the flag would take the non-compact branch (gates agree: both need DSV41_DRAFT_MOE_G17 fc1)
+PASS  _workspace_m_alignment M=1..400 x 4 geometries: off == base; on == base except compact drafter (32 for M<=160, 128 above)
+PASS  _dsv41_compact_fc1 unchanged (target-only) with the flag on
+PASS  permute dispatch DSV41_MOE_FUSED_PERMUTE=0 G17=off: drafter M32 -> stock; 128-row drafter and target unchanged
+PASS  permute dispatch DSV41_MOE_FUSED_PERMUTE=0 G17=perm: drafter M32 -> fused; 128-row drafter and target unchanged
+PASS  permute dispatch DSV41_MOE_FUSED_PERMUTE=0 G17=permverify: drafter M32 -> stock + verify; 128-row drafter and target unchanged
+PASS  permute dispatch DSV41_MOE_FUSED_PERMUTE=1 G17=off: drafter M32 -> stock; 128-row drafter and target unchanged
+PASS  permute dispatch DSV41_MOE_FUSED_PERMUTE=1 G17=perm: drafter M32 -> fused; 128-row drafter and target unchanged
+PASS  permute dispatch DSV41_MOE_FUSED_PERMUTE=1 G17=permverify: drafter M32 -> stock + verify; 128-row drafter and target unchanged
+PASS  perm: expert_map present -> stock (gate)
+PASS  perm: int64 topk ids accepted (as the target gate)
+PASS  drafter_compact_eligible: drafter geometry -> True
+PASS  drafter_compact_eligible: target / EP / unpadded!=288 / non-SM121 / non-DeepGEMM / target-gate-fired / non-SiLU -> False
+PASS  drafter_compact_eligible: DSV41_MOE_COMPACT unset or 0 -> False (the compact SiLU writer asserts it == '1')
+PASS  documented: compact drafter weights with DSV41_MOE_COMPACT=0 would assert in _act_mul_quant (why the gate requires it)  -- [('AssertionError', '')]
+PASS  drafter_compact_eligible: flag off -> False
+PASS  dsv41_draft_m32.geometry: on accepts 768 and 576; off accepts 768 only
+PASS  sizes M=1..160: slots M*3 <= 1024 (_DSV41_FP_SLOTS), mn_aligned == M_sum, compact FC1 out and FC2 input fit the existing workspaces
+
+24/24 passed
+exit=0
+===== tests/test_emulation.py (512S1, 2026-11-08T14:58:04Z, 3.13.13 torch 2.11.0)
+PASS  L: live _load_w13, 8 TP ranks: compact w13 == padded w13 rows [0:288]+[384:672]; padded pad rows stay 0
+PASS  L: same for the UE8M0 weight scales (compact == padded live rows; pad scale bytes 0)
+PASS  W: packed weight-scale words are per row: compact columns == padded live columns
+PASS  F1+S+F2+gather [random]: compact FC1 cols == padded live cols; padded pad cols are +0 (0x0000); FC2 input bytes + scales identical (clamp none/10); FC2 + gather identical  -- f1=True pad+0=True silu=True fc2+gather=True; live -0.0 outputs: 0
+PASS  F1+S+F2+gather [random2]: compact FC1 cols == padded live cols; padded pad cols are +0 (0x0000); FC2 input bytes + scales identical (clamp none/10); FC2 + gather identical  -- f1=True pad+0=True silu=True fc2+gather=True; live -0.0 outputs: 0
+PASS  F1+S+F2+gather [max]: compact FC1 cols == padded live cols; padded pad cols are +0 (0x0000); FC2 input bytes + scales identical (clamp none/10); FC2 + gather identical  -- f1=True pad+0=True silu=True fc2+gather=True; live -0.0 outputs: 0
+PASS  F1+S+F2+gather [zeros]: compact FC1 cols == padded live cols; padded pad cols are +0 (0x0000); FC2 input bytes + scales identical (clamp none/10); FC2 + gather identical  -- f1=True pad+0=True silu=True fc2+gather=True; live -0.0 outputs: 0
+PASS  F1+S+F2+gather [negzero]: compact FC1 cols == padded live cols; padded pad cols are +0 (0x0000); FC2 input bytes + scales identical (clamp none/10); FC2 + gather identical  -- f1=True pad+0=True silu=True fc2+gather=True; live -0.0 outputs: 0
+PASS  F1+S+F2+gather [cancel]: compact FC1 cols == padded live cols; padded pad cols are +0 (0x0000); FC2 input bytes + scales identical (clamp none/10); FC2 + gather identical  -- f1=True pad+0=True silu=True fc2+gather=True; live -0.0 outputs: 0
+PASS  F1+S+F2+gather [tiny]: compact FC1 cols == padded live cols; padded pad cols are +0 (0x0000); FC2 input bytes + scales identical (clamp none/10); FC2 + gather identical  -- f1=True pad+0=True silu=True fc2+gather=True; live -0.0 outputs: 3432
+PASS  F1+S+F2+gather [ties]: compact FC1 cols == padded live cols; padded pad cols are +0 (0x0000); FC2 input bytes + scales identical (clamp none/10); FC2 + gather identical  -- f1=True pad+0=True silu=True fc2+gather=True; live -0.0 outputs: 0
+PASS  S [hostile bf16 inputs: 1e-40..1e18, +/-0, ties, denormals, 1e18]: identical FP8 bytes and UE8M0 scales
+PASS  S [control]: if the padded FC1 ever produced -0 in its pad columns the FC2 input would differ (0x80 vs 0x00) -> the device test asserts the pad columns are +0  -- 6144 bytes differ in the -0 control
+PASS  P: stock vs fused permute, E=128 top-3 align 32, M=1..160 + hostile routings, independent atomic orders: same grouped_layout, expert ends (LIVE_ACT), M_sum; per slot identical row bytes and packed scale words; dead rows' scale words 0; gathered output identical
+
+14/14 passed
+exit=0
+===== tests/test_device_harness.py (512S1, 2026-11-08T14:58:08Z, 3.13.13 torch 2.11.0)
+PASS launcher default DSV41_SM121_TARGET_M32='1' (want '1')
+PASS launcher default DSV41_DRAFT_MOE_M32='1' (want '1')
+PASS launcher default DSV41_MOE_COMPACT='1' (want '1')
+PASS launcher default DSV41_MOE_LIVE_ACT='1' (want '1')
+PASS launcher default DSV41_MOE_LIVE_ACT_MIN_ROWS='192' (want '192')
+PASS launcher default DSV41_MOE_M32_G1='all' (want 'all')
+PASS launcher default DSV41_MOE_FC1_DEAL='deal' (want 'deal')
+PASS DSV41_DRAFT_MOE_G17 removed from the test process environment
+PASS 14 launcher defaults applied, all expanded ($HOME -> home)
+device_harness: ALL PASS
+exit=0

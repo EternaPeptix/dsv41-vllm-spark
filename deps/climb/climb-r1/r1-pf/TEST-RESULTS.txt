@@ -1,0 +1,122 @@
+r1-pf CPU test results after the review fix (run on Mac Studio 512S1, nice -n 10; no GPU)
+
+### python3 tests/test_r1pf.py
+Sun Nov  8 14:29:06 UTC 2026
+host: 512S1  python: 3.13.13 torch 2.11.0
+63737f9c413ebfa2c408b13cb0cbecddac2b42c6a5e219e6bad43bde095f4bee  base/dsv41_l2_prefetch.py
+8bc9a1b5b73c808580a350fe8618fd6abb34a6f629de11c2053f640a7cd15596  files/vllm/distributed/device_communicators/dsv41_l2_prefetch.py
+5af558fe96edfcd630caa3e673b71788587649a4e0bf9b45b4e8963b39e10548  files/vllm/distributed/device_communicators/dsv41_l2pf_r1.py
+25e89fda6891d68e2e5e69523ba2a25e422c3d08522ac5901ee05ea6d926270f  install.py
+b05b2157e1db7065177f3c1a6ba5054e0cb98550c535168289bfd48fd8abc581  KIT.json
+2a4155f6f1291792ca32c031a192302db70171ca890f1012c834d67e477db055  tests/harness.py
+b85b4bc858ea11cb8cfabea23327d8a40526a1e4920750e1b423cca4c171ee3b  tests/test_r1pf.py
+538c550a6cd0a49da55c230b1b534670cff595e756348bc0054496ff4ebf50ac  tests/installer_cycle.sh
+
+PASS test_base_sha_matches_kit
+PASS test_anchors_apply_to_live_base
+PASS test_installer_cycle
+PASS test_flag_off_module_not_imported
+PASS test_flag_off_identical_launch_sequence
+PASS test_raw_window_selection_equals_make_plan
+PASS test_g29_refused_under_paced_ag
+PASS test_g29_idxtail
+PASS test_g29_pure_rules
+PASS test_g15_shared_w2_post_fork
+PASS test_g11_kvsrc_compressor_in_post_moe_window
+PASS test_g01_dropped
+PASS test_g13_drafter_graph_and_ephase
+PASS test_g13_arms
+PASS test_all_levers_together
+PASS test_stream_protocol_every_env_and_lever
+PASS test_fail_closed
+17/17 passed
+(exit 0)
+
+### bash tests/installer_cycle.sh <byte copy of spark-one live dsv41_l2_prefetch.py, sha256 63737f9c413ebfa2>
+== status
+63737f9c clean   <tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py  [= base_sha256]
+- absent  <tmp>/vllm/distributed/device_communicators/dsv41_l2pf_r1.py  [-]
+r1-pf status: CLEAN (base 63737f9c413ebfa2 module -)
+   (exit 0)
+== dry
+  322:     if _R1 is not None:  # r1-pf
+  323:         _R1.install(mod)  # r1-pf
+  783:         if _R1 is not None:  # r1-pf
+  784:             g2 = _R1.augment_target_g2(g2, events, sel, device)  # r1-pf
+ 1064:     if _R1 is not None and part[0] == "x":  # r1-pf
+ 1065:         return _R1.fork_part(part, where)  # r1-pf
+ 1174: # climb r1 (r1-pf): default-off levers in dsv41_l2pf_r1.py, imported only when a master flag is set  # r1-pf
+ 1175: _R1 = None  # r1-pf
+ 1176: _R1_FLAGS = ('DSV41_L2_PREFETCH_R1_DRAFT', 'DSV41_L2_PREFETCH_R1_IDXTAIL', 'DSV41_L2_PREFETCH_R1_SHW2', 'DSV41_L2_PREFETCH_R1_KVSRC')  # r1-pf
+ 1177: if ENABLED and any(_env(_k, "0").lower() in ("1", "on", "true") for _k in _R1_FLAGS):  # r1-pf
+ 1178:     try:  # r1-pf
+ 1179:         from vllm.distributed.device_communicators import dsv41_l2pf_r1 as _R1  # r1-pf
+ 1180:         _R1.bind(sys.modules[__name__])  # r1-pf
+ 1181:     except Exception as _e:  # noqa: BLE001  # r1-pf
+ 1182:         _R1 = None  # r1-pf
+ 1183:         logger.warning("DSV41_L2_PREFETCH_R1: disabled (%r)", _e)  # r1-pf
+   (exit 0)
+== install
+<tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py: patched (63737f9c -> 8bc9a1b5), 16 tagged lines
+<tmp>/vllm/distributed/device_communicators/dsv41_l2pf_r1.py: 5af558fe
+   (exit 0)
+== install
+<tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py: already patched (8bc9a1b5)
+<tmp>/vllm/distributed/device_communicators/dsv41_l2pf_r1.py: 5af558fe
+   (exit 0)
+== status
+8bc9a1b5 PATCHED <tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py  [= patched_sha256]
+5af558fe present <tmp>/vllm/distributed/device_communicators/dsv41_l2pf_r1.py  [= kit_sha256]
+63737f9c backup  <tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py.bak-r1-pf  [= base_sha256]
+r1-pf status: INSTALLED (base 8bc9a1b5b73c8085 module 5af558fe96edfcd6)
+   (exit 0)
+== append a foreign line to the patched file
+== status
+88008617 PATCHED <tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py  [UNKNOWN sha]
+5af558fe present <tmp>/vllm/distributed/device_communicators/dsv41_l2pf_r1.py  [= kit_sha256]
+63737f9c backup  <tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py.bak-r1-pf  [= base_sha256]
+r1-pf status: INCONSISTENT (base 88008617f610ce51 module 5af558fe96edfcd6)
+   (exit 2)
+== uninstall
+refusing to uninstall (nothing changed; rerun with --force to override):
+  <tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py: sha 88008617f610ce51 is neither KIT.json patched_sha256 8bc9a1b5b73c8085 nor patch(backup); it was edited after install (restoring <tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py.bak-r1-pf would discard those edits)
+   (exit 1)
+== remove the foreign line again
+== status
+8bc9a1b5 PATCHED <tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py  [= patched_sha256]
+5af558fe present <tmp>/vllm/distributed/device_communicators/dsv41_l2pf_r1.py  [= kit_sha256]
+63737f9c backup  <tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py.bak-r1-pf  [= base_sha256]
+r1-pf status: INSTALLED (base 8bc9a1b5b73c8085 module 5af558fe96edfcd6)
+   (exit 0)
+== uninstall
+<tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py: restored 63737f9c
+<tmp>/vllm/distributed/device_communicators/dsv41_l2pf_r1.py: removed
+   (exit 0)
+== status
+63737f9c clean   <tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py  [= base_sha256]
+- absent  <tmp>/vllm/distributed/device_communicators/dsv41_l2pf_r1.py  [-]
+r1-pf status: CLEAN (base 63737f9c413ebfa2 module -)
+   (exit 0)
+63737f9c413ebfa2c408b13cb0cbecddac2b42c6a5e219e6bad43bde095f4bee  <tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py
+== drifted base
+== install
+<tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py: sha256 13f74d715e8a482a != KIT.json base 63737f9c413ebfa2; refusing (rebase the kit)
+   (exit 1)
+0
+
+### rank0-style log lines from the simulation (tests/harness), r1 levers under both launchers
+== 08a249da + IDXTAIL=1 + SHW2=1 + WOB=1
+   DSV41_L2_PREFETCH_R1 (r1-pf) levers: {"draft_eph": false, "draft_graph": false, "idxtail": false, "kvsrc": false, "shw2": true}; draft(qbprev=True head=5.0 MB woa_burst=False gbps=base) eph(18.0 MB gbps=base max=200 us) idxtail(6.0 MB x2) shw2(2.0 MB) kvsrc(2.5 MB) INACTIVE: {"idxtail": "built for burst all-gather windows; with 'ag' in PACE_KINDS (launcher 08a249da) the tail would queue on pacer stream 3 ahead of the
+   DSV41_L2_PREFETCH g2 plan tokens=4 {"bytes_mb": {"attn_p": 55.68, "pre_p": 74.21}, "forks": {"attn_p": 6, "pre_p": 19}, "moved_mb": {}} r1={"shw2_mb": 9.12, "shw2_n": 6}; first: [ag1 layers.0.attn.wq_b:0.16 layers.0.attn.wq_b:5.00 layers.0.attn.wo_b:0.16 layers.0.attn.wo_b:0.68] [ar2 layers.0.ffn.gate:3.75] [ar3 layers.1.engram:0.04 layers.1.engram:0.04] [L1 language_model.model.layers.0.attn.wo_a:0.12 language_model
+== fda6d05a + IDXTAIL=1
+   DSV41_L2_PREFETCH_R1 (r1-pf) levers: {"draft_eph": false, "draft_graph": false, "idxtail": true, "kvsrc": false, "shw2": false}; draft(qbprev=True head=5.0 MB woa_burst=False gbps=base) eph(18.0 MB gbps=base max=200 us) idxtail(6.0 MB x2) shw2(2.0 MB) kvsrc(2.5 MB)
+   DSV41_L2_PREFETCH g2 plan tokens=4 {"bytes_mb": {"attn_b": 24.72, "pre_b": 48.0, "pre_p": 26.21}, "forks": {"attn_b": 6, "pre_b": 8, "pre_p": 11}, "moved_mb": {}} r1={"idxtail_mb": 13.21, "idxtail_n": 3}; first: [ag1 layers.0.attn.wq_b:0.16 layers.0.attn.wq_b:5.00 layers.0.attn.wo_b:0.16 layers.0.attn.wo_b:0.68] [ar2 layers.0.ffn.gate:3.75] [ar3 layers.1.engram:0.04 layers.1.engram:0.04] [L1 language_model.model.laye
+
+### compile check of the kit files with the Spark's own interpreter (spark-one ~/venvs/vllm032/bin/python3, source on stdin, nothing written)
+dsv41_l2pf_r1.py compiles on 3.12.14
+dsv41_l2_prefetch.py compiles on 3.12.14
+
+### read-only production check, 2026-11-08 (ssh -n spark-<n>: sha256sum / ls / sha256sum ~/dsv41-tp8.sh)
+spark-one..eight: live dsv41_l2_prefetch.py 63737f9c413ebfa2 on 8/8, no r1-pf files or .bak-r1-pf, launcher 08a249da on 8/8
+
+Not covered by CPU tests: real kernels, real module hooks inside vLLM, timing. See README 'rank0.log lines to check' and KIT.json device_checks.

@@ -39,6 +39,10 @@ import threading
 
 # (FC1 N, hidden K, top-k, local experts) of the DSpark drafter routed MoE on one TP8 rank (padded FC1).
 DRAFT_GEOMETRY = (768, 5120, 3, 128)
+_R2DM_FC1, _R2DM_PERM = False, ""  # G17 DSV41_DRAFT_MOE_G17, default off (experts/dsv41_r2_draftmoe.py)  # r2-draftmoe
+if os.environ.get("DSV41_DRAFT_MOE_G17", "0").strip().lower() not in ("", "0", "off", "false"):  # r2-draftmoe
+    from vllm.model_executor.layers.fused_moe.experts import dsv41_r2_draftmoe as _r2dm  # r2-draftmoe
+    _R2DM_FC1, _R2DM_PERM = _r2dm.FC1, _r2dm.PERM  # r2-draftmoe
 DEFAULT_MAX_M = 160
 _LOCK = threading.RLock()
 _VERIFIER = None
@@ -63,6 +67,8 @@ def max_m() -> int:
 
 
 def geometry(N: int, K: int, topk: int, experts: int) -> bool:
+    if _R2DM_FC1 and (N, K, topk, experts) == _r2dm.DRAFT_COMPACT_GEOMETRY:  # r2-draftmoe
+        return True  # r2-draftmoe
     return (N, K, topk, experts) == DRAFT_GEOMETRY
 
 

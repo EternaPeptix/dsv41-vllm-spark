@@ -471,7 +471,7 @@ def human(rep: dict, free_now: int) -> str:
 # ---------------------------------------------------------------- main
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--model", default=os.path.expanduser("~/models/dsv41/uncensored-fp8"))
+    ap.add_argument("--model", default=os.path.expanduser("~/models/dsv41/official-fp8"))
     ap.add_argument("--rank", type=int, required=True)
     ap.add_argument("--world", type=int, default=WORLD)
     ap.add_argument("--dry-run", action="store_true")

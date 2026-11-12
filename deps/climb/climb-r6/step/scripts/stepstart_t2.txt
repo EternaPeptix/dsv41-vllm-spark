@@ -1,0 +1,136 @@
+== q0.1.sqlite  steps 60  drafter-end -> target-start span p50 57.7 p10 51.5 us
+   E-pre vocab_parallel_embedding_ker#0     n  60 dur p50    3.94  gap-before p50    2.66
+   E-pre ar_kernel_pl#1                     n  60 dur p50   31.52  gap-before p50    2.14
+   E-pre _gather_lookback_kernel#2          n  60 dur p50    1.54  gap-before p50    7.07
+   E-pre ->graph gap                        n  60 dur p50   10.14  gap-before p50    0.00
+   eng L0 wkvAG dur                                         n  60 p50   29.63 p10   25.60
+   eng L0 wkvAG gap in                                      n  60 p50    0.70 p10    0.70
+   eng L0 wkvAG gap out                                     n  60 p50    0.54 p10    0.54
+   eng L0 lookAG dur                                        n  60 p50   21.98 p10   18.78
+   eng L0 lookAG gap in                                     n  60 p50    0.70 p10    0.70
+   eng L0 lookAG gap out                                    n  60 p50    0.35 p10    0.32
+   eng L0 between(look->wkv) n                              n  60 p50    2.00 p10    2.00
+   eng L0 between span                                      n  60 p50   87.39 p10   84.67
+   eng L0   kernel_cutlass_kernel_flashinferquantiza        n  60 p50    2.08 p10    1.92
+   eng L0   device_kernel                                   n  60 p50   84.03 p10   80.93
+   eng L0 lookAG prod=mhc_post_tilelang_kernel              n  60 p50    0.00 p10    0.00
+   eng L1 wkvAG dur                                         n  60 p50   32.00 p10   26.72
+   eng L1 wkvAG gap in                                      n  60 p50    0.70 p10    0.45
+   eng L1 wkvAG gap out                                     n  60 p50    0.54 p10    0.54
+   eng L1 lookAG dur                                        n  60 p50   21.63 p10   20.06
+   eng L1 lookAG gap in                                     n  60 p50    0.74 p10    0.70
+   eng L1 lookAG gap out                                    n  60 p50    0.35 p10    0.32
+   eng L1 between(look->wkv) n                              n  60 p50    2.00 p10    2.00
+   eng L1 between span                                      n  60 p50   87.55 p10   85.63
+   eng L1   kernel_cutlass_kernel_flashinferquantiza        n  60 p50    3.10 p10    1.98
+   eng L1   device_kernel                                   n  60 p50   83.62 p10   82.18
+   eng L1 lookAG prod=mhc_post_tilelang_kernel              n  60 p50    0.00 p10    0.00
+   drafter first AR dur                                       n  60 p50   30.75
+   drafter first AR grid                                      n  60 p50    7.00
+   drafter gap in                                             n  60 p50    0.54
+   drafter gap out                                            n  60 p50    0.58
+   drafter prod=vocab_parallel_embedding_kernel               n  60 p50    0.00
+   drafter cons=elementwise_kernel                            n  60 p50    0.00
+   drafter kernels before                                     n  60 p50   24.00
+== q0.2.sqlite  steps 59  drafter-end -> target-start span p50 51.7 p10 42.3 us
+   E-pre vocab_parallel_embedding_ker#0     n  59 dur p50    3.97  gap-before p50    2.59
+   E-pre ar_kernel_pl#1                     n  59 dur p50   24.54  gap-before p50    2.11
+   E-pre _gather_lookback_kernel#2          n  59 dur p50    1.54  gap-before p50    6.98
+   E-pre ->graph gap                        n  59 dur p50   10.11  gap-before p50    0.00
+   eng L0 wkvAG dur                                         n  59 p50   22.66 p10   18.91
+   eng L0 wkvAG gap in                                      n  59 p50    0.74 p10    0.70
+   eng L0 wkvAG gap out                                     n  59 p50    0.54 p10    0.54
+   eng L0 lookAG dur                                        n  59 p50   18.53 p10   16.32
+   eng L0 lookAG gap in                                     n  59 p50    0.74 p10    0.70
+   eng L0 lookAG gap out                                    n  59 p50    0.35 p10    0.32
+   eng L0 between(look->wkv) n                              n  59 p50    2.00 p10    2.00
+   eng L0 between span                                      n  59 p50   89.25 p10   85.28
+   eng L0   kernel_cutlass_kernel_flashinferquantiza        n  59 p50    1.95 p10    1.89
+   eng L0   device_kernel                                   n  59 p50   85.98 p10   82.08
+   eng L0 lookAG prod=mhc_post_tilelang_kernel              n  59 p50    0.00 p10    0.00
+   eng L1 wkvAG dur                                         n  59 p50   24.80 p10   19.74
+   eng L1 wkvAG gap in                                      n  59 p50    0.70 p10    0.64
+   eng L1 wkvAG gap out                                     n  59 p50    0.54 p10    0.54
+   eng L1 lookAG dur                                        n  59 p50   19.81 p10   18.34
+   eng L1 lookAG gap in                                     n  59 p50    0.70 p10    0.67
+   eng L1 lookAG gap out                                    n  59 p50    0.35 p10    0.32
+   eng L1 between(look->wkv) n                              n  59 p50    2.00 p10    2.00
+   eng L1 between span                                      n  59 p50   88.70 p10   84.77
+   eng L1   kernel_cutlass_kernel_flashinferquantiza        n  59 p50    2.02 p10    1.92
+   eng L1   device_kernel                                   n  59 p50   85.22 p10   81.47
+   eng L1 lookAG prod=mhc_post_tilelang_kernel              n  59 p50    0.00 p10    0.00
+   drafter first AR dur                                       n  59 p50   31.42
+   drafter first AR grid                                      n  59 p50    7.00
+   drafter gap in                                             n  59 p50    0.54
+   drafter gap out                                            n  59 p50    0.58
+   drafter prod=vocab_parallel_embedding_kernel               n  59 p50    0.00
+   drafter cons=elementwise_kernel                            n  59 p50    0.00
+   drafter kernels before                                     n  59 p50   24.00
+== q0.3.sqlite  steps 60  drafter-end -> target-start span p50 56.8 p10 52.7 us
+   E-pre vocab_parallel_embedding_ker#0     n  60 dur p50    3.94  gap-before p50    2.62
+   E-pre ar_kernel_pl#1                     n  60 dur p50   28.06  gap-before p50    2.18
+   E-pre _gather_lookback_kernel#2          n  60 dur p50    1.54  gap-before p50    7.36
+   E-pre ->graph gap                        n  60 dur p50   10.14  gap-before p50    0.00
+   eng L0 wkvAG dur                                         n  60 p50   31.46 p10   24.51
+   eng L0 wkvAG gap in                                      n  60 p50    0.70 p10    0.70
+   eng L0 wkvAG gap out                                     n  60 p50    0.54 p10    0.54
+   eng L0 lookAG dur                                        n  60 p50   21.63 p10   17.41
+   eng L0 lookAG gap in                                     n  60 p50    0.70 p10    0.70
+   eng L0 lookAG gap out                                    n  60 p50    0.35 p10    0.32
+   eng L0 between(look->wkv) n                              n  60 p50    2.00 p10    2.00
+   eng L0 between span                                      n  60 p50   88.03 p10   84.32
+   eng L0   kernel_cutlass_kernel_flashinferquantiza        n  60 p50    2.21 p10    1.95
+   eng L0   device_kernel                                   n  60 p50   84.67 p10   80.42
+   eng L0 lookAG prod=mhc_post_tilelang_kernel              n  60 p50    0.00 p10    0.00
+   eng L1 wkvAG dur                                         n  60 p50   33.60 p10   25.98
+   eng L1 wkvAG gap in                                      n  60 p50    0.70 p10    0.45
+   eng L1 wkvAG gap out                                     n  60 p50    0.54 p10    0.54
+   eng L1 lookAG dur                                        n  60 p50   21.54 p10   19.81
+   eng L1 lookAG gap in                                     n  60 p50    0.70 p10    0.70
+   eng L1 lookAG gap out                                    n  60 p50    0.35 p10    0.19
+   eng L1 between(look->wkv) n                              n  60 p50    2.00 p10    2.00
+   eng L1 between span                                      n  60 p50   88.64 p10   84.51
+   eng L1   kernel_cutlass_kernel_flashinferquantiza        n  60 p50    3.39 p10    1.95
+   eng L1   device_kernel                                   n  60 p50   84.90 p10   81.28
+   eng L1 lookAG prod=mhc_post_tilelang_kernel              n  60 p50    0.00 p10    0.00
+   drafter first AR dur                                       n  60 p50   32.06
+   drafter first AR grid                                      n  60 p50    7.00
+   drafter gap in                                             n  60 p50    0.54
+   drafter gap out                                            n  60 p50    0.58
+   drafter prod=vocab_parallel_embedding_kernel               n  60 p50    0.00
+   drafter cons=elementwise_kernel                            n  60 p50    0.00
+   drafter kernels before                                     n  60 p50   24.00
+== q4.2.sqlite  steps 59  drafter-end -> target-start span p50 54.6 p10 42.7 us
+   E-pre vocab_parallel_embedding_ker#0     n  59 dur p50    1.76  gap-before p50    2.66
+   E-pre ar_kernel_pl#1                     n  59 dur p50   28.70  gap-before p50    2.34
+   E-pre _gather_lookback_kernel#2          n  59 dur p50    1.73  gap-before p50    7.01
+   E-pre ->graph gap                        n  59 dur p50   10.02  gap-before p50    0.00
+   eng L0 wkvAG dur                                         n  59 p50   24.51 p10   18.56
+   eng L0 wkvAG gap in                                      n  59 p50    0.67 p10    0.38
+   eng L0 wkvAG gap out                                     n  59 p50    0.54 p10    0.51
+   eng L0 lookAG dur                                        n  59 p50   18.02 p10   15.71
+   eng L0 lookAG gap in                                     n  59 p50    0.74 p10    0.70
+   eng L0 lookAG gap out                                    n  59 p50    0.35 p10    0.32
+   eng L0 between(look->wkv) n                              n  59 p50    2.00 p10    2.00
+   eng L0 between span                                      n  59 p50   89.63 p10   85.92
+   eng L0   kernel_cutlass_kernel_flashinferquantiza        n  59 p50    1.95 p10    1.89
+   eng L0   device_kernel                                   n  59 p50   86.43 p10   82.72
+   eng L0 lookAG prod=mhc_post_tilelang_kernel              n  59 p50    0.00 p10    0.00
+   eng L1 wkvAG dur                                         n  59 p50   26.05 p10   20.54
+   eng L1 wkvAG gap in                                      n  59 p50    0.70 p10    0.70
+   eng L1 wkvAG gap out                                     n  59 p50    0.54 p10    0.54
+   eng L1 lookAG dur                                        n  59 p50   21.38 p10   19.81
+   eng L1 lookAG gap in                                     n  59 p50    0.70 p10    0.70
+   eng L1 lookAG gap out                                    n  59 p50    0.35 p10    0.19
+   eng L1 between(look->wkv) n                              n  59 p50    2.00 p10    2.00
+   eng L1 between span                                      n  59 p50   87.10 p10   83.65
+   eng L1   kernel_cutlass_kernel_flashinferquantiza        n  59 p50    2.66 p10    1.95
+   eng L1   device_kernel                                   n  59 p50   83.42 p10   80.38
+   eng L1 lookAG prod=mhc_post_tilelang_kernel              n  59 p50    0.00 p10    0.00
+   drafter first AR dur                                       n  59 p50   26.59
+   drafter first AR grid                                      n  59 p50    7.00
+   drafter gap in                                             n  59 p50    0.58
+   drafter gap out                                            n  59 p50    0.58
+   drafter prod=vocab_parallel_embedding_kernel               n  59 p50    0.00
+   drafter cons=elementwise_kernel                            n  59 p50    0.00
+   drafter kernels before                                     n  59 p50   24.00

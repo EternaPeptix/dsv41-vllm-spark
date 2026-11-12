@@ -84,6 +84,9 @@ logger = init_logger(__name__)
 # r3-dense flags (default off; see vllm/models/deepseek_v41/nvidia/dsv41_r3_dense.py)
 _DSV41_QKV_A_SHARD = __import__("os").environ.get("DSV41_QKV_A_SHARD", "") == "1"
 _DSV41_IDX_WPROJ = bool(__import__("os").environ.get("DSV41_IDX_WPROJ", ""))
+# r1-attn IDXPAR (audit G20; default off; see nvidia/dsv41_idxpar.py)  # r1-attn
+_DSV41_IDXPAR = __import__("os").environ.get("DSV41_IDXPAR", "0").strip() not in ("", "0")  # r1-attn
+_DSV41_PRIO_CMP = __import__("os").environ.get("DSV41_PRIO_CMP", "").strip().lower() not in ("", "0", "off", "false", "no")  # r5-prio
 
 
 def _replace_layer_index(prefix: str, layer_id: int) -> str:
@@ -610,6 +613,9 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase, ABC):
         else:
             self.compressed_cache_prefix = None
 
+        if _DSV41_IDXPAR:  # r1-attn
+            from vllm.models.deepseek_v41.nvidia import dsv41_idxpar as _idxpar  # r1-attn
+            self._dsv41_idxpar = _idxpar.LayerPlan.create(self)  # r1-attn
         if vllm_config.kernel_config.enable_jit_warmup:
             from vllm.v1.attention.backends.mla.sparse_swa import (
                 _COMPUTE_PREFILL_METADATA_KERNEL,
@@ -856,6 +862,11 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase, ABC):
         latent is ready, main-cache insertion overlaps indexer preparation;
         both cache writes finish before sparse attention reads either cache.
         """
+        if _DSV41_IDXPAR and self._dsv41_idxpar is not None:  # r1-attn
+            if self._dsv41_idxpar.run(  # r1-attn
+                hidden_states, qr, kv, qr_scale, kv_score, indexer_weights, positions, attn_out  # r1-attn
+            ):  # r1-attn
+                return  # r1-attn
         attn_metadata = get_forward_context().attn_metadata
         indexer = self.indexer
         compressor = self.compressor
@@ -992,6 +1003,11 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase, ABC):
 
             aux_fns[1] = indexer_weights_proj
 
+        if _DSV41_PRIO_CMP and self.compressor is not None:  # r5-prio
+            from vllm.models.deepseek_v41.nvidia import dsv41_prio as _prio  # r5-prio
+            return _prio.cmp_parallel_input_projections(  # r5-prio
+                self, hidden_states, aux_fns, aux_streams,  # r5-prio
+                hidden_states.shape[0] <= envs.VLLM_MULTI_STREAM_GEMM_TOKEN_THRESHOLD)  # r5-prio
         qr_kv, (kv_score, indexer_weights) = execute_in_parallel(
             lambda: self._fused_wqa_wkv_gemm(hidden_states),
             aux_fns,

@@ -1,0 +1,13 @@
+sha256	loaded_from_on_every_spark	source_in_this_repo	how_it_is_built
+84c6db595b0b8781074aecb7e68acd2fcce10110fccad962b40e76e12cf7e811	~/dsv41-fc2/athena_fc2_k288_pack_sm121.so	deps/athena-fc2/pack	build_fc2_pack.py, TORCH_CUDA_ARCH_LIST=12.1a (see deps/athena-fc2/PROD_SO_SHA256.txt)
+85d888ae36fdfbc1eb126e3c9048f6e2dc9b89a5189aae2488bc89d630b515e0	~/dsv41-fc2/athena_tp8_fc2_packed_graph_sm121.so	deps/athena-fc2/graph	run_fc2_graph_build.sh, TORCH_CUDA_ARCH_LIST=12.1a
+c054de3ac7f13f8038e5fcade8dea0d18756e13d88f13ce2dcc46bc91457dadc	~/dsv41-r2/skinny_mx/build/skinny_mx_ext.so	deps/dsv41-r2/skinny_mx	build.py (torch cpp_extension JIT)
+b3af28da9120e5efe1493814768fbf42a5d7194e343a5b9369e3214d9f1f9a92	~/dsv41-r2/skinny_mx_v2/build/skinny_mx_v2_ext.so	deps/dsv41-r2/skinny_mx_v2 (kit: deps/climb/climb-r2/r2-skinny)	build.py (torch cpp_extension JIT); DSV41_SKINNY_V2=1
+d5250d7949fa7caef4221966d6fced38f4c71ae03d8ab3bb22245ad91cb65747	~/dsv41-r3/xsplit/build/libdsv41_xsplit.so	deps/climb/climb-r3/r3-xsplit/src	src/build.sh (nvcc, sm_121a); DSV41_ATTN_XSPLIT=1
+e28cd324f1ad563ddc9a5dbbc1f55bef7f63234f21d832e29fe23c546d4c1513	~/dsv41-stage/bs03/build/vllm_bs03_det_topk_sm121.so	deps/dsv41-stage/bs03	build.sh; DSV41_BS03_DET_TOPK=1
+b1c4eff850fc243ebaad12bd04bae00a7910f310dde20727649517ecf98105a9	~/dsv41-stage/g130/fc1/trees/deal-base/_C.cpython-312-aarch64-linux-gnu.so	deps/dsv41-stage/g130/fc1 (tree + header/dsv41_fc1_deal.cuh)	ops/build-deal.sh; DSV41_MOE_FC1_DEAL=deal
+6fea5091715fc33836ec32c9c1aabfe24f3733756d00ffab0af6f326ea479626	~/dsv41-stage/g1/m32-bw/trees/all-d05/_C.cpython-312-aarch64-linux-gnu.so	deps/dsv41-stage/g1/m32-bw	see its README; DSV41_MOE_M32_G1=all
+33d4eb19f3dc7c281440afa6df80724c1f9adae0ed6bc8e57f835b9eea83889a	~/dsv41-stage/g2/fc2c-on-m32all/tree/_C.cpython-312-aarch64-linux-gnu.so	deps/dsv41-stage/g2/fc2c-on-m32all	see its README; DSV41_MOE_FC2C=1
+a09f85e8757e693f7c0bccce62b5717678a06f4c85cb00959daf64e38939bcbc	~/dsv41-stage/r4/l2-prefetch/libdsv41_l2pf.so	deps/dsv41-stage/r4/l2-prefetch	l2pf.cu (nvcc -shared); DSV41_L2_PREFETCH=1
+b79ab9606c76d3a42d84718838cdd6008f9682588a9a87cff9f3258b51768481	~/dsv41-stage/r7comm2/build/rdma_ar_ext.so	deps/dsv41-stage/r7comm2 (native/ + kit/src/)	kit/ops/build8-r7.sh -> build.sh; == KIT.json gated .so; RDMA_AR_EXT + DSV41_RDMA_TRIM=1
+0451009d0b4732e9c4867ab2d3ec7130be24e517bf22228a83dfa6a222a9d622	~/rdma_ar_dsv41/build-g2ct/libdsv41_l2pf_g2.so	deps/dsv41-stage/g2/colltrim/native/l2pf_g2.cu	native/build_g2.py

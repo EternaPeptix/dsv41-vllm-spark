@@ -1,0 +1,246 @@
+{
+ "name": "r6-step",
+ "summary": "Climb round 6: step-start collectives (C3: column-sharded embedding with AG instead of AR for the target and DSpark embeddings; one packed rows gather and optionally one packed wkv gather for the two Engram layers) and the E1 DSpark main_proj local GEMM on a side stream from the CERT screen's end to combine_hidden_states (C4). Two anchor-patched live files + one new module; every flag default off and inert when off.",
+ "levers": [
+  {
+   "id": "C3-COLEMB",
+   "flag": "DSV41_STEP_COLEMB=1",
+   "status": "built"
+  },
+  {
+   "id": "C3-PACK-look",
+   "flag": "DSV41_STEP_ENGRAM_PACK=look",
+   "status": "built"
+  },
+  {
+   "id": "C3-PACK-all",
+   "flag": "DSV41_STEP_ENGRAM_PACK=all",
+   "status": "built"
+  },
+  {
+   "id": "C3-EMB-INGRAPH (5->2 completion)",
+   "flag": "-",
+   "status": "skipped"
+  },
+  {
+   "id": "C4",
+   "flag": "DSV41_STEP_C4=1",
+   "status": "built"
+  }
+ ],
+ "flags": [
+  {
+   "name": "DSV41_STEP_COLEMB",
+   "default": "unset (off)",
+   "on_value": "1",
+   "meaning": "target (eager) and DSpark (in-graph) embeddings: column-table lookup + one column all-gather instead of vocab-parallel lookup + all-reduce, for 0 < T <= DSV41_STEP_COLEMB_MAX_T (default 128, capped at the rows whose stock AR is the rdma path). Table built eagerly once from the live path with a full-table owner-row check vs canon(W) on every rank + cross-rank checksum; refuses on any mismatch. +165 MB/rank."
+  },
+  {
+   "name": "DSV41_STEP_COLEMB_MAX_T",
+   "default": "128",
+   "on_value": "int",
+   "meaning": "largest row count that takes the column path"
+  },
+  {
+   "name": "DSV41_STEP_ENGRAM_PACK",
+   "default": "unset (off)",
+   "on_value": "look | all (1 = look)",
+   "meaning": "look: Engram layers 1 and 14 share one rows all-gather at layer 1's Engram.embed (4 -> 3 Engram collectives). all: also one wkv all-gather at layer 1 with layer 14's wkv GEMM run right after layer 1's on main (4 -> 2). all falls back to look while DSV41_PRIO_ENGRAM_HOIST is on. Decode-sized forwards only, never in a breakable capture, SP, EngramBatch or Engram DP > 1."
+  },
+  {
+   "name": "DSV41_STEP_ENGRAM_PACK_MAX_T",
+   "default": "128",
+   "on_value": "int",
+   "meaning": "largest forward that packs"
+  },
+  {
+   "name": "DSV41_STEP_C4",
+   "default": "unset (off)",
+   "on_value": "1",
+   "meaning": "CERT-armed steps: cat + MXFP8 quant + CUTLASS GEMM of the r4 column-split main_proj on a side stream forked after the screen kernel; combine_hidden_states waits on its event and runs the all-gather + main_norm on main where the stock path does. Refused while DSV41_MAINPROJ_HOIST (G12) is on."
+  },
+  {
+   "name": "DSV41_STEP_C4_AUDIT",
+   "default": "0",
+   "on_value": "N",
+   "meaning": "first N consumed steps: also recompute the stock local GEMM at combine time, compare bitwise on device, and SERVE the stock result (so the audit arm is exact whether or not C4 is); one host read at step N; mismatch disables C4. Audit arms only (puts the GEMM back on the critical path for N steps)."
+  }
+ ],
+ "files": [
+  {
+   "path": "models/deepseek_v41/common/engram.py",
+   "action": "patch",
+   "base_sha256": "aa8aad1ba64ff9b84d64a763ab2de615e4ac09a5bb9d578f31620bf4a78981e1",
+   "compose_sha256": [
+    "c8170bd9355f7c7f25ad4f3416334207fc85cb6b047ac4a4e7a4fc32c8da1021"
+   ],
+   "patched_sha256": [
+    "34cf684e87b650f7a7d28b66649bf32b8f6620502297453ee3e0ac621a004077",
+    "e99f623d3c461fa6d82002750f573dfac2a9f13ffc1e5b5341d090d9c322a148"
+   ],
+   "base_note": "live 8/8 on 2026-11-09 (launcher 166d7aac); compose = r5-prio installed (c8170bd9 -> e99f623d). End-of-file install line only."
+  },
+  {
+   "path": "models/deepseek_v41/nvidia/dsv41_r4_small.py",
+   "action": "patch",
+   "base_sha256": "3364d8c877db7e532923fe03d6da5fa2763867d06d18f575c4c8835556faae8e",
+   "compose_sha256": [],
+   "patched_sha256": [
+    "d9bf5d596c261771379d1ce5c8fb505cd3b5edff19540f7d8ccf1973fa845e74"
+   ],
+   "base_note": "live 8/8 (r1-drafter installed); no r5 kit touches it"
+  },
+  {
+   "path": "models/deepseek_v41/nvidia/dsv41_step.py",
+   "action": "new",
+   "kit_sha256": "425c651509c46d0557ed019a8be19bfb2cffbb3c1c4764e1f577f94f33273cb2",
+   "prior_sha256": [
+    "ebe2f7bbebefe91633079260e8e56d8b9f750b24ebe8df97fd17fb0ecf35128d"
+   ]
+  }
+ ],
+ "install": "python3 install.py install   (8/8, ONLY from the window's KIT_INSTALL step while climb-window.sh holds CLUSTER_LOCK; install.py itself does not check the lock and there is no 8/8 fleet driver; status: python3 install.py status)",
+ "uninstall": "python3 install.py uninstall   (LIFO: before any climb-r5/install-all.sh uninstall/status/preflight/device-plan, which report engram.py FOREIGN and refuse while r6-step is installed on top of r5-prio)",
+ "install_order": "after climb-r5/install-all.sh (or on live without r5). r5-prio pins engram.py's base sha, so r6-step must be uninstalled before r5-prio is installed or uninstalled, then reinstalled.",
+ "depends_on": [
+  "r4-e1 DSV41_R4_MAINPROJ_SPLIT=1 + DSV41_R4_CERT_HEAD=1 (live) for C4",
+  "rdma_ar all-reduce + column all-gather (live .so 14d049dd, DSV41_RDMA_AG_COLS=1) for C3"
+ ],
+ "conflicts_with": [
+  "G12 DSV41_MAINPROJ_HOIST (C4 refuses while it is on)",
+  "r5-prio DSV41_PRIO_ENGRAM_HOIST with ENGRAM_PACK=all (all degrades to look)"
+ ],
+ "composes_with": [
+  "r5-prio ENGRAM_HOIST with ENGRAM_PACK=look (packed gather moves to layer 0 with the hoist's embed call)",
+  "r5-glue / r5-ffnfront / harness (disjoint files)"
+ ],
+ "expected_gain_pct": {
+  "COLEMB": {
+   "low": 0.08,
+   "central": 0.11,
+   "high": 0.16,
+   "ms_per_step": [
+    0.016,
+    0.024,
+    0.034
+   ],
+   "basis": "t2: eager embedding AR 24.5-31.5 us -> eager column AG (E1 main_proj AG [M,640] 16-22 us) saves 3-15; drafter embedding AR 26.6-32.1 us (two-shot, no paced prefetch in its window) -> in-graph AG (drafter AG p50 12.0-12.3) saves 13-19"
+  },
+  "PACK_look": {
+   "low": -0.01,
+   "central": 0.04,
+   "high": 0.08,
+   "ms_per_step": [
+    -0.003,
+    0.008,
+    0.016
+   ],
+   "basis": "t2: layer-14 rows AG 19.8-21.6 us + 1.05 us gaps removed; +cat +split copy +bigger AG 5-7 us; the removed window carried 18-22 us of paced L2 prefetch (fully covered): up to ~17 us of DRAM hiding may be lost unless the planner re-places it; new wait on layer 14's lookup event at layer 1 costs 0 on t2 (scripts/engwait_t2.txt: lookup ends >= 379 us before layer 1's rows AG in all 360 forwards)"
+  },
+  "PACK_all_extra": {
+   "low": 0.01,
+   "central": 0.06,
+   "high": 0.12,
+   "ms_per_step": [
+    0.003,
+    0.013,
+    0.025
+   ],
+   "basis": "t2: layer-14 wkv AG 24.8-33.6 us + 1.24 gaps removed; +cat +copy +2x payload 8-12 us; window carried 10-13 us of paced prefetch. GEMMs stay on the critical path (same total)"
+  },
+  "C4": {
+   "low": -0.3,
+   "central": 0.27,
+   "high": 0.31,
+   "ms_per_step": [
+    -0.06,
+    0.056,
+    0.065
+   ],
+   "basis": "t2 E1 (6 traces): quant 3.7-4.3 + GEMM 61.4-64.8 us + 2 gaps leave main; side chain needs ~70 us from screen end, main reaches combine 126-215 us (p10 114-155) after it -> hidden; contention with refine/argmax 3-15 us. Low: G12-chain (same fork point) measured -0.95% in w2 with no root cause found"
+  },
+  "combined_central": 0.48,
+  "vs": "production 166d7aac (G1 130.23); 1% G1 ~ 0.21 ms/step"
+ },
+ "window_arms": [
+  {
+   "name": "control",
+   "env": {
+    "RDMA_AR_AUDIT": "200"
+   }
+  },
+  {
+   "name": "c4-audit",
+   "env": {
+    "RDMA_AR_AUDIT": "200",
+    "DSV41_STEP_C4": "1",
+    "DSV41_STEP_C4_AUDIT": "2000"
+   },
+   "note": "exactness arm first: rank0..7 log 'DSV41_STEP_C4 audit: 2000 steps bitwise identical ... PASS'; the stock y is served during the 2000 audited steps; not a timing arm"
+  },
+  {
+   "name": "c4",
+   "env": {
+    "RDMA_AR_AUDIT": "200",
+    "DSV41_STEP_C4": "1"
+   },
+   "priority": 1
+  },
+  {
+   "name": "colemb",
+   "env": {
+    "RDMA_AR_AUDIT": "200",
+    "DSV41_STEP_COLEMB": "1"
+   },
+   "priority": 1,
+   "note": "boot line 'DSV41_STEP_COLEMB rank r: full-table check ... PASS' 8/8"
+  },
+  {
+   "name": "pack-look",
+   "env": {
+    "RDMA_AR_AUDIT": "200",
+    "DSV41_STEP_ENGRAM_PACK": "look"
+   },
+   "priority": 2
+  },
+  {
+   "name": "pack-all",
+   "env": {
+    "RDMA_AR_AUDIT": "200",
+    "DSV41_STEP_ENGRAM_PACK": "all"
+   },
+   "priority": 2,
+   "note": "needs DSV41_PRIO_ENGRAM_HOIST off (r5-prio flag)"
+  },
+  {
+   "name": "step-all",
+   "env": {
+    "RDMA_AR_AUDIT": "200",
+    "DSV41_STEP_C4": "1",
+    "DSV41_STEP_COLEMB": "1",
+    "DSV41_STEP_ENGRAM_PACK": "all"
+   },
+   "priority": 3
+  },
+  {
+   "name": "hoist-vs-all",
+   "env": {
+    "RDMA_AR_AUDIT": "200",
+    "DSV41_PRIO_ENGRAM_HOIST": "1",
+    "DSV41_STEP_ENGRAM_PACK": "look"
+   },
+   "priority": 3,
+   "note": "only if r5 is installed and both pack-all and r5 eh arms help: decides which replaces the other"
+  }
+ ],
+ "device_checks": [
+  "device_test.py on a stopped node in the mandatory env (source ~/venvs/vllm032/bin/activate; export PATH=/usr/local/cuda/bin:$PATH CUDA_HOME=/usr/local/cuda): E0 builds mtp.0.main_proj and layers.{1,14}.engram.wkv (8 rank slices) through the live quant-method lifecycle (serving-layout scale, FlashInferCutlassMxfp8LinearKernel) and proves concat_r ColSplit.local == the stock main_proj GEMM; C3b PACK=all runs the kit's wkv wrappers on those layers vs stock order at every T x rank; C3a/C4 mutants run at every served T/M. exit 0 = every gate PASS + every mutant CAUGHT; 2 = environment/serving-op assertion failed; 1 = failure",
+  "boot: 'DSV41_STEP_COLEMB rank <r>: full-table check 129280 x 5120 ... PASS' on 8/8 ranks (the real-AR full-table proof, every startup); any FAIL line -> the lever is off on every rank",
+  "boot: 'DSV41_STEP_ENGRAM_PACK=<mode>: engram layers 0 and 1 share one rows gather...' 8/8; 'DSV41_STEP_C4: GPUModelRunner.sample_tokens hook installed' and 'consumed 1' 8/8",
+  "exact.py ec2f4437f8e1ed09, G1 outputs_digest 2f7fdccbd388225a and 9/9 long prompts in every arm",
+  "l2pf: 'g2 captured ... planned' identical on all ranks, no MISMATCH (C3 changes the collective sequence identically on every rank: AR->AG and fewer Engram gathers)",
+  "RDMA_AR_AUDIT=200: NEW_STREAM lines equal to control (C4's side stream issues no collective)"
+ ],
+ "tests": "tests/test_step.py (CPU, 512S1 ~/exo-venv313 torch 2.11 + pytest 9.2 from ~/climb-r1/pydeps): 30 passed; exhaustive 65536-pattern AR-map test passed; device_test.py --cpu-selftest: 11 checks (6 mutants) 0 failed, incl. C3a mutant ids caught at all 26 T and the PACK=all harness with stand-in GEMMs (60 gates, 20 mutants); tools/serving_layers_cpu_check.py on spark-eight (live vllm032 + checkpoint, CPU only): 24 checks 0 failed (live quant-method lifecycle -> FlashInferCutlassMxfp8LinearKernel, serving scale, live ColSplit builds for 8 ranks, raw scale still rejected); tools/compile_check.py on spark-eight (no GPU launch): ALL PASS. device_test.py GPU parts NOT run (no stopped node); no serving arm run.",
+ "r8_fixb": "r8-fixb (climb-r8/fixb, 2026-11-09): dsv41_step.py r8 = 425c6515 (PACK=all operand-identity pairing; COLEMB/C4 AST-identical to r6 ebe2f7bb, kept in prev/); det_gate.py + device_test.py --part det; tests/test_r8_fixb.py. Fleet upgrade from the installed r6 module: ../install.py / ../ops/fleet.sh. See ../README.md section 3."
+}

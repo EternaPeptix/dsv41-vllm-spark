@@ -1,0 +1,8 @@
+exact decomposition: runs=401 mismatches=0
+negative controls (inputs on which the broken variant is detected):
+  l_ffma       7
+  rope_split   7
+  stale_epoch  16
+  max_order    0 (fmax is order-insensitive on these values: the fold order is safe, F5)
+  no_alpha1    1
+EMULATION PASS

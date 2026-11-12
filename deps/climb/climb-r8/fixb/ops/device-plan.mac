@@ -1,0 +1,4 @@
+fixb-install|L=$HOME/Documents/dsv41-offline/climb-windows/r8-fixb-dw/fixb-step-dt.log; if grep -q "SUMMARY: .* 0 failed" $L && grep -q "device_test rc=0" $L; then bash /Users/jeweled/Documents/dsv41-offline/climb-r8/fixb/ops/fleet.sh install; else echo "step device test did not pass: r8 module NOT installed"; fi
+fixb-status|bash /Users/jeweled/Documents/dsv41-offline/climb-r8/fixb/ops/fleet.sh status
+fixb-collect|bash /Users/jeweled/Documents/dsv41-offline/climb-r8/fixb/ops/stage.sh collect $HOME/Documents/dsv41-offline/climb-windows/r8-fixb-dw/fixb-results
+fixb-clean|bash /Users/jeweled/Documents/dsv41-offline/climb-r8/fixb/ops/stage.sh clean; true

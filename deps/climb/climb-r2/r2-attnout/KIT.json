@@ -1,0 +1,170 @@
+{
+  "name": "r2-attnout",
+  "round": "climb r2 (kernel levers), 2026-11-08",
+  "levers": [
+    {
+      "gid": "G19",
+      "audit_ids": [
+        "attn:L-OP"
+      ],
+      "status": "partial",
+      "built": [
+        "rope (inverse-RoPE fold into the wo_a partial A load)",
+        "rq (split reduce + MXFP8 quant in one kernel, wo_b gets a QuantizedActivation)",
+        "st1 / vs / bn128 (exact launch retunes of the partial kernel)"
+      ],
+      "not_built": [
+        "last-arriving-CTA reduce inside the partial kernel (needs an acq_rel tile counter and loses PDL; deferred)"
+      ]
+    },
+    {
+      "gid": "G31",
+      "audit_ids": [
+        "attn:L-QR"
+      ],
+      "status": "skipped",
+      "reason": "Full variant needs the Q-RoPE inside the FlashInfer SM120 sparse-MLA prologue, which round 2 must not modify (XSPLIT, round 3). The exact-by-construction sub-variant (fused insert on an aux stream on the 8 indexer layers) is already covered by round-1 r1-attn IDXPAR (G20), which moves exactly that main wq_b -> SWA-insert chain to its own stream; a second edit of the same region would conflict."
+    }
+  ],
+  "flags": [
+    {
+      "name": "DSV41_ATTNOUT_OP",
+      "default": "0",
+      "on_value": "rope,rq",
+      "meaning": "Comma list of parts: rope = fold inverse RoPE into the sonar wo_a partial A load; rq = split reduce + MXFP8 quant fused (wo_b gets QuantizedActivation); st1 = partial num_stages 1; vs = vectorised [4,BN] E8M0 scale load; bn128 = 16x128 partial tile. Aliases 1|on|all = rope,rq; tune = st1,vs. Unset/''/0/off = module never imported, live path unchanged. Any OTHER unknown value (e.g. 'false', 'no') is treated as on by o_proj.py and the lazily imported module raises ValueError at the first o_proj call -> the worker crashes loudly at boot (never a silent wrong setting). Each part self-checks bitwise against the live kernels on the first 16 eager calls (real + synthetic hostile data); a difference OR an exception in a check disables the part (ERROR '[r2-attnout] ... DISABLED' in rank0.log) and the live kernels run. A part never runs unchecked: in capture and after the check budget, unchecked parts use the live kernels."
+    }
+  ],
+  "files": [
+    {
+      "path": "vllm/models/deepseek_v4/nvidia/ops/o_proj.py",
+      "base_sha256": "34b9e1a49d105b696e6520d23067495eeaff9b281fe979328d8af3019ab9f62c",
+      "base_sha256_with_round1": {},
+      "action": "patch",
+      "patched_sha256": "aee7bf1dbf5c222514c7f32b5f0564af612280f169fdf99dd48d8ec82e3d9218"
+    },
+    {
+      "path": "vllm/models/deepseek_v4/nvidia/ops/sonar_bf16_bmm.py",
+      "base_sha256": "9f6f3f8428c31e06db857e8b9631dc4f3d09dbfe7c9b2aafdf98ca1eb27d85f9",
+      "base_sha256_with_round1": {
+        "r1-pdl": "67ee71a6cf31f22320d03e2588fe29554f0f57dc4137fe9566891bf5fceaba52"
+      },
+      "action": "patch",
+      "patched_sha256": "b372c4306452907951eec49a0b495a76d149f80def35fb98f680fded6481543a"
+    },
+    {
+      "path": "vllm/models/deepseek_v4/nvidia/ops/dsv41_attnout.py",
+      "base_sha256": null,
+      "kit_sha256": "308942ebbed1fc121f74ea5b9820a941b7fed895edf7aae4d6d63480ba1d1bfc",
+      "action": "new",
+      "kit_sha256_history": {
+        "f70a1a0a (reviewed; rq did not compile)": "f70a1a0aae94f214553973ebd941baddb975d042d8f7ca203a521e7e4ae5097e",
+        "2402341f (reviewer fixA = tl.constexpr asm only; compile/interp checked)": "2402341f90a21769ad17efdd2ca4a248bfdcbbaf6f73f27653d2d6d17108c0fc"
+      },
+      "note": "lines 1-483 (all kernels, asm constants, INV448_BITS, _launch_* helpers) byte-identical to the reviewer's fixA copy 2402341f; later changes are host logic in _run only"
+    }
+  ],
+  "round1_composition": {
+    "r1-pdl": "patches sonar_bf16_bmm.py (flag block after the triton import + a hook before the _sm120_wo_a_partial launch in grouped_bmm); r2-attnout's anchors (try_project signature, the grouped_bmm call at the end of try_project) do not overlap; tested by applying r1-pdl's own patched() to the live file, then this installer.",
+    "r1-attn": "patches attention.py only; r2-attnout does not touch attention.py.",
+    "r1-pf, r1-drafter": "no overlapping files."
+  },
+  "install": "python3 install.py install",
+  "uninstall": "python3 install.py uninstall",
+  "depends_on": [
+    "launcher fda6d05a or 08a249da (both: DSV41_SONAR_OPROJ=fp8, SPLITS=32, MAX_M=32; the lever only acts where the sonar fp8 path runs); patched files unchanged between them (o_proj 34b9e1a4, sonar 9f6f3f84 re-checked 2026-11-08 14:55 UTC)"
+  ],
+  "conflicts_with": [],
+  "expected_gain_pct": {
+    "low": 0.4,
+    "central": 0.79,
+    "high": 1.54
+  },
+  "expected_gain_by_arm_pct": {
+    "rope": {
+      "low": 0.15,
+      "central": 0.26,
+      "high": 0.37
+    },
+    "rope,rq": {
+      "low": 0.4,
+      "central": 0.58,
+      "high": 0.77
+    },
+    "rope,rq,st1,vs(,bn128)": {
+      "low": 0.4,
+      "central": 0.79,
+      "high": 1.54,
+      "note": "tune part unmeasured; device_test.py times it"
+    }
+  },
+  "window_arms": [
+    {
+      "name": "control",
+      "env": {},
+      "requires": "same r1-pdl flag state as the treatment arms"
+    },
+    {
+      "name": "op-rope",
+      "env": {
+        "DSV41_ATTNOUT_OP": "rope"
+      },
+      "requires": [
+        "compile_check.py PASS + interp_check.py PASS on this kit (spark-eight, no window)",
+        "device_test.py --variants 'rope' exit 0 (stopped node)",
+        "rank0.log: '[r2-attnout] ... active' and no 'DISABLED' line (else the arm measured the control: discard)"
+      ]
+    },
+    {
+      "name": "op-rope-rq",
+      "env": {
+        "DSV41_ATTNOUT_OP": "rope,rq"
+      },
+      "requires": [
+        "compile_check.py PASS + interp_check.py PASS on this kit (spark-eight, no window)",
+        "device_test.py --variants 'rope' exit 0 (stopped node)",
+        "device_test.py --variants 'rq;rope,rq' exit 0 (stopped node) -- rq has never executed on a GPU",
+        "rank0.log: '[r2-attnout] ... active' and no 'DISABLED' line (else the arm measured the control: discard)"
+      ]
+    },
+    {
+      "name": "op-rope-rq-tune",
+      "env": {
+        "DSV41_ATTNOUT_OP": "rope,rq,st1,vs"
+      },
+      "requires": [
+        "compile_check.py PASS + interp_check.py PASS on this kit (spark-eight, no window)",
+        "device_test.py --variants 'rope' exit 0 (stopped node)",
+        "device_test.py --variants 'rq;rope,rq' exit 0 (stopped node) -- rq has never executed on a GPU",
+        "device_test.py --variants 'rope,rq,st1,vs' exit 0",
+        "rank0.log: '[r2-attnout] ... active' and no 'DISABLED' line (else the arm measured the control: discard)"
+      ]
+    },
+    {
+      "name": "op-rope-rq-tune128",
+      "env": {
+        "DSV41_ATTNOUT_OP": "rope,rq,st1,vs,bn128"
+      },
+      "requires": [
+        "compile_check.py PASS + interp_check.py PASS on this kit (spark-eight, no window)",
+        "device_test.py --variants 'rope' exit 0 (stopped node)",
+        "device_test.py --variants 'rq;rope,rq' exit 0 (stopped node) -- rq has never executed on a GPU",
+        "device_test.py --variants 'rope,rq,st1,vs,bn128' exit 0",
+        "rank0.log: '[r2-attnout] ... active' and no 'DISABLED' line (else the arm measured the control: discard)"
+      ]
+    }
+  ],
+  "device_checks": [
+    "GATE 1 (compile, not yet rerun on the final kit by the builder; CLUSTER_LOCK held by window w2 15:21-~19:21 UTC during the fix session): on spark-eight with ~/dsv41-opt-20261021/CLUSTER_LOCK absent: `mkdir -p ~/climb-scratch/r2-attnout` + copy the kit there; `cd ~/climb-scratch/r2-attnout && TRITON_CACHE_DIR=$PWD/tcache nice -n 19 ~/venvs/vllm032/bin/python scripts/compile_check.py out` -> 'COMPILE CHECK PASS' (exit 0); `TRITON_CACHE_DIR=$PWD/tcache nice -n 19 ~/venvs/vllm032/bin/python scripts/interp_check.py` -> 'INTERP CHECK PASS' (exit 0, ~27 s). Reviewer already ran both on the byte-identical kernel source (fixA, 15:18 UTC): PASS / PASS 12/12, output in ref/compile-review-fixA/.",
+    "GATE 2 (device, never run): on a STOPPED node (spark-eight suggested): `DSV41_ATTNOUT_KIT=<kit dir> ~/venvs/vllm032/bin/python device_test.py --variants all` -> exit 0 ('ALL BIT-IDENTICAL', 'variants with a mismatch or error: none'). A variant that errors is now reported as failed and the run continues. No rq arm before rq and rope,rq are bit-identical here.",
+    "rank0.log after relaunch with the flag: '[r2-attnout] DSV41_ATTNOUT_OP=... active' and NO '[r2-attnout] ... DISABLED' line (a DISABLED line means the self-check found differing bits or an exception and the live kernels are running).",
+    "exact.py combined == ec2f4437f8e1ed09 and goal_single outputs_digest == 2f7fdccbd388225a for every arm.",
+    "nsys: per attention layer the `kernel` (inverse RoPE, grid (M,8)) launch disappears with rope; `_sm120_wo_a_reduce` + `MXFP8QuantizeSwizzledKernel` become one `_r2_reduce_quant` with rq; `_sm120_wo_a_partial` becomes `_r2_wo_a_partial`."
+  ],
+  "compile_log": "ref/compile-review-fixA/{compile.log,summary.json(sha 637b883f),reduce_quant.ptx,rope.ptx,live_partial.ptx,interp.log}: reviewer's run on spark-eight, Triton 3.7.1, sm_121, of the tl.constexpr-fixed kernel source (byte-identical to this kit's lines 1-483): COMPILE CHECK PASS (all partial variants same mma.sync m16n8k16 as live, kWidth 4; rq PTX: add.rn.f32x2 even/odd chains, cvt.rn.bf16.f32, mul.rn.f32, verbatim asm, cvt.rn.satfinite.e4m3x2, griddepcontrol.launch_dependents+wait) and INTERP CHECK PASS 12/12. The shipped f70a1a0a failed compile_check (NameError _ASM_UE8M0, non-constexpr global). Not rerun by the builder on the final kit (lock held); Triton kernels JIT on the node at the first eager call, so no prebuilt binary is shipped.",
+  "install_order": "install r1-pdl (if used) BEFORE r2-attnout; uninstall r2-attnout BEFORE r1-pdl. install.py uninstall refuses (writes nothing) if a patched file is not exactly patched(.bak-r2-attnout).",
+  "review": {
+    "reviewer": "review-attnout 2026-11-08",
+    "verdict": "fix",
+    "fixes": "see REVIEW.md 'Fixes'"
+  }
+}

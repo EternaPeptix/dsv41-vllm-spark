@@ -139,6 +139,15 @@ SF_AUDIT_EVERY = int(os.environ.get("DSV41_SYNC_FREE_AUDIT_EVERY", "2000") or 20
 SF_BLOCK = 4096
 
 ANY = CERT_MODE != "0" or MAINPROJ_SPLIT
+# climb-r1 r1-drafter G12, default off: unset = dsv41_drafter_sched.py is never imported.  # dsv41-r1-drafter
+_DSV41_MAINPROJ_HOIST = os.environ.get("DSV41_MAINPROJ_HOIST", "0").strip().lower() not in ("", "0", "off", "false", "no")  # dsv41-r1-drafter
+# climb r6 (r6-step) C4, default off: unset = dsv41_step is never imported.  # r6-step
+_DSV41_STEP_C4 = os.environ.get("DSV41_STEP_C4", "").strip().lower() not in ("", "0", "off", "false", "no")  # r6-step
+# climb-r6 r6-head, default off: unset = dsv41_head_r6.py is never imported.  # dsv41-r6-head
+_DSV41_R6_HEAD = any(os.environ.get(_n, "0").strip().lower() not in _OFF  # dsv41-r6-head
+                     for _n in ("DSV41_R6_HEAD_REFINE", "DSV41_R6_HEAD_SCREEN"))  # dsv41-r6-head
+if _DSV41_R6_HEAD:  # dsv41-r6-head
+    from vllm.models.deepseek_v41.nvidia import dsv41_head_r6 as _r6_head  # dsv41-r6-head
 
 # Certificate constants. Inflations are generous: they cost nothing measurable in candidates.
 INFL_X = 1.0 + 2.0 ** -14   # group / total norm of x (fp32 sum of <= 128 squares + sqrt)
@@ -403,9 +412,12 @@ def _kernels():
     return _K
 
 
-def certified_logits(st: CertState, x: torch.Tensor, full: bool = False, debug: dict | None = None) -> torch.Tensor:
+def certified_logits(st: CertState, x: torch.Tensor, full: bool = False, debug: dict | None = None,  # dsv41-r1-drafter
+                     after_screen=None) -> torch.Tensor:  # dsv41-r1-drafter
     """x [M, K] bf16 contiguous -> bf16 [M, V]: exact logits on needed tiles, -inf elsewhere
     (full=True: exact kernel on every tile). No host sync; graph-capturable."""
+    if _DSV41_R6_HEAD and not full:  # dsv41-r6-head
+        return _r6_head.certified_logits(st, x, debug=debug, after_screen=after_screen)  # dsv41-r6-head
     k = _kernels()
     triton = k["triton"]
     x = x.contiguous()
@@ -427,6 +439,8 @@ def certified_logits(st: CertState, x: torch.Tensor, full: bool = False, debug: 
             K=K, G=st.group, BM=BM, BN=SBN, BK=SBK, CACC2=2.0 * c_acc(K), INFL_Q=INFL_Q, INFL_B=INFL_B,
             SLOP_REL=SLOP_REL, SLOP_ABS=SLOP_ABS,
             num_warps=SWARPS if BM <= 32 else max(SWARPS, 8), num_stages=SSTAGES)
+    if after_screen is not None:  # dsv41-r1-drafter
+        after_screen()  # dsv41-r1-drafter
     k["refine"][(triton.cdiv(V, XBV),)](
         x, x.stride(0), st.W, hi, thr, bad, out, out.stride(0), st.need, M, V,
         K=K, BV=XBV, BMX=max(16, next_pow2(M)), BK=XBK, FULL=full, num_warps=XWARPS, num_stages=XSTAGES)
@@ -575,6 +589,9 @@ def maybe_install() -> None:
         _install_runner_hook()
     if MAINPROJ_SPLIT:
         _install_dspark_hook()
+    if _DSV41_STEP_C4:  # r6-step
+        from vllm.models.deepseek_v41.nvidia import dsv41_step as _dsv41_step  # r6-step
+        _dsv41_step.install_c4()  # r6-step
 
 
 def _cert_state(model):
@@ -763,7 +780,7 @@ def sf_onehot(gathered: torch.Tensor, M: int, tp: int, V: int) -> tuple[torch.Te
     return out, tok
 
 
-def sync_free_logits(lp, head, local: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+def sync_free_logits(lp, head, local: torch.Tensor, after_ag=None) -> tuple[torch.Tensor, torch.Tensor]:  # dsv41-r1-drafter
     """Armed step: certified local shard -> ([M, org_vocab] bf16 one-hot at the stock greedy token,
     [M] int64 tokens) with ONE 16 B/row all-gather instead of the [M, V/tp] bf16 logits gather."""
     from vllm.distributed import tensor_model_parallel_all_gather
@@ -772,6 +789,8 @@ def sync_free_logits(lp, head, local: torch.Tensor) -> tuple[torch.Tensor, torch
     valid = int(si.num_org_elements)
     pair = sf_local_pairs(local, valid, int(si.org_vocab_start_index))
     gathered = tensor_model_parallel_all_gather(pair, dim=0)
+    if after_ag is not None:  # dsv41-r1-drafter
+        after_ag()  # dsv41-r1-drafter
     if not _S.get("sf_logged"):
         _S["sf_logged"] = True
         logger.info("DSV41_SYNC_FREE argmax: first armed step (M=%d): 16 B/row all-gather replaces the "
@@ -841,11 +860,21 @@ def target_logits(model, hidden_states: torch.Tensor, skip_gather: bool = False)
     st.calls += 1
     st.armed_calls += int(armed)
     if CERT_MODE == "1":
-        local = certified_logits(st, hidden_states)
+        _dsv41_hk = None  # dsv41-r1-drafter
+        if (_DSV41_MAINPROJ_HOIST and SF_ARGMAX and armed and not skip_gather and _S.get("sf_ok")  # dsv41-r1-drafter
+                and head.tp_size > 1):  # dsv41-r1-drafter
+            from vllm.models.deepseek_v41.nvidia.dsv41_drafter_sched import mainproj_target_hook  # dsv41-r1-drafter
+            _dsv41_hk = mainproj_target_hook()  # dsv41-r1-drafter
+        if _DSV41_STEP_C4 and _dsv41_hk is None and armed and not skip_gather and head.tp_size > 1:  # r6-step
+            from vllm.models.deepseek_v41.nvidia import dsv41_step as _dsv41_step  # r6-step
+            _dsv41_hk = _dsv41_step.c4_target_hook()  # r6-step
+        local = certified_logits(st, hidden_states,  # dsv41-r1-drafter
+                                 after_screen=None if _dsv41_hk is None else _dsv41_hk.after_screen)  # dsv41-r1-drafter
         if SF_ANY and armed and not skip_gather and _S.get("sf_ok") and head.tp_size > 1:
             # g1 DSV41_SYNC_FREE: the only consumer of these logits is a greedy argmax
             if SF_ARGMAX:
-                out, _tok = sync_free_logits(lp, head, local)
+                out, _tok = sync_free_logits(lp, head, local,  # dsv41-r1-drafter
+                                             after_ag=None if _dsv41_hk is None else _dsv41_hk.after_ag)  # dsv41-r1-drafter
                 _sf_tick()
                 return out
             full = _finish(lp, head, local, skip_gather)
@@ -971,6 +1000,11 @@ def mainproj_split(linear, x):
                         st.N, st.n, st.K, MAINPROJ_MAX_M)
     if not st:
         return None
+    if _DSV41_STEP_C4:  # r6-step
+        from vllm.models.deepseek_v41.nvidia import dsv41_step as _dsv41_step  # r6-step
+        _dsv41_y = _dsv41_step.c4_take(st, x, M)  # r6-step
+        if _dsv41_y is not None:  # r6-step
+            return _dsv41_y  # r6-step
     verdict = st.checked.get(M)
     if verdict is None:
         if _capturing():

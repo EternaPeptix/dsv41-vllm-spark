@@ -152,7 +152,7 @@ Every host has a single 916G nvme (`/run/sparkos/host`, which also serves `/home
   - `01:03:44 temp key removed from S2`, then `ALL DONE`
 - `~/queen-park` on spark-four and spark-five: only empty directory skeletons are left (12K).
 - **512S2 `~/.ssh/authorized_keys`: "queenmove-temp" is NOT present** (grep count 0). The script removed it at 01:03:44 PDT on 10-21.
-  - The file has 7 lines. Their comments are jeweled@512S1, ultor@olympusmons, kevinvegda@gmail.com, sufithaire@gmail.com and three keys with no comment.
+  - The file has 7 lines. Their comments are jeweled@512S1, ultor@olympusmons, <email>, <email> and three keys with no comment.
   - This is reported only; nothing was changed. Worth a glance from the user if any of those keys are unexpected.
 - 512S2 `~/queen-archive` = 294G.
 

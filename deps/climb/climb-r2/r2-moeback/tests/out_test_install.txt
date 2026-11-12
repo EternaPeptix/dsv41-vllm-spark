@@ -1,0 +1,123 @@
+PASS [moe_runner] live base sha256 recorded in KIT.json 20b69fe514bebd67
+PASS [moe_runner] anchor x1: 'logger = init_logger(__name__)'
+PASS [moe_runner] anchor x1: 'self._maybe_apply_shared_experts('
+PASS [moe_runner] anchor x1: 'if shared_experts_overlapping:'
+PASS [moe_runner] anchor x1: 'if shared_output is not None:'
+PASS [moe_runner] patched compiles; 10 tagged lines
+PASS [moe_runner] inverse edit restores base bytes
+PASS [moe_runner] every changed line carries the tag []
+PASS [gather] live base sha256 recorded in KIT.json 733c3a87ff0fa487
+PASS [gather] anchor x1: '@torch.no_grad()'
+PASS [gather] anchor x1: 'grid = (triton.cdiv(input_tensor.shape[1], block_d), min(n, '
+PASS [gather] patched compiles; 6 tagged lines
+PASS [gather] inverse edit restores base bytes
+PASS [gather] every changed line carries the tag []
+PASS [site] live base sha256 recorded in KIT.json 733bdbe0e82566a3
+PASS [site] anchor x1: 'sys.path.insert(0, os.path.expanduser("~/dsv41-fc2"))'
+PASS [site] patched compiles; 9 tagged lines
+PASS [site] inverse edit restores base bytes
+PASS [site] every changed line carries the tag []
+PASS install rc 0
+PASS new module copied
+PASS all three targets patched
+PASS second install is a no-op
+PASS status lists PATCHED x3 c8b333b6adf8cab9 PATCHED <tmp>/vllm/model_executor/layers/fused_moe/runner/moe_runner.py
+b182b57beebc7b2b PATCHED <tmp>/fc2/fc2_status_gated_gather_trial.py
+376bf15668a689eb PATCHED <tmp>/fc2/site/sitecustomize.py
+a6c66c1a08fd5332 present <tmp>/vllm/model_executor/layers/fused_moe/runner/dsv41_moe_fold.py
+- absent  <tmp>/fc2/athena_tp8_fc2_packed_graph_pdl_sm121.so
+- absent  <tmp>/fc2/athena_tp8_fc2_packed_graph_pdl_sm121.so.sha256
+
+PASS uninstall rc 0
+PASS uninstall restores base bytes
+PASS new module removed
+PASS unknown base sha refused
+PASS uninstall keeps a later kit's edit
+PASS [moe_runner] every tagged statement is the flag definition or flag-gated
+PASS [gather] every tagged statement is the flag definition or flag-gated
+PASS [site] every tagged statement is the flag definition or flag-gated
+PASS trial overlay sha unchanged (launcher pin ae2089724597)
+PASS Athena transform_apply anchors apply to live DeepGemmFP4Experts.apply
+PASS kit targets exclude trial overlay and deep_gemm_moe.py {'moe_runner.py', 'fc2_status_gated_gather_trial.py', 'sitecustomize.py'}
+PASS _gated_gather kernel lines 1..51 identical and unmoved
+PASS site flag off: trial installed, GRAPH_SO untouched, no trigger TRIAL /live.so None
+
+PASS site flag on: GRAPH_SO -> pdl .so, trigger=start TRIAL <tmp>/dsv41-fc2/athena_tp8_fc2_packed_graph_pdl_sm121.so start
+DSV41_FC2_PDL on: <tmp>/dsv41-fc2/athena_tp8_fc2_packed_graph_pdl_sm121.so 05067a1051ea trigger=start
+
+PASS site flag on: explicit DSV41_MOE_PDL_TRIGGER=0 kept TRIAL <tmp>/dsv41-fc2/athena_tp8_fc2_packed_graph_pdl_sm121.so 0
+
+PASS site flag on + sha mismatch: exit 97 97
+PASS site flag on + missing .so: exit 97 97
+PASS site flag off with missing .so: still boots
+PASS preflight: bad base on the last target refuses the whole install 3/w83wrx_j3q14flpx952v9nd80000gn/T/tmp2_dr8etr/fc2/site/sitecustomize.py: base sha256 5462a4b7927e7269e25e506b169a18776f92182a75b4b63053a6a0058e8ddb7a not in KIT.json accepted bases for site
+refusing
+
+PASS preflight: no target written, no backup, no new module
+PASS no build/ .so: install rc 0, binary skipped with warning mpj6yyqego/vllm/model_executor/layers/fused_moe/runner/dsv41_moe_fold.py: a6c66c1a
+WARNING: G18 binary not installed: <tmp>/kit/build/athena_tp8_fc2_packed_graph_pdl_sm121.so missing (G18 binary not built); DSV41_FC2_PDL=1 would exit 97 at boot
+
+PASS uninstall after skip restores bases
+PASS build/ .so with pdl_binary_sha256 null: install REFUSED o/kit/build/athena_tp8_fc2_packed_graph_pdl_sm121.so is present but KIT.json pdl_binary_sha256 is null: unvetted binary; run `python3 install.py vet-pdl <build_pdl.sh out dir>` or remove it; refusing
+
+PASS   ... and nothing written (targets, module, binary)
+PASS build/ .so sha != KIT.json: install REFUSED, nothing written ed_graph_pdl_sm121.so: sha256 351d821ddc062d46f80b0bb10a7a616022f6414d2e9e88b83ad14ad071a5b6cd != KIT.json pdl_binary_sha256 0000000000000000000000000000000000000000000000000000000000000000; refusing
+
+PASS vetted but no device stamp: install rc 0, binary skipped, stale installed copy removed 80000gn/T/tmpj6yyqego/fc2/athena_tp8_fc2_packed_graph_pdl_sm121.so.sha256
+WARNING: G18 binary not installed: no device gate stamp (<tmp>/kit/build/DEVICE-G18.json: FileNotFoundError); run tools/g18_gate.py; DSV41_FC2_PDL=1 would exit 97 at boot
+
+PASS stamp failed racecheck: binary skipped 8 binary not installed: device gate stamp <tmp>/kit/build/DEVICE-G18.json does not pass: ['racecheck_rc']; DSV41_FC2_PDL=1 would exit 97 at boot
+
+PASS stamp pass=false: binary skipped NING: G18 binary not installed: device gate stamp <tmp>/kit/build/DEVICE-G18.json does not pass: ['pass']; DSV41_FC2_PDL=1 would exit 97 at boot
+
+PASS stamp quick reps: binary skipped  G18 binary not installed: device gate stamp <tmp>/kit/build/DEVICE-G18.json does not pass: ['reps>=200']; DSV41_FC2_PDL=1 would exit 97 at boot
+
+PASS stamp too few graph cases: binary skipped binary not installed: device gate stamp <tmp>/kit/build/DEVICE-G18.json does not pass: ['graph_cases>=8']; DSV41_FC2_PDL=1 would exit 97 at boot
+
+PASS stamp stamp for another sha: binary skipped  binary not installed: device gate stamp <tmp>/kit/build/DEVICE-G18.json does not pass: ['pdl_so_sha256']; DSV41_FC2_PDL=1 would exit 97 at boot
+
+PASS vetted + passing device stamp: binary installed with matching sidecar ched (376bf156)
+<tmp>/vllm/model_executor/layers/fused_moe/runner/dsv41_moe_fold.py: a6c66c1a
+<tmp>/fc2/athena_tp8_fc2_packed_graph_pdl_sm121.so: 351d821d (+ .sha256; vetted + device-gated)
+
+PASS uninstall removes binary + sidecar and restores bases
+PASS vet-pdl: STRICT accepted folders/y3/w83wrx_j3q14flpx952v9nd80000gn/T/tmpvcd2jsqu/out: mode STRICT; live 300 control 300 pdl 302 instructions; pdl .so bb4422df38e219e4
+vet-pdl OK (STRICT): KIT.json pdl_binary_sha256 = bb4422df38e219e49fab25322ee80271c3c93a7f0a3d01957b63dcc3b35ecf0f; next: tools/g18_gate.py on a stopped node
+
+PASS vet-pdl: SCHEDULE-ONLY accepted wrx_j3q14flpx952v9nd80000gn/T/tmpaxnlre15/out: mode SCHEDULE-ONLY; live 300 control 300 pdl 301 instructions; pdl .so bb4422df38e219e4
+vet-pdl OK (SCHEDULE-ONLY): KIT.json pdl_binary_sha256 = bb4422df38e219e49fab25322ee80271c3c93a7f0a3d01957b63dcc3b35ecf0f; next: tools/g18_gate.py on a stopped node
+
+PASS vet-pdl: live != control refused vet-pdl <tmp>/out: mode STRICT; live 300 control 300 pdl 302 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  live vs control SASS NOT IDENTICAL (toolchain does not reproduce production)
+
+PASS vet-pdl: extra FFMA refused vet-pdl <tmp>/out: mode DIFFERENT; live 300 control 300 pdl 303 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  opcode multiset differs beyond the wait: control-only {}, pdl-only {'FFMA': 1}
+
+PASS vet-pdl: changed opcode refused vet-pdl <tmp>/out: mode DIFFERENT; live 300 control 300 pdl 302 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  opcode multiset differs beyond the wait: control-only {'IMAD': 9}, pdl-only {'IADD3': 9}
+
+PASS vet-pdl: no ACQBULK refused vet-pdl <tmp>/out: mode STRICT; live 300 control 300 pdl 300 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  PDL SASS has no griddepcontrol.wait (ACQBULK)
+
+PASS vet-pdl: ACQBULK in control refused vet-pdl <tmp>/out: mode STRICT; live 300 control 300 pdl 300 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  control already has 1 wait instructions
+
+PASS vet-pdl: STG before wait refused 52v9nd80000gn/T/tmp9r38ghsa/out: mode DIFFERENT; live 300 control 300 pdl 302 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  global write before the first wait in listing order: ['STG.E']
+  opcode multiset differs beyond the wait: control-only {}, pdl-only {'STG.E': 1}
+
+PASS vet-pdl: live .so not pinned refused 3q14flpx952v9nd80000gn/T/tmpl5u3duu7/out: mode STRICT; live 300 control 300 pdl 302 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  live .so in COMPILE-LOG is 3333333333333333333333333333333333333333333333333333333333333333, not the pinned production binary 85d888ae36fd
+
+PASS vet-pdl: .so not the one hashed refused vet-pdl <tmp>/out: mode STRICT; live 300 control 300 pdl 302 instructions; pdl .so bb4422df38e219e4
+vet-pdl FAILED, KIT.json unchanged:
+  PDL .so on disk is not the one COMPILE-LOG hashed
+
+ALL PASS

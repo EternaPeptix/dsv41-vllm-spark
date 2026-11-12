@@ -1,0 +1,23 @@
+RQPAD (rq grid 4xM, M = grid y); saving per call = p50 - T_new
+  T_new 3.2: us/step code 30 prose 69 maths 25 -> G1 +0.18%
+  T_new 2.5: us/step code 60 prose 99 maths 55 -> G1 +0.32%
+  T_new 2.1: us/step code 77 prose 117 maths 72 -> G1 +0.40%
+RQPAD with the wo_b launch-offset floor: saving per call = p50 - max(T_new, off + P), off = p50 + succ-gap
+  off (us) by M: M=1 1.87, M=2 1.40, M=4 1.37, M=5 1.22, M=6 1.37
+  T_new 3.2 P 0.0: us/step code 30 prose 69 maths 25 -> G1 +0.18%
+  T_new 3.2 P 0.5: us/step code 30 prose 69 maths 25 -> G1 +0.18%
+  T_new 3.2 P 1.0: us/step code 30 prose 69 maths 25 -> G1 +0.18%
+  T_new 3.2 P 1.5: us/step code 30 prose 69 maths 25 -> G1 +0.18%
+  T_new 2.5 P 0.0: us/step code 60 prose 99 maths 55 -> G1 +0.32%
+  T_new 2.5 P 0.5: us/step code 60 prose 99 maths 55 -> G1 +0.32%
+  T_new 2.5 P 1.0: us/step code 60 prose 99 maths 55 -> G1 +0.32%
+  T_new 2.5 P 1.5: us/step code 45 prose 83 maths 39 -> G1 +0.25%
+  T_new 2.1 P 0.0: us/step code 77 prose 117 maths 72 -> G1 +0.40%
+  T_new 2.1 P 0.5: us/step code 77 prose 116 maths 72 -> G1 +0.40%
+  T_new 2.1 P 1.0: us/step code 67 prose 104 maths 61 -> G1 +0.35%
+  T_new 2.1 P 1.5: us/step code 45 prose 83 maths 39 -> G1 +0.25%
+RPSPLIT (rp on path n/st x saving per call)
+  1.0 us/call: us/step code 40 prose 40 maths 40 -> G1 +0.19%
+  2.0 us/call: us/step code 80 prose 80 maths 80 -> G1 +0.37%
+  3.0 us/call: us/step code 120 prose 120 maths 120 -> G1 +0.56%
+  4.0 us/call: us/step code 160 prose 160 maths 160 -> G1 +0.75%

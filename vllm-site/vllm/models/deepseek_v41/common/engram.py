@@ -78,6 +78,7 @@ from vllm.utils.platform_utils import is_uva_available
 from vllm.utils.torch_utils import get_accelerator_view_from_cpu_tensor
 
 logger = init_logger(__name__)
+_DSV41_PRIO_EH = __import__("os").environ.get("DSV41_PRIO_ENGRAM_HOIST", "").strip().lower() not in ("", "0", "off", "false", "no")  # r5-prio
 
 # Per-rank token slot from which the Engram DP exchange switches from peer
 # reads to all-to-all.
@@ -1715,7 +1716,9 @@ class Engram(nn.Module):
         if self._batch is not None:
             kv = self.wkv(self._batch.wkv_input(self, hash_ids.shape[0]))
         else:
-            kv = self.wkv(self.embed(hash_ids).flatten(-2))
+            kv = (self.wkv(self.embed(hash_ids).flatten(-2))  # r5-prio
+                  if not _DSV41_PRIO_EH or self.__dict__.get("_dsv41_prio_take") is None  # r5-prio
+                  else self._dsv41_prio_take(hash_ids))  # r5-prio
         num_kv_tokens = hash_ids.shape[0]
         assert token_mask is None or token_mask.shape == (num_kv_tokens,)
         if self.use_sequence_parallel:
@@ -1768,3 +1771,11 @@ class Engram(nn.Module):
             num_warps=num_warps,
         )
         return output
+
+
+# climb r6 (r6-step) C3, default off: unset = dsv41_step is never imported.  # r6-step
+_DSV41_STEP_C3 = any(__import__("os").environ.get(_k, "").strip().lower() not in ("", "0", "off", "false", "no")  # r6-step
+                     for _k in ("DSV41_STEP_COLEMB", "DSV41_STEP_ENGRAM_PACK"))  # r6-step
+if _DSV41_STEP_C3:  # r6-step
+    from vllm.models.deepseek_v41.nvidia import dsv41_step as _dsv41_step  # r6-step
+    _dsv41_step.install_c3(Engram)  # r6-step

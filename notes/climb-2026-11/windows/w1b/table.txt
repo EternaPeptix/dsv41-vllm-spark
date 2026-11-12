@@ -1,0 +1,11 @@
+c1 control | G1 118.862 code 120.25 prose 86.06 math 150.28 digest 2f7fdccbd388225a reps_identical True | exact - | det - | -
+p0 DSV41_L2_PREFETCH_PACE_KINDS=ar,attn | G1 120.015 code 121.35 prose 86.98 math 151.71 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+p6 DSV41_L2_PREFETCH_WOB_MB=6;DSV41_L2_PREFETCH_PACE_KINDS=ar,attn | G1 122.766 code 124.05 prose 89.13 math 155.11 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF | -
+p6r DSV41_L2_PREFETCH_WOB_MB=6;DSV41_L2_PREFETCH_PACE_KINDS=ar,attn;DSV41_L2_PREFETCH_REPLAN=attn | G1 122.947 code 124.28 prose 89.35 math 155.21 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+p6g DSV41_L2_PREFETCH_WOB_MB=6;DSV41_L2_PREFETCH_PACE_KINDS=ar,attn,ag | G1 123.552 code 124.90 prose 89.68 math 156.07 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+c2 control | G1 118.983 code 120.52 prose 86.29 math 150.14 digest 2f7fdccbd388225a reps_identical True | exact - | det - | G4 min 53.56 mean 68.95
+p6s150 DSV41_L2_PREFETCH_WOB_MB=6;DSV41_L2_PREFETCH_PACE_KINDS=ar,attn;DSV41_L2_PREFETCH_PACE_GBPS=150 | G1 122.331 code 123.62 prose 88.86 math 154.51 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+p6s100 DSV41_L2_PREFETCH_WOB_MB=6;DSV41_L2_PREFETCH_PACE_KINDS=ar,attn;DSV41_L2_PREFETCH_PACE_GBPS=100 | G1 118.156 code 118.87 prose 86.50 math 149.09 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+p0b DSV41_L2_PREFETCH_PACE_KINDS=ar,attn | G1 120.078 code 121.35 prose 87.16 math 151.73 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det - | -
+p6b DSV41_L2_PREFETCH_WOB_MB=6;DSV41_L2_PREFETCH_PACE_KINDS=ar,attn | G1 122.654 code 123.89 prose 88.99 math 155.08 digest 2f7fdccbd388225a reps_identical True | exact ec2f4437f8e1ed09 | det ALL==REF | G4 min 55.42 mean 71.32
+c3 control | G1 119.181 code 120.68 prose 86.37 math 150.49 digest 2f7fdccbd388225a reps_identical True | exact - | det - | -

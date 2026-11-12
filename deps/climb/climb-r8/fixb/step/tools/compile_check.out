@@ -1,0 +1,3 @@
+PASS colemb lookup (int16 copy, N=640): 48 SASS instrs; fp-class opcodes []; must []; forbid ['FADD', 'FFMA', 'FMUL', 'F2F', 'F2FP', 'HADD2', 'HFMA2.MMA']
+PASS device_test AR emulator (FADD no FTZ, F2FP): 1720 SASS instrs; fp-class opcodes ['F2FP.BF16.F32.PACK_AB', 'FADD']; must ['FADD', 'F2FP.BF16.F32.PACK_AB']; forbid ['FADD.FTZ', 'FFMA', 'FMUL', 'FHADD', 'HADD2', 'HFMA2.MMA']
+ALL PASS

@@ -1,0 +1,156 @@
+{
+ "name": "r6-comm",
+ "round": "climb-r6 (2026-11-09)",
+ "supersedes": "climb-r3/r3-comm (never installed; its .so 7ec43164 failed the old regex SASS gate, which this kit replaces)",
+ "levers": [
+  {
+   "id": "C1",
+   "gid": "G06 (comm:A)",
+   "flag": "DSV41_RDMA_TRIM",
+   "status": "built: source = r3-comm (unchanged, sha ad0f13a8 -> r6 2bff8a89 adds only C2); r3 .so 7ec43164 and the r6 device-TU SASS pass the new reduction-dataflow gate (gate/run_gate.py 13/13, all 5 must-fail mutants KILLED); NOT device-tested, NOT served",
+   "title": "rdma_ar kernel critical-path trim: early posted_seq read, seq advance at entry, single-CTA publish <= 24 KiB, single-CTA two-shot phase 2"
+  },
+  {
+   "id": "C2",
+   "gid": "stage C (comm:C)",
+   "flag": "DSV41_RDMA_PDL",
+   "status": "partial: source + device-TU SASS done and gated (fpflow 56/56 kernels, pdlcheck 32/32 PDL kernels, wait-late mutant KILLED); the shipped .so is not built yet (needs the stopped window: a full build takes ~5 GB of spark-eight's unified memory, 10.5 GB were available while serving); device test written, NOT run",
+   "title": "PDL on the collective edges: ar_kernel_r3 launched with programmatic stream serialization, only ctrl->posted_seq read before griddepcontrol.wait; optional early trigger after the last flag wait"
+  }
+ ],
+ "flags": [
+  {
+   "name": "DSV41_RDMA_TRIM",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "C1: the r6 .so launches ar_kernel_r3 (trim) instead of ar_kernel_pl. Needs RDMA_AR_EXT = the r6 .so and RDMA_AR_PUB_V1=1 RDMA_AR_PUB_V2=1 RDMA_AR_HYG_POLL=1 (production defaults). Values: unset/''/0/off/false/no = off, 1/on/true/yes = on, else a startup error (same parser in the .so and rdma_all_reduce.py)."
+  },
+  {
+   "name": "DSV41_RDMA_PDL",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "C2 (needs DSV41_RDMA_TRIM=1, else a startup error): 1/on/true/yes/in = ar_kernel_r3 launches with PDL (in-edge); trig = also griddepcontrol.launch_dependents after the last flag wait. Never combined with the G26 send-buffer kernels."
+  },
+  {
+   "name": "DSV41_RDMA_TRIM_S1_BYTES",
+   "default": "24576",
+   "on_value": "24576",
+   "meaning": "C1 knob (r3): messages <= this many bytes are staged and published by CTA 0 alone. Decimal 0..2^30, else a startup error."
+  },
+  {
+   "name": "DSV41_RDMA_SENDBUF",
+   "default": "0",
+   "on_value": "unset in serving",
+   "meaning": "r3 G26 (needs TRIM): registered send-buffer region; BENCH ONLY (no serving producer): never in a serving arm."
+  },
+  {
+   "name": "RDMA_AR_EXT",
+   "default": "$HOME/dsv41-stage/g130/rdma/build/rdma_ar_ext.so (launcher)",
+   "on_value": "/home/jeweled/dsv41-stage/r6comm/build/rdma_ar_ext.so",
+   "meaning": "existing launcher knob: selects the r6 .so for an arm. With every r6 flag unset the r6 .so runs the live kernels (instruction-identical, gate IDENTITY 39/39) and the live proxy code."
+  }
+ ],
+ "files": [
+  {
+   "path": "distributed/device_communicators/rdma_all_reduce.py",
+   "base_sha256": "26a5d834612c6ab487edfdfcfacb118248380b7c9739134ebf7da6298590993f",
+   "base_sha256_accepted": [
+    "26a5d834612c6ab487edfdfcfacb118248380b7c9739134ebf7da6298590993f"
+   ],
+   "base_note": "identical on 8/8 (read-only sha256sum 2026-11-09 ~09:30Z) and untouched by every climb r1..r5 kit, so it is also the base with the r5 kits installed",
+   "patched_sha256": "67498e6b7ddebd29e9625b0523d7fe53d3fc68cc7fdff98898e136fa380bfd79",
+   "action": "patch (44 tagged lines '# r6-comm')"
+  },
+  {
+   "path": "$HOME/dsv41-stage/r6comm/native/rdma_ar.cu",
+   "sha256": "2bff8a89d6c312238db4439ee108947f1901a7482f8730913581232d5e77d20e",
+   "base_sha256": "ad0f13a800a96bfffebc34ac6e4df06e1c105be857318daaa974de3c600d1a83",
+   "base_note": "src/mk_r6.py applied to climb-r3 src/rdma_ar.cu (ad0f13a8 = mk_r3.py applied to the live d38cfe68, the source of the live .so 14d049dd)",
+   "action": "new"
+  },
+  {
+   "path": "$HOME/dsv41-stage/r6comm/native/mk_r6.py",
+   "sha256": "8f3bdabef3838ce195ea39a7501ba7a7aadda57bd12f2ddcc496c6a742d709b9",
+   "action": "new"
+  },
+  {
+   "path": "$HOME/dsv41-stage/r6comm/build.sh",
+   "sha256": "da7c1d051859d821a5678d2f8b4cde9dcc301a8a165dfc14b43f90f3d8b55bb3",
+   "action": "new"
+  },
+  {
+   "path": "$HOME/dsv41-stage/r6comm/build/rdma_ar_ext.so",
+   "sha256": null,
+   "note": "NOT BUILT YET: ops/build8-r6.sh r6 writes the sha here (first step of the stopped window, ops/window-r6.sh dw). install.py and device_test.py refuse until it is recorded.",
+   "action": "new",
+   "source": "prebuilt/rdma_ar_ext.so (one binary for 8/8)"
+  }
+ ],
+ "mutant_so_sha256": {},
+ "live_untouched": [
+  "$HOME/dsv41-stage/g130/rdma/build/rdma_ar_ext.so (14d049dda41a2a8f, 8/8 2026-11-09)",
+  "$HOME/dsv41-stage/g130/rdma/native/rdma_ar.cu (d38cfe6881c4df84)",
+  "$HOME/dsv41-tp8.sh (166d7aac, 8/8)"
+ ],
+ "install": "bash ops/stage8-r6.sh; bash ops/install8-r6.sh install (inside a window: CLUSTER_LOCK owner=claude); per node: python3 install.py install | uninstall | status | dry",
+ "depends_on": [],
+ "conflicts_with": [
+  "climb-r3/r3-comm (same file; install.py refuses while '# r3-comm' lines exist)"
+ ],
+ "composes_with": "live 166d7aac and the climb-r5 kits (r5-prio, r5-ffnfront, r5-glue, harness): none touches rdma_all_reduce.py or the rdma_ar sources (tests T11 on copies). r1-pdl / r5 PDL v2.1 (DSV41_GLUE_PDL): independent; with DSV41_RDMA_PDL=trig the PDL-launched _proj_rows can become resident before the AR exits (it still waits for completion).",
+ "expected_gain_pct": {
+  "C1": {
+   "low": 0.23,
+   "central": 0.57,
+   "high": 1.18,
+   "ms_per_step": [
+    0.05,
+    0.12,
+    0.25
+   ],
+   "note": "estimates/estimates.py on the t2 op mix (142 ops/step; S1 on ~54 (code/maths) to ~100 (prose) ops, P2 on every decode two-shot) x the audit/skeptic per-op ranges; models were off 3-4x both ways in earlier rounds"
+  },
+  "C2": {
+   "low": 0.07,
+   "central": 0.11,
+   "high": 0.27,
+   "ms_per_step": [
+    0.014,
+    0.024,
+    0.058
+   ],
+   "note": "~138 graph in-edges x 0.10/0.17/0.30 us (r1-pdl skeptic per-boundary range); high includes trig with r1-pdl proj consumers. Below the +0.3 % bar alone: arm it on top of C1 (c3/t3 pair)"
+  }
+ },
+ "window_arms": [
+  {
+   "name": "r6-dw (stopped device window, FIRST)",
+   "env": "bash ops/window-r6.sh dw (MAC_PLAN line of climb-common/device-window.sh)",
+   "expect": "build 7 .so; RUN_GATE PASS incl. D3-D6 on the full build + GATED_SO_SHA256 line; R6_DEVICE_TEST PASS x10; bench X DONE failures [0]*8; bench L verdict lines G06 / C2"
+  },
+  {
+   "name": "c1 / c2 (control)",
+   "env": "RDMA_AR_AUDIT=200;RDMA_AR_EXT=/home/jeweled/dsv41-stage/r6comm/build/rdma_ar_ext.so",
+   "expect": "exact ec2f4437f8e1ed09, digest 2f7fdccbd388225a, G1 == production within spread"
+  },
+  {
+   "name": "t1 / t2 (C1)",
+   "env": "RDMA_AR_AUDIT=200;RDMA_AR_EXT=/home/jeweled/dsv41-stage/r6comm/build/rdma_ar_ext.so;DSV41_RDMA_TRIM=1",
+   "expect": "same anchors + det ALL==REF; promote at >= +0.3 % in both pairs"
+  },
+  {
+   "name": "t3 / t4 (C1 + C2) vs c3 / c4 (C1)",
+   "env": "...;DSV41_RDMA_TRIM=1;DSV41_RDMA_PDL=1",
+   "expect": "same anchors; only after t1/t2"
+  }
+ ],
+ "device_checks": [
+  "build (stopped window, spark-eight): ops/build8-r6.sh r6 m_rev m_seed0 m_negzero m_ffma m_tree m_waitlate -> KIT.json shas",
+  "binary gate (CPU): gate/run_gate.py -> RUN_GATE PASS (G0-G5, M1-M7, D3-D6 on sass/r6-<KIT sha8>.sass) and the line 'GATED_SO_SHA256 <KIT .so sha>' (install.py refuses without it)",
+  "device (stopped, 8/8): ops/run-device8-r6.sh all -> R6_DEVICE_TEST PASS on 8 c1 runs + mutants (spark-one) + c2 (spark-five); shapes from the launcher byte bounds (shapes.py): AR bf16 M <= 204 (41 M), fp32 M <= 102 (37 M), gathers <= 2 MiB; C2 poison/m_waitlate also fp32 and dim-0/column gathers; 7200 s per part",
+  "bench X / L: ops/run-bench8-r6.sh r6x|r6L <r6 .so> --phases X|L (+ live --ctl-only L); phase X = decode mix + the served-shape coverage block (112 ops up to 2 MiB)",
+  "serving: C-T-C-T (ops/window-r6.sh serve-cmd)"
+ ],
+ "cpu_tests": "tests/run_tests.py (512S1, ~/exo-venv313/bin/python3; T11 with R6T_R5_DIR=~/climb-r5-ref; T8 on the Mac) -> TEST-RESULTS.txt; T18 = served-shape coverage (shapes.py), T19 = gate dump selection",
+ "build": "bash ops/build8-r6.sh (Mac; spark-eight only, needs MemAvailable >= 13 GB = a stopped service); evidence builds while serving: bash ops/dev8-r6.sh (device-only cubins, ~150 MB, guard floor 8.5 GB)"
+}

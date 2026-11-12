@@ -1,0 +1,35 @@
+other kits touching our targets: {'fc2_status_gated_gather_trial.py': ['r1-pdl']}
+PASS only r1-pdl touches one of our targets (the gather) {'fc2_status_gated_gather_trial.py': {'r1-pdl'}}
+PASS r1-pdl records the same live gather base ['733c3a87ff0fa487a1f394fb429e2fef4e85a8ec1eab791162a4e6c183286459']
+PASS ours applies on top of r1-pdl 
+PASS r1-pdl applies on top of ours 
+PASS both orders give the same file 
+live gather sha 733c3a87ff0fa487a1f394fb429e2fef4e85a8ec1eab791162a4e6c183286459 r1-pdl gather sha 4fc6960be159c61faff94cb697b99cbaa6031fc67c03527b840e7d1c47ec0f72
+PASS KIT.json accepts the live and the r1-pdl-installed gather 
+PASS removing ours leaves exactly r1-pdl's file 
+PASS removing r1-pdl (inverse of its edits) leaves exactly our file 
+PASS removing both restores the live base 
+PASS gated_gather with both flags off executes exactly the base statements 
+PASS A: r1-pdl real install on the base tree 
+PASS A: r1-pdl's gather == its patch of the base (sha in our KIT.json) 
+PASS A: ours installs on top of r1-pdl 
+PASS A: gather now carries both kits' tags 
+PASS A: r1-pdl status flags the gather as not its exact patch while ours is on top y
+71256c140662 TAGGED, NOT OUR EXACT PATCH (!)  <tmp>/home/dsv41-fc2/fc2_status_gated_gather_trial.py
+f8c8fc319044 present                          <tmp>/vllm/triton_utils/dsv41_glue_pdl.py
+
+PASS A: ours uninstall (LIFO) restores exactly r1-pdl's state (backups aside) 
+PASS A: r1-pdl status PATCHED again for the gather 7824af1f4738 PATCHED                          <tmp>/vllm/models/deepseek_v41/nvidia/dsv41_oblit.py
+67ee71a6cf31 PATCHED                          <tmp>/vllm/models/deepseek_v4/nvidia/ops/sonar_bf16_bmm.py
+902e3996e42c PATCHED                          <tmp>/vllm/model_executor/layers/quantization/utils/fp8_utils.py
+c3a05cca1b4f PATCHED                          <tmp>/vllm/model_executor/layers/fused_moe/deep_gemm_utils.py
+b566eb62cf07 PATCHED                          <tmp>/vllm/models/deepseek_v41/common/ops/cache_utils.py
+4fc6960be159 PATCHED                          <tmp>/home/dsv41-fc2/fc2_status_gated_gather_trial.py
+f8c8fc319044 present                          <tmp>/vllm/triton_utils/dsv41_glue_pdl.py
+
+PASS A: r1-pdl real uninstall -> every original file byte-identical to base 
+PASS B: r1-pdl after ours: refused, nothing written /folders/y3/w83wrx_j3q14flpx952v9nd80000gn/T/tmpdx99nsnr/home/dsv41-fc2/fc2_status_gated_gather_trial.py: sha256 b182b57beebc7b2b != recorded base 733c3a87ff0fa487 (and not our patch of it); refusing
+
+   C: r1-pdl uninstall with ours on top -> rc 1; REFUSED, nothing changed: dsv41-fc2/fc2_status_gated_gather_trial.py: sha256 71256c1406626e87 is not this kit's patch of .bak-r1-pdl (sha 733c3a87ff0fa487); something changed it after install (another kit?). Refusing to revert it; restore by hand
+PASS C: wrong-order uninstall leaves no half-state (refuses untouched, or G25 inert) 
+ALL PASS

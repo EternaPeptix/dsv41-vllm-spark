@@ -1,0 +1,17 @@
+PASS live census parsed {'cvt.f32.bf16': 96, 'fma.rn.f32x2': 48, 'cvt.rn.bf16x2.f32': 8}
+PASS identity (no epilogue) rejected none
+PASS accept A: f32 add + 2nd RN (add.f32 x16) path=A fails=[]
+PASS accept A: f32x2 add (add.rn.f32x2 x8) path=A fails=[]
+PASS accept A: scalar 2nd RN (cvt.rn.bf16.f32 x16) path=A fails=[]
+PASS accept B: native add.rn.bf16x2 x8 path=B fails=[]
+PASS accept B: native add.bf16 x16 path=B fails=[]
+PASS reject WRONG: shared into fp32 acc (8 cvt + 16 add.f32) path=none fails=['epilogue is neither A (f32 add + 2nd RN) nor B (native bf16 add): per thread 16 elements, extra roundings 0, extra f32-add elements 16, bf16-add elements 0']
+PASS reject WRONG: shared as acc init (no add) path=none fails=['epilogue is neither A (f32 add + 2nd RN) nor B (native bf16 add): per thread 16 elements, extra roundings 0, extra f32-add elements 0, bf16-add elements 0']
+PASS reject WRONG: f32 add but only half the 2nd roundings path=none fails=['epilogue is neither A (f32 add + 2nd RN) nor B (native bf16 add): per thread 16 elements, extra roundings 8, extra f32-add elements 16, bf16-add elements 0']
+PASS reject WRONG: both epilogues (f32 add + bf16 add) path=none fails=['epilogue is neither A (f32 add + 2nd RN) nor B (native bf16 add): per thread 16 elements, extra roundings 16, extra f32-add elements 16, bf16-add elements 16']
+PASS reject WRONG: extra fma (shared via fma) path=none fails=['accumulation fma count differs', 'fma census differs: fma.rn.f32x2 live 48 add 56', "unexpected fp ops in the fold kernel: ['fma.rn.f32x2']", 'epilogue is neither A (f32 add + 2nd RN) nor B (native bf16 add): per thread 16 elements, extra roundings 0, extra f32-add elements 0, bf16-add elements 0']
+PASS reject WRONG: stray mul.f32 path=A fails=["unexpected fp ops in the fold kernel: ['mul.rn.f32']"]
+PASS reject WRONG: scalar fma for the add path=none fails=['fma census differs: fma.rn.f32 live 0 add 16', "unexpected fp ops in the fold kernel: ['fma.rn.f32']", 'epilogue is neither A (f32 add + 2nd RN) nor B (native bf16 add): per thread 16 elements, extra roundings 16, extra f32-add elements 0, bf16-add elements 0']
+PASS reject A with .ftz ['add: .ftz present', "unexpected fp ops in the fold kernel: ['add.ftz.f32']", 'epilogue is neither A (f32 add + 2nd RN) nor B (native bf16 add): per thread 16 elements, extra roundings 16, extra f32-add elements 0, bf16-add elements 0']
+PASS reject a live census that is not production's
+ALL PASS

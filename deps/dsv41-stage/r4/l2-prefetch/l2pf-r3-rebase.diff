@@ -1,0 +1,70 @@
+--- /private/tmp/claude-501/-Users-jeweled/64b45536-e9c4-4d44-9db6-63d2a8374326/scratchpad/r4/l2-prefetch/patched/dsv41_l2_prefetch.py	2026-10-21 22:17:36
++++ patched/dsv41_l2_prefetch.py	2026-10-22 07:03:53
+@@ -66,6 +66,7 @@
+ USE_AG = _env("DSV41_L2_PREFETCH_AG", "1") != "0"
+ MAX_TOKENS = int(_env("DSV41_L2_PREFETCH_MAX_TOKENS", "128"))
+ MHC = _env("DSV41_L2_PREFETCH_MHC", "1") != "0"
++R3_DENSE = _env("DSV41_L2_PREFETCH_R3", "1") != "0"  # r4 rebase: record r3-e4 qkv_a shard reads
+ SKIP_N = int(_env("DSV41_L2_PREFETCH_SKIP_N", "0"))
+ MIN_PARAM = int(float(_env("DSV41_L2_PREFETCH_MIN_PARAM_KB", "32")) * 1024)
+ MAX_PARAM = int(float(_env("DSV41_L2_PREFETCH_MAX_PARAM_MB", "64")) * (1 << 20))
+@@ -163,6 +164,8 @@
+     if MHC:
+         _wrap_mhc(mod, "mhc_shifted_post_pre", 4)
+         _wrap_mhc(mod, "mhc_pre_delayed_tilelang", 1)
++    if R3_DENSE:
++        _wrap_r3_dense()
+     _side_stream()  # created outside any capture
+     S.installed = True
+     logger.info("DSV41_L2_PREFETCH: DeepseekV4Model.forward bracketed (decode <= %d tokens)", MAX_TOKENS)
+@@ -197,6 +200,50 @@
+     setattr(mod, name, wrapper)
+ 
+ 
++def _wrap_r3_dense() -> None:
++    """r4 rebase onto r3-e4: DSV41_QKV_A_SHARD reads a private [224, K] MXFP8 shard
++    (attn._dsv41_qkv_shard) instead of calling the fused_wqa_wkv module, so no module
++    pre-hook fires for it. Record the shard (scales first, then weight) right before the
++    shard GEMM; its all-gather is the next collective, so it lands in the correct window.
++    The first call per layer builds the shard and is not recorded (plan is learned again
++    at every capture warm-up). indexer weights_proj (bmm32 path) is recorded the same way."""
++    try:
++        import importlib
++
++        r3 = importlib.import_module("vllm.models.deepseek_v41.nvidia.dsv41_r3_dense")
++    except Exception as e:  # noqa: BLE001
++        logger.info("DSV41_L2_PREFETCH: r3 dense module not importable (%r); not wrapped", e)
++        return
++    fn = getattr(r3, "qkv_a_sharded", None)
++    if fn is not None and not getattr(fn, "_dsv41_l2pf", False):
++
++        def qkv_wrapper(attn, x, *a, **k):
++            if S.mode == "learn":
++                st = getattr(attn, "_dsv41_qkv_shard", None)
++                if st is not None and hasattr(st, "w"):
++                    _record((str(getattr(attn, "prefix", "attn")) + ".qkv_a_shard",
++                             (getattr(st, "s_rm", None), st.w)))
++            return fn(attn, x, *a, **k)
++
++        qkv_wrapper._dsv41_l2pf = True  # type: ignore[attr-defined]
++        qkv_wrapper.__wrapped__ = fn  # type: ignore[attr-defined]
++        r3.qkv_a_sharded = qkv_wrapper
++    fw = getattr(r3, "indexer_weights_proj", None)
++    if fw is not None and not getattr(fw, "_dsv41_l2pf", False):
++
++        def wproj_wrapper(linear, x, *a, **k):
++            if S.mode == "learn":
++                w = getattr(linear, "weight", None)
++                if isinstance(w, torch.Tensor):
++                    _record(("idx.weights_proj", (w,)))
++            return fw(linear, x, *a, **k)
++
++        wproj_wrapper._dsv41_l2pf = True  # type: ignore[attr-defined]
++        wproj_wrapper.__wrapped__ = fw  # type: ignore[attr-defined]
++        r3.indexer_weights_proj = wproj_wrapper
++    logger.info("DSV41_L2_PREFETCH: r3 dense qkv_a shard / weights_proj reads recorded")
++
++
+ # ----------------------------------------------------------------------------- recording ---
+ def _tensor_items(tensors) -> list[tuple[int, int, int | None]]:
+     out = []

@@ -1,0 +1,50 @@
+# r4-xsretime CPU tests, 2026-11-08T21:24:15Z, Mac Studio 512S1, python 3.13.13 torch 2.11.0
+# kit shas: base 8bc9a1b5b73c8085 patched bb8d4a7eeb8e46dd module fd727ec16767fb99
+PASS test_base_sha_matches_kit
+PASS test_anchors_apply_to_live_base
+PASS test_flag_off_text_and_ast_identical
+PASS test_installer_cycle
+PASS test_flag_off_module_not_imported
+PASS test_inactive_settings_identical_to_live
+PASS test_flag_off_identical_launch_sequence
+PASS test_rate_only_attn_windows_change_period
+PASS test_own_stream_moves_attn_pacer_and_joins_at_end
+    dedup removed 7.56 MiB over 3 captures (expected ~0.84 MiB x qualifying layers)
+PASS test_dedup_removes_owner_window_bytes_only
+PASS test_all_three_combined
+PASS test_pace_head_kept_as_base_burst
+PASS test_pacer_library_missing_falls_back_to_base
+PASS test_dedup_fails_closed
+PASS test_subtract_matches_bruteforce
+PASS test_dedup_lists_owner_mapping
+16/16 passed
+exit 0
+
+# installer dry run on a copy of the live base (8bc9a1b5)
+8bc9a1b5 clean   <tmp>/vllm/distributed/device_communicators/dsv41_l2_prefetch.py  [= base_sha256]
+- absent  <tmp>/vllm/distributed/device_communicators/dsv41_l2pf_xsr.py  [-]
+r4-xsretime status: CLEAN (base 8bc9a1b5b73c8085 module -)
+  324:     if _XSR is not None:  # r4-xsretime
+  325:         _XSR.install()  # r4-xsretime
+  583:         if _XSR is not None:  # r4-xsretime
+  584:             _XSR.join()  # r4-xsretime
+ 1006:     if _XSR is not None and fork_kind == "attn":  # r4-xsretime
+ 1007:         _xp = _XSR.attn_parts(segs, device)  # r4-xsretime
+ 1008:         if _xp is not None:  # r4-xsretime
+ 1009:             return _xp  # r4-xsretime
+ 1030:     if _XSR is not None:  # r4-xsretime
+ 1031:         fl = _XSR.retime_lists(fl, events)  # r4-xsretime
+ 1076:     if _XSR is not None and part[0] == "y":  # r4-xsretime
+ 1077:         return _XSR.fork_part(part, where)  # r4-xsretime
+ 1196: # climb r4 (r4-xsretime): attention-window re-timing in dsv41_l2pf_xsr.py, imported only when a master flag is set  # r4-xsretime
+ 1197: _XSR = None  # r4-xsretime
+ 1198: _XSR_FLAGS = ('DSV41_L2_PREFETCH_PACE_GBPS_ATTN', 'DSV41_L2_PREFETCH_PACE_ATTN_STREAM', 'DSV41_L2_PREFETCH_ATTN_DEDUP')  # r4-xsretime
+ 1199: if ENABLED and any(_env(_k, "0").lower() not in ("", "0", "off", "false") for _k in _XSR_FLAGS):  # r4-xsretime
+ 1200:     try:  # r4-xsretime
+ 1201:         from vllm.distributed.device_communicators import dsv41_l2pf_xsr as _XSR  # r4-xsretime
+ 1202:         _XSR.bind(sys.modules[__name__])  # r4-xsretime
+ 1203:         if not _XSR.any_active():  # r4-xsretime
+ 1204:             _XSR = None  # r4-xsretime
+ 1205:     except Exception as _e:  # noqa: BLE001  # r4-xsretime
+ 1206:         _XSR = None  # r4-xsretime
+ 1207:         logger.warning("DSV41_L2_PREFETCH r4-xsretime: disabled (%r)", _e)  # r4-xsretime

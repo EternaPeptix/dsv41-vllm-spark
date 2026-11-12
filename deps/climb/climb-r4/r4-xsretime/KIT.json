@@ -1,0 +1,178 @@
+{
+ "name": "r4-xsretime",
+ "summary": "Climb round 4: re-time the paced attention-window L2 prefetch (wo_a 4.12 MiB + wo_b 5.16 MiB, 125 GB/s, ~79 us on the shared pacer FIFO stream 3) so it finishes before the wo_b GEMM when DSV41_ATTN_XSPLIT=1 shortens attention by 12-14 us/call. Three default-off levers behind new DSV41_L2_PREFETCH_* flags: per-kind attn pace rate, own attn pacer stream, attn-window dedup against the all-gather window. One base patch (6 anchors, 24 tagged lines) on the LIVE dsv41_l2_prefetch.py (r1-pf installed) + one new module. Cache hints only: exact by construction.",
+ "levers": [
+  {
+   "id": "XSR-RATE",
+   "flag": "DSV41_L2_PREFETCH_PACE_GBPS_ATTN",
+   "status": "built"
+  },
+  {
+   "id": "XSR-OWN",
+   "flag": "DSV41_L2_PREFETCH_PACE_ATTN_STREAM",
+   "status": "built"
+  },
+  {
+   "id": "XSR-DEDUP",
+   "flag": "DSV41_L2_PREFETCH_ATTN_DEDUP",
+   "status": "built"
+  },
+  {
+   "id": "XSR-WOB",
+   "flag": "DSV41_L2_PREFETCH_WOB_MB (existing knob, env-only arm)",
+   "status": "no code"
+  }
+ ],
+ "flags": [
+  {
+   "name": "DSV41_L2_PREFETCH_PACE_GBPS_ATTN",
+   "default": "0 (= DSV41_L2_PREFETCH_PACE_GBPS)",
+   "on_value": "160 | 200",
+   "meaning": "pace rate (GB/s) of the attention (wo_a+wo_b) windows only; ar/ag/post windows keep PACE_GBPS. Needs PACE_GBPS>0 and 'attn' in PACE_KINDS, else logged INACTIVE. Bound (0, 400]."
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_PACE_ATTN_STREAM",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "paced attention windows on their own 4th side stream (created at install, joined at the end of the bracketed forward): start at the fork instead of after the all-gather pacer in the stream-3 FIFO, and the post-attention all-reduce pacer no longer queues behind them."
+  },
+  {
+   "name": "DSV41_L2_PREFETCH_ATTN_DEDUP",
+   "default": "0",
+   "on_value": "1",
+   "meaning": "drop from every attention window the byte ranges the collective window holding its fork already prefetched (wo_b scales + first 0.69 MiB of wo_b in non-indexer layers); windows only shrink."
+  }
+ ],
+ "files": [
+  {
+   "path": "distributed/device_communicators/dsv41_l2_prefetch.py",
+   "action": "patch",
+   "base_sha256": "8bc9a1b5b73c808580a350fe8618fd6abb34a6f629de11c2053f640a7cd15596",
+   "base_note": "live 8/8 on 2026-11-08 = r1-pf patched_sha256 (r1-pf on 63737f9c)",
+   "patched_sha256": "bb8d4a7eeb8e46dd3d959dd28a68c31f8790d5997614df5c3230fffc76173ff1"
+  },
+  {
+   "path": "distributed/device_communicators/dsv41_l2pf_xsr.py",
+   "action": "new",
+   "kit_sha256": "fd727ec16767fb9920c542ba5be2649b6b86a53950e87a55dab97c2f80eaa0a5"
+  }
+ ],
+ "reference_files": [
+  {
+   "path": "distributed/device_communicators/dsv41_l2pf_r1.py",
+   "sha256": "5af558fe96edfcd630caa3e673b71788587649a4e0bf9b45b4e8963b39e10548",
+   "note": "live r1-pf module, unchanged; must stay installed"
+  }
+ ],
+ "install": "python3 install.py install",
+ "uninstall": "python3 install.py uninstall  (before any r1-pf uninstall)",
+ "depends_on": [
+  "r1-pf (installed, live)",
+  "r3-xsplit (installed, DSV41_ATTN_XSPLIT) for the xs arms"
+ ],
+ "conflicts_with": [],
+ "expected_gain_pct": {
+  "low": 0.3,
+  "central": 1.0,
+  "high": 2.0,
+  "vs": "control (production), best xs+ arm; prod+r200 alone ~+0.3..0.5"
+ },
+ "window_arms": [
+  {
+   "name": "control",
+   "env": {},
+   "priority": 0,
+   "note": "production b22e4aa9 (kit installed, flags off)"
+  },
+  {
+   "name": "xs",
+   "env": {
+    "DSV41_ATTN_XSPLIT": "1"
+   },
+   "priority": 1,
+   "note": "XSPLIT alone (t1: ~0 in serving)"
+  },
+  {
+   "name": "xs+r200",
+   "env": {
+    "DSV41_ATTN_XSPLIT": "1",
+    "DSV41_L2_PREFETCH_PACE_GBPS_ATTN": "200"
+   },
+   "priority": 1,
+   "note": "attn windows paced at 200 GB/s (49 us instead of 79); model: done at wo_b start in 29-68% of layers, mean overrun -8..+1 us (was +22..+31)"
+  },
+  {
+   "name": "xs+own+r160",
+   "env": {
+    "DSV41_ATTN_XSPLIT": "1",
+    "DSV41_L2_PREFETCH_PACE_ATTN_STREAM": "1",
+    "DSV41_L2_PREFETCH_PACE_GBPS_ATTN": "160"
+   },
+   "priority": 1,
+   "note": "own pacer stream (starts at the fork, ~13 us earlier) + 160 GB/s; model overrun -7..+2 us"
+  },
+  {
+   "name": "xs+own+r160+dedup",
+   "env": {
+    "DSV41_ATTN_XSPLIT": "1",
+    "DSV41_L2_PREFETCH_PACE_ATTN_STREAM": "1",
+    "DSV41_L2_PREFETCH_PACE_GBPS_ATTN": "160",
+    "DSV41_L2_PREFETCH_ATTN_DEDUP": "1"
+   },
+   "priority": 2,
+   "note": "all three; model overrun -13..-4 us, done in 58-95% of layers"
+  },
+  {
+   "name": "xs+r200+dedup",
+   "env": {
+    "DSV41_ATTN_XSPLIT": "1",
+    "DSV41_L2_PREFETCH_PACE_GBPS_ATTN": "200",
+    "DSV41_L2_PREFETCH_ATTN_DEDUP": "1"
+   },
+   "priority": 2,
+   "note": "single pacer FIFO kept, fastest attn, minus the AG-window wo_b head"
+  },
+  {
+   "name": "xs+r160",
+   "env": {
+    "DSV41_ATTN_XSPLIT": "1",
+    "DSV41_L2_PREFETCH_PACE_GBPS_ATTN": "160"
+   },
+   "priority": 3,
+   "note": "model overrun +4..+13 us (partial fix)"
+  },
+  {
+   "name": "xs+own",
+   "env": {
+    "DSV41_ATTN_XSPLIT": "1",
+    "DSV41_L2_PREFETCH_PACE_ATTN_STREAM": "1"
+   },
+   "priority": 3,
+   "note": "earlier start only; model overrun +10..+19 us (partial fix); isolates the FIFO effect incl. the post-attn AR pacer no longer queueing"
+  },
+  {
+   "name": "xs+wob3",
+   "env": {
+    "DSV41_ATTN_XSPLIT": "1",
+    "DSV41_L2_PREFETCH_WOB_MB": "3"
+   },
+   "priority": 3,
+   "note": "ENV-ONLY (no kit flag): 3 of 5.16 MiB of wo_b in the attn window; the GEMM reads the rest from DRAM uncontended"
+  },
+  {
+   "name": "prod+r200",
+   "env": {
+    "DSV41_L2_PREFETCH_PACE_GBPS_ATTN": "200"
+   },
+   "priority": 2,
+   "note": "no XSPLIT: production also overruns wo_b by +6..+13 us (wo_b 14.7-18.3 us vs 13.1-14.3 when the pacer is done)"
+  }
+ ],
+ "device_checks": [
+  "no new kernel: the live libdsv41_l2pf_g2.so pacer / libdsv41_l2pf.so burst kernels only; no stopped-node device test needed",
+  "rank0.log per arm: 'r4-xsretime: active=' line with the expected levers and no INACTIVE; 'g2 captured tokens=N forks {... attn_y ...}' equals planned and no MISMATCH; dedup arms: moved_mb.xsr_dedup > 0",
+  "exact.py ec2f4437f8e1ed09 and G1 outputs_digest 2f7fdccbd388225a in every arm (cache hints only)",
+  "optional nsys (one capture per arm): ~/Documents/dsv41-offline/climb-r4/xsretime/scripts/deep.py: pace_end_vs_wobs <= 0 in most layers, wob back to 13-15.6 us, E_to_ar2end delta vs prod ~0"
+ ],
+ "tests": "tests/test_xsr.py (16/16 on 512S1, see TEST-RESULTS.txt)"
+}

@@ -1,0 +1,303 @@
+# r7-comm2 TEST-RESULTS (2026-11-09, re-run after the review fixes). Every result below is from a command I ran; nothing
+# ran on a GPU; nothing was compiled (CLUSTER_LOCK held by r5-w2 during the fix pass too).
+
+## 1. gate/run_gate7.py --skip-missing (512S1, ~/exo-venv313/bin/python3; r6 SASS from climb-r6/comm/sass)
+(re-recorded, review item 7: 19 CPU cases OK incl. the new O7 ordgate selftest; 21 MISSING = need compiled SASS)
+G0_live_vs_r3so                OK  (  25.4 s) IDENTITY: 39/39 ref kernels instruction-identical in the candidate | FPFLOW_GATE PASS: 24/24 r3 kernels proven, 8/8 production twins proven
+G1_live_vs_devctl              OK  (  25.0 s) IDENTITY: 39/39 ref kernels instruction-identical in the candidate | FPFLOW_GATE PASS: 24/24 r3 kernels proven, 8/8 production twins proven
+G2_r3so_vs_devctl              OK  (  25.3 s) IDENTITY: 63/63 ref kernels instruction-identical in the candidate | FPFLOW_GATE PASS: 24/24 r3 kernels proven, 8/8 production twins proven
+G3_live_vs_devr6               OK  (  54.2 s) IDENTITY: 39/39 ref kernels instruction-identical in the candidate | FPFLOW_GATE PASS: 56/56 r3 kernels proven, 8/8 production twins proven
+G4_r3so_vs_devr6               OK  (  54.6 s) IDENTITY: 63/63 ref kernels instruction-identical in the candidate | FPFLOW_GATE PASS: 56/56 r3 kernels proven, 8/8 production twins proven
+G5_pdl_devr6                   OK  (   3.5 s) PDLCHECK PASS: 32/32 PDL kernels
+M1_m_rev                       OK  (  40.7 s) IDENTITY: 39/39 ref kernels instruction-identical in the candidate | MUTANT: reduction kernels caught 42/42 (reason /term \d for rank|rank order/) -> KILLED
+M2_m_seed0                     OK  (  34.7 s) IDENTITY: 39/39 ref kernels instruction-identical in the candidate | MUTANT: reduction kernels caught 42/42 (reason /seed/) -> KILLED
+M3_m_negzero                   OK  (  35.0 s) IDENTITY: 39/39 ref kernels instruction-identical in the candidate | MUTANT: reduction kernels caught 42/42 (reason /seed/) -> KILLED
+M4_m_ffma                      OK  (  34.5 s) IDENTITY: 39/39 ref kernels instruction-identical in the candidate | MUTANT: reduction kernels caught 42/42 (reason /FFMA/) -> KILLED
+M5_m_tree                      OK  (  40.3 s) IDENTITY: 39/39 ref kernels instruction-identical in the candidate | MUTANT: reduction kernels caught 42/42 (reason /tree|seed/) -> KILLED
+M6_m_waitlate_fp               OK  (  54.1 s) IDENTITY: 39/39 ref kernels instruction-identical in the candidate | FPFLOW_GATE PASS: 56/56 r3 kernels proven, 8/8 production twins proven
+M7_m_waitlate_pdl              OK  (   4.7 s) PDL MUTANT: PDL kernels caught by W2 32/32 -> KILLED
+S7a_stage_r3so                 OK  (  30.0 s) STAGE_SELFTEST PASS
+S7b_stage_devr6                OK  (  90.6 s) STAGE_SELFTEST PASS
+P7_projgate_selftest           OK  (   5.5 s) PROJGATE_SELFTEST PASS (base record f29c9ff9b85178f7)
+P7b_projgate_served_variants   OK  (   7.8 s) RECORDS EQUAL (3 served cubins)
+A7_acqcheck_selftest           OK  (   5.1 s) ACQCHECK N2 FAIL/OPEN  N1 FAIL/OPEN
+O7_ordgate_selftest            OK  (   0.3 s) ORDGATE_SELFTEST PASS 9/9
+R0_live_vs_devr7               MISSING input ['dev-r7.sass']
+R1_devctlr6_vs_devr7           MISSING input ['dev-ctl_r6.sass', 'dev-r7.sass']
+R2_pdl_devr7                   MISSING input ['dev-r7.sass']
+R3_proj_devr7                  MISSING input ['dev-r7.sass']
+R4_ord_devr7                   MISSING input ['dev-r7.sass']
+MR1_m_rev                      MISSING input ['dev-m_rev.sass']
+MR2_m_seed0                    MISSING input ['dev-m_seed0.sass']
+MR3_m_negzero                  MISSING input ['dev-m_negzero.sass']
+MR4_m_ffma                     MISSING input ['dev-m_ffma.sass']
+MR5_m_tree                     MISSING input ['dev-m_tree.sass']
+MR6_m_waitlate_fp              MISSING input ['dev-m_waitlate.sass']
+MR7_m_waitlate_pdl             MISSING input ['dev-m_waitlate.sass']
+MR8_m_stage                    MISSING input ['dev-m_stage.sass']
+MP1_mp_first                   MISSING input ['dev-mp_first.sass']
+MP2_mp_warp                    MISSING input ['dev-mp_warp.sass']
+MP3_mp_l2                      MISSING input ['dev-mp_l2.sass']
+MP4_mp_unfused                 MISSING input ['dev-mp_unfused.sass']
+MP5_mp_chunk                   MISSING input ['dev-mp_chunk.sass']
+MO1_mo_nofence                 MISSING input ['dev-mo_nofence.sass']
+MO2_mo_first                   MISSING input ['dev-mo_first.sass']
+MO3_mo_noacq                   MISSING input ['dev-mo_noacq.sass']
+INFO ACQCHECK N2 FAIL/OPEN  N1 FAIL/OPEN  (N2 gates the C2 arm, N1 the trig arm; audit/out/acqcheck.txt)
+GATED_SO_SHA256 none (KIT.json records no r7 .so yet: no D7 cases; install.py refuses)
+RUN_GATE7 PARTIAL: 19/40 cases gave the expected verdict (21 MISSING inputs, tolerated by --skip-missing: NOT a gate pass)
+
+## 2. tests/run_tests7.py (512S1)
+PASS T1 mk_r7 reproduces the r7 source; r6 kernels untouched: 7 r6 functions byte-identical; ar_kernel_r3 +15 lines (signature + projection tail)
+PASS T2 mk_mutants7 reproduces the 15 mutants, each confined to its region: 15 mutants reproduce; 1-12 changed lines each (2 of them the R6_MUTANT / R7_MUTANT attributes) (plus the helper block)
+PASS T3 installer: both bases, idempotence, byte-exact uninstall, refusals, rollback: 11 scenarios
+PASS T4 fold semantics: armed fold is taken once; every mismatch falls back; flag off folds nothing: 21 checks
+PASS T5 flag-off structure (AST): rdma_all_reduce.py: 2 existing functions carry r7 code, all under `if _R7_PROJ:`; dsv41_oblit.py: 2 existing functions carry r7 code, all under `if _R7 is not None:`
+PASS T6 proj_emu selftest + device_test7 --cpu-selfcheck: R7_CPU_SELFCHECK PASS
+PASS T7 KIT.json shas match the kit: sources, bases and patched shas consistent; .so and mutant .so shas not recorded (unbuilt)
+PASS T8 composition: no other r5/r6 kit patches the two files: only ['climb-r6/comm'] touch them
+PASS T9 shell syntax: 11 scripts
+PASS T10 SASS collection stops on spark-one's lock: before the first step, between dumps, mid-dump, and on no answer: free: 2/2 names, 2 dumps; lock between dumps: stopped before dump 2 (1 dump ran); lock at start / no answer: 0 dumps (fail closed); lock mid-dump: driver stopped in 0.8 s and the running cuobjdump was killed
+CPU_TESTS7 PASS 10/10
+
+## 2b. tests/importcheck7.py (512S1; climb-r6 integrate trees + r5 stub harness, real torch CPU; review item 9)
+python 3.13.13; production env: 92 DSV41_/RDMA_AR_ vars from /private/tmp/r7c2fix/climb-r6/integrate/live/dsv41-tp8.sh; launcher sets DSV41_OBLIT=yes, DSV41_GLUE_PDL=None, DSV41_OBLIT_FOLD=None
+-- tree live: rdma_all_reduce.py base 26a5d834 -> r7 patched; model.py real
+ok   [live         ] off/prod: no r7 flag                                 {"rdma_all_reduce._R7_PROJ": "False", "dsv41_oblit._R7_ON": "False"}
+ok   [live         ] off + RDMA_AR_EXT=r7 .so, TRIM=1 (q arm)             {"rdma_all_reduce._R7_PROJ": "False", "rdma_all_reduce._R3_TRIM": "True", "dsv41_oblit._R7_ON": "False"}
+ok   [live         ] on/HT13 PROJ=1 (p arm): model -> oblit -> rdma       {"rdma_all_reduce._R7_PROJ": "True", "dsv41_oblit._R7_ON": "True", "dsv41_oblit._DSV41_GLUE_PDL": "False"}
+ok   [live         ] on/HT13 + DSV41_GLUE_PDL=woa (no 'proj': allowed)    {"dsv41_oblit._R7_ON": "True", "dsv41_oblit._DSV41_GLUE_PDL": "False"}
+ok   [live         ] bad/PROJ + DSV41_GLUE_PDL=1 (refused)                {}
+ok   [live         ] bad/PROJ + DSV41_GLUE_PDL=proj (refused)             {}
+ok   [live         ] bad/PROJ + r5 combined env (GLUE_PDL=1: refused)     {}
+ok   [live         ] bad/PROJ + DSV41_OBLIT_FOLD=ffn (refused)            {}
+ok   [live         ] bad/PROJ without TRIM                                {}
+ok   [live         ] bad/PROJ=2                                           {}
+ok   [live         ] off + r5 combined env (GLUE_PDL=1 without PROJ: allowed) {"dsv41_oblit._R7_ON": "False", "dsv41_oblit._DSV41_GLUE_PDL": "True"}
+-- tree composed/live: rdma_all_reduce.py base 67498e6b -> r7 patched; model.py real
+ok   [composed/live] off/prod: no r7 flag                                 {"rdma_all_reduce._R7_PROJ": "False", "dsv41_oblit._R7_ON": "False"}
+ok   [composed/live] off + RDMA_AR_EXT=r7 .so, TRIM=1 (q arm)             {"rdma_all_reduce._R7_PROJ": "False", "rdma_all_reduce._R3_TRIM": "True", "dsv41_oblit._R7_ON": "False"}
+ok   [composed/live] on/HT13 PROJ=1 (p arm): model -> oblit -> rdma       {"rdma_all_reduce._R7_PROJ": "True", "dsv41_oblit._R7_ON": "True", "dsv41_oblit._DSV41_GLUE_PDL": "False"}
+ok   [composed/live] on/HT13 + DSV41_GLUE_PDL=woa (no 'proj': allowed)    {"dsv41_oblit._R7_ON": "True", "dsv41_oblit._DSV41_GLUE_PDL": "False"}
+ok   [composed/live] bad/PROJ + DSV41_GLUE_PDL=1 (refused)                {}
+ok   [composed/live] bad/PROJ + DSV41_GLUE_PDL=proj (refused)             {}
+ok   [composed/live] bad/PROJ + r5 combined env (GLUE_PDL=1: refused)     {}
+ok   [composed/live] bad/PROJ + DSV41_OBLIT_FOLD=ffn (refused)            {}
+ok   [composed/live] bad/PROJ without TRIM                                {}
+ok   [composed/live] bad/PROJ=2                                           {}
+ok   [composed/live] off + r5 combined env (GLUE_PDL=1 without PROJ: allowed) {"dsv41_oblit._R7_ON": "False", "dsv41_oblit._DSV41_GLUE_PDL": "True"}
+-- tree composed/r5: rdma_all_reduce.py base 67498e6b -> r7 patched; model.py real
+ok   [composed/r5  ] off/prod: no r7 flag                                 {"rdma_all_reduce._R7_PROJ": "False", "dsv41_oblit._R7_ON": "False"}
+ok   [composed/r5  ] off + RDMA_AR_EXT=r7 .so, TRIM=1 (q arm)             {"rdma_all_reduce._R7_PROJ": "False", "rdma_all_reduce._R3_TRIM": "True", "dsv41_oblit._R7_ON": "False"}
+ok   [composed/r5  ] on/HT13 PROJ=1 (p arm): model -> oblit -> rdma       {"rdma_all_reduce._R7_PROJ": "True", "dsv41_oblit._R7_ON": "True", "dsv41_oblit._DSV41_GLUE_PDL": "False"}
+ok   [composed/r5  ] on/HT13 + DSV41_GLUE_PDL=woa (no 'proj': allowed)    {"dsv41_oblit._R7_ON": "True", "dsv41_oblit._DSV41_GLUE_PDL": "False"}
+ok   [composed/r5  ] bad/PROJ + DSV41_GLUE_PDL=1 (refused)                {}
+ok   [composed/r5  ] bad/PROJ + DSV41_GLUE_PDL=proj (refused)             {}
+ok   [composed/r5  ] bad/PROJ + r5 combined env (GLUE_PDL=1: refused)     {}
+ok   [composed/r5  ] bad/PROJ + DSV41_OBLIT_FOLD=ffn (refused)            {}
+ok   [composed/r5  ] bad/PROJ without TRIM                                {}
+ok   [composed/r5  ] bad/PROJ=2                                           {}
+ok   [composed/r5  ] off + r5 combined env (GLUE_PDL=1 without PROJ: allowed) {"dsv41_oblit._R7_ON": "False", "dsv41_oblit._DSV41_GLUE_PDL": "True"}
+IMPORTCHECK7 PASS (0 failing cases)
+
+## 3. tests/mock_device7.py (512S1; harness smoke, no kernel ran; re-run after the device_test7 serving-op change)
+SERVING-OP proj: Triton _proj_rows cubin ec864fe99b539704 is a served cubin
+MOCK proj: 592 checks, 0 failures (77 s)
+SERVING-OP proj: Triton _proj_rows cubin ec864fe99b539704 is a served cubin
+FAIL rank 0 M 1 planted planted two False s1 24576 bits 0: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 1 planted planted two False s1 24576 bits 128: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 1 planted planted two False s1 24576 bits 384: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 1 planted planted two True s1 24576 bits 0: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 1 planted planted two True s1 24576 bits 128: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 1 planted planted two True s1 24576 bits 384: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 2 planted planted two False s1 24576 bits 0: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 2 planted planted two False s1 24576 bits 128: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 2 planted planted two False s1 24576 bits 384: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 2 planted planted two True s1 24576 bits 0: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 2 planted planted two True s1 24576 bits 128: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 2 planted planted two True s1 24576 bits 384: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 3 planted planted two False s1 24576 bits 0: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 3 planted planted two False s1 24576 bits 128: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 3 planted planted two False s1 24576 bits 384: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 3 planted planted two True s1 24576 bits 0: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 3 planted planted two True s1 24576 bits 128: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 3 planted planted two True s1 24576 bits 384: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 4 planted planted two False s1 24576 bits 0: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 4 planted planted two False s1 24576 bits 128: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 4 planted planted two False s1 24576 bits 384: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 4 planted planted two True s1 24576 bits 0: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 4 planted planted two True s1 24576 bits 128: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 4 planted planted two True s1 24576 bits 384: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 5 planted planted two False s1 24576 bits 0: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 5 planted planted two False s1 24576 bits 128: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 5 planted planted two False s1 24576 bits 384: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 5 planted planted two True s1 24576 bits 0: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 5 planted planted two True s1 24576 bits 128: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 5 planted planted two True s1 24576 bits 384: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 6 planted planted two False s1 24576 bits 0: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 6 planted planted two False s1 24576 bits 128: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 6 planted planted two False s1 24576 bits 384: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 6 planted planted two True s1 24576 bits 0: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 6 planted planted two True s1 24576 bits 128: y != served _proj_rows (first byte 512)
+FAIL rank 0 M 6 planted planted two True s1 24576 bits 384: y != served _proj_rows (first byte 512)
+FAIL graph rank 0 bits 0 rep 3 M 4: y != served _proj_rows(eager live)
+FAIL graph rank 0 bits 0 rep 5 M 6: y != served _proj_rows(eager live)
+FAIL graph rank 0 bits 0 rep 19 M 2: y != served _proj_rows(eager live)
+FAIL graph rank 0 bits 128 rep 3 M 4: y != served _proj_rows(eager live)
+MOCK control proj (candidate projects in the mp_l2 order): 40 failures (must be > 0)
+SERVING-OP proj: Triton _proj_rows cubin ec864fe99b539704 is a served cubin
+MOCK projmut mp_first: caught 24/24
+MOCK projmut mp_warp: caught 24/24
+MOCK projmut mp_l2: caught 24/24
+MOCK projmut mp_unfused: caught 24/24
+MOCK projmut mp_chunk: caught 24/24
+MOCK stage: control 0 failures; m_stage caught 128/128
+MOCK control stage (unedited candidate as the mutant): caught 0/128 (must be 0)
+MOCK_DEVICE7 PASS (174 s; harness smoke only, no kernel ran)
+
+## 4. device_test7.py --cpu-selfcheck (512S1)
+planted row scale 2^5: mp_unfused differs on 1 elements OK
+planted row scale 2^5: mp_chunk   differs on 1 elements OK
+R7_CPU_SELFCHECK PASS
+
+## 5. gate/projgate.py --selftest (served Triton _proj_rows)
+selftest T1 chain starts with element 0 (FMUL x0*d0, then FFMA x1*d1): CAUGHT (record differs)
+selftest T2 warp butterfly xor 1 first and 16 last: CAUGHT (proof fails: tree level: expected FADD(v, SHFL.BFLY(v, 1, 0x1f)) at /*0aa0*/)
+selftest T3 second-level butterfly xor 1 then 4: CAUGHT (proof fails: tree level: expected FADD(v, SHFL.BFLY(v, 1, 0x1f)) at /*0b90*/)
+selftest T4 one y FFMA flushes denormals (.FTZ): CAUGHT (proof fails: FFMA.FTZ R5, -R64.reuse, R5, R0 /*0c70*/: modifier (served: plain RN, no FTZ))
+selftest T5 one y FFMA without the negation (x + s*d): CAUGHT (proof fails: FFMA R5, R64.reuse, R5, R0: expected exactly one negated product operand (-s))
+selftest T6 d elements 4..7 read 16 bytes too far: CAUGHT (proof fails: row 0 y[5] = fma(-s, ('d', None, 9), ('x', 0, 5)))
+PROJGATE_SELFTEST PASS (base record f29c9ff9b85178f7)
+
+## 6. gate/stage_selftest.py live vs r3 .so 7ec43164
+grid-staging r3 kernels: 8; r7 environments 8, r6 subset 2
+ar_kernel_r3ILi0ELb0ELi8ELi13EE: S0 PASS (80 copies) | S1 m_stage CAUGHT (staging store /*0e20*/ (tid 37 cta 0 grid 16 nvec 26112 it 1): send element 16421 word 0 holds ('in', None, No) | S2 r6 envs: copy proof blind, coverage assertion FAILS the kernel
+ar_kernel_r3ILi0ELb1ELi8ELi13EE: S0 PASS (80 copies) | S1 m_stage CAUGHT (staging store /*0e20*/ (tid 37 cta 0 grid 16 nvec 26112 it 1): send element 16421 word 0 holds ('in', None, No) | S2 r6 envs: copy proof blind, coverage assertion FAILS the kernel
+ar_kernel_r3ILi1ELb0ELi8ELi13EE: S0 PASS (80 copies) | S1 m_stage CAUGHT (staging store /*0e20*/ (tid 37 cta 0 grid 16 nvec 26112 it 1): send element 16421 word 0 holds ('in', None, No) | S2 r6 envs: copy proof blind, coverage assertion FAILS the kernel
+ar_kernel_r3ILi2ELb0ELi8ELi15EE: S0 PASS (80 copies) | S1 m_stage CAUGHT (staging store /*0e00*/ (tid 37 cta 0 grid 16 nvec 26112 it 1): send element 16421 word 0 holds ('in', None, No) | S2 r6 envs: copy proof blind, coverage assertion FAILS the kernel
+ar_kernel_r3ILi2ELb0ELi8ELi47EE: S0 PASS (80 copies) | S1 m_stage CAUGHT (staging store /*0f30*/ (tid 37 cta 0 grid 16 nvec 26112 it 1): send element 16421 word 0 holds ('in', None, No) | S2 r6 envs: copy proof blind, coverage assertion FAILS the kernel
+ar_kernel_r3ILi2ELb1ELi8ELi15EE: S0 PASS (80 copies) | S1 m_stage CAUGHT (staging store /*0e00*/ (tid 37 cta 0 grid 16 nvec 26112 it 1): send element 16421 word 0 holds ('in', None, No) | S2 r6 envs: copy proof blind, coverage assertion FAILS the kernel
+ar_kernel_r3ILi2ELb1ELi8ELi47EE: S0 PASS (80 copies) | S1 m_stage CAUGHT (staging store /*0f30*/ (tid 37 cta 0 grid 16 nvec 26112 it 1): send element 16421 word 0 holds ('in', None, No) | S2 r6 envs: copy proof blind, coverage assertion FAILS the kernel
+ar_kernel_r3ILi3ELb0ELi8ELi13EE: S0 PASS (80 copies) | S1 m_stage CAUGHT (staging store /*0e20*/ (tid 37 cta 0 grid 16 nvec 26112 it 1): send element 16421 word 0 holds ('in', None, No) | S2 r6 envs: copy proof blind, coverage assertion FAILS the kernel
+STAGE_SELFTEST PASS
+
+## 7. gate/acqcheck.py (N1 / N2) on audit/out/t2_sass.jsonl.gz (Mac, stdlib)
+== N2: ACQBULK in every CTA, per kernel name (all variants found)
+DeviceGemmMxfp8                                pdl-obs Y variants   2 classes ['EARLY-EXIT'] triton launch_pdl [] -> PASS-A1g (every variant: thread 0 of CTA 0 waits on every path; none (the exit at /
+    1/121a/cached_ops/mxfp8_gemm_cutlass_sm120/mxfp8_gemm_cutlass_sm120.so sm_121a: @P0 EXIT /*09b0*/ reachable before the wait  | A1g witness waits
+    cutlass_mxfp8_mxfp8_gemm_cutlass_sm120___nv_bfloat16_128_32_128.cuda.o sm_121a: @P0 EXIT /*09b0*/ reachable before the wait  | A1g witness waits
+Kernel2                                        pdl-obs Y variants   0 classes [] triton launch_pdl [] -> NO-SASS (PDL-observed: OPEN)
+_dsv41_rp_kernel                               pdl-obs Y variants  56 classes ['WAITS'] triton launch_pdl ['True'] -> PASS (every variant waits in every CTA)
+_dsv4_topk_kernel                              pdl-obs Y variants  17 classes ['WAITS'] triton launch_pdl ['True'] -> PASS (every variant waits in every CTA)
+_fused_engram_post_wkv_kernel                  pdl-obs - variants  20 classes ['NONE'] triton launch_pdl ['False'] -> PASS (no griddepcontrol; no PDL launch evidence: stream-ordered)
+_gather_lookback_kernel                        pdl-obs - variants  57 classes ['NONE'] triton launch_pdl ['False'] -> PASS (no griddepcontrol; no PDL launch evidence: stream-ordered)
+_mk_winner_kernel                              pdl-obs - variants   2 classes ['NONE'] triton launch_pdl ['False'] -> PASS (no griddepcontrol; no PDL launch evidence: stream-ordered)
+_proj_rows                                     pdl-obs - variants   3 classes ['NONE'] triton launch_pdl ['False'] -> PASS (no griddepcontrol; no PDL launch evidence: stream-ordered)
+_q_kv_norm_quant_kernel                        pdl-obs Y variants   6 classes ['WAITS'] triton launch_pdl ['True'] -> PASS (every variant waits in every CTA)
+_r2_reduce_quant                               pdl-obs Y variants   3 classes ['WAITS'] triton launch_pdl ['True'] -> PASS (every variant waits in every CTA)
+_sf_onehot_kernel                              pdl-obs - variants   5 classes ['NONE'] triton launch_pdl ['False'] -> PASS (no griddepcontrol; no PDL launch evidence: stream-ordered)
+act_and_mul_kernel                             pdl-obs Y variants   0 classes [] triton launch_pdl [] -> NO-SASS (PDL-observed: OPEN)
+ar_kernel_pl                                   pdl-obs - variants   4 classes ['NONE'] triton launch_pdl [] -> PASS (no griddepcontrol; no PDL launch evidence: stream-ordered)
+flashinferquantization                         pdl-obs Y variants   0 classes [] triton launch_pdl [] -> NO-SASS (PDL-observed: OPEN)
+fusedDeepseekV4QNormRopeKV                     pdl-obs Y variants   0 classes [] triton launch_pdl [] -> NO-SASS (PDL-observed: OPEN)
+l2pf_kernel                                    pdl-obs - variants   2 classes ['NONE'] triton launch_pdl [] -> PASS (no griddepcontrol; no PDL launch evidence: stream-ordered)
+l2pf_paced_kernel                              pdl-obs - variants   1 classes ['NONE'] triton launch_pdl [] -> PASS (no griddepcontrol; no PDL launch evidence: stream-ordered)
+mhc_fused_tilelang_kernel                      pdl-obs - variants   2 classes ['WAITS'] triton launch_pdl [] -> PASS (every variant waits in every CTA)
+mhc_post_norm_kernel                           pdl-obs - variants   2 classes ['WAITS'] triton launch_pdl [] -> PASS (every variant waits in every CTA)
+mhc_post_tilelang_kernel                       pdl-obs - variants   1 classes ['WAITS'] triton launch_pdl [] -> PASS (every variant waits in every CTA)
+mhc_pre_big_fuse_with_norm_tilelang_kernel     pdl-obs Y variants  21 classes ['WAITS'] triton launch_pdl [] -> PASS (every variant waits in every CTA)
+mhc_proj_kernel                                pdl-obs Y variants   2 classes ['NONE'] triton launch_pdl [] -> PASS-LAUNCH-SITE (no griddepcontrol; plain launch: moet b0dc737 tools/dsv41_sm120/mhc_ove
+per_token_group_quant_8bit_register_kernel     pdl-obs Y variants   0 classes [] triton launch_pdl [] -> PASS-PRIOR-AUDIT (not re-collected: climb-r1/r1-pdl/README.md section 4 item 3: production vari
+sm120_fp8_fp4_gemm_1d1d_impl                   pdl-obs Y variants  25 classes ['WAITS'] triton launch_pdl [] -> PASS (every variant waits in every CTA)
+sm120_fp8_paged_mqa_logits                     pdl-obs Y variants  10 classes ['WAITS'] triton launch_pdl [] -> PASS (every variant waits in every CTA)
+sm120_tf32_hc_prenorm_gemm_impl                pdl-obs Y variants  10 classes ['WAITS'] triton launch_pdl [] -> PASS (every variant waits in every CTA)
+topkGatingSoftplusSqrt                         pdl-obs Y variants   1 classes ['EARLY-EXIT'] triton launch_pdl [] -> PASS-A1g (every variant: thread 0 of CTA 0 waits on every path; num_rows (c[0x0][0x
+    lm032/lib/python3.12/site-packages/vllm/_moe_C_stable_libtorch.abi3.so sm_120: @P0 EXIT /*0080*/ reachable before the wait  | A1g witness waits
+    (not loadable on GB10, not checked: ['sm_100', 'sm_110', 'sm_80', 'sm_87', 'sm_89', 'sm_90'])
+== N1: AR consumers wait before any global read (A2)
+mhc_fused_tilelang_kernel                      variants   2 pdl-launched False -> PASS (waits before every global read, every variant)
+mhc_post_tilelang_kernel                       variants   1 pdl-launched False -> PASS (waits before every global read, every variant)
+mhc_pre_big_fuse_with_norm_tilelang_kernel     variants  21 pdl-launched True -> PASS (waits before every global read, every variant)
+_proj_rows                                     variants   3 pdl-launched False -> PASS-NOT-PDL (no griddepcontrol, not PDL-launched: starts only after the AR grid completes)
+_q_kv_norm_quant_kernel                        variants   6 pdl-launched True -> PASS (waits before every global read, every variant)
+l2pf_kernel                                    variants   2 pdl-launched False -> PASS-NOT-PDL (no griddepcontrol, not PDL-launched: starts only after the AR grid completes)
+mhc_post_norm_kernel                           variants   2 pdl-launched False -> PASS (waits before every global read, every variant)
+flashinferquantization                         variants   0 pdl-launched True -> NO-SASS: OPEN (PDL-observed)
+_fused_engram_post_wkv_kernel                  variants  20 pdl-launched False -> PASS-NOT-PDL (no griddepcontrol, not PDL-launched: starts only after the AR grid completes)
+_gather_lookback_kernel                        variants  57 pdl-launched False -> PASS-NOT-PDL (no griddepcontrol, not PDL-launched: starts only after the AR grid completes)
+_mk_winner_kernel                              variants   2 pdl-launched False -> PASS-NOT-PDL (no griddepcontrol, not PDL-launched: starts only after the AR grid completes)
+_sf_onehot_kernel                              variants   5 pdl-launched False -> PASS-NOT-PDL (no griddepcontrol, not PDL-launched: starts only after the AR grid completes)
+ar_kernel_pl                                   variants   4 pdl-launched False -> PASS-NOT-PDL (no griddepcontrol, not PDL-launched: starts only after the AR grid completes)
+rms_norm_kernel                                variants   0 pdl-launched False -> OPEN-WEAK (launch site: UNVERIFIED: vLLM csrc layernorm is a <<<>>> launch as far as known, source and SASS not read h
+elementwise_kernel                             variants   0 pdl-launched False -> OPEN-WEAK (launch site: UNVERIFIED: ATen TensorIterator <<<>>> launch as far as known, not read here; 0 t2 overlaps)
+index_elementwise_kernel                       variants   0 pdl-launched False -> OPEN-WEAK (launch site: UNVERIFIED: ATen index kernel <<<>>> launch as far as known, not read here; 0 t2 overlaps)
+selftest control: real _q_kv_norm_quant_kernel passes A1 and A2: OK
+selftest M1 predicated ACQBULK caught by A1: OK
+selftest M2 ACQBULK removed caught by A1: OK
+selftest M3 LDG before the wait caught by A2 (not by A1): OK
+selftest M4 predicated EXIT before the wait caught by A1: OK
+selftest M5 A1g control (real topkGating sm_120 witness waits): OK
+selftest M5 A1g unpredicated early EXIT caught by the witness: OK
+selftest M6 A1g without the num_rows >= 1 assumption is undecided (fails closed): OK
+ACQCHECK N2 FAIL/OPEN  N1 FAIL/OPEN
+
+## 8. t2 sizing (512S1)
+### 8a. ht13_t2b.py (first sizing: gap + dur only)
+trace           n/step  gap us  dur us  gap+dur               rows
+q0.1.sqlite      75.93    0.65    2.59     3.24 {4: 2732, 6: 1824}
+q0.2.sqlite      76.00    0.66    2.52     3.18 {1: 76, 2: 2508, 4: 1976}
+q0.3.sqlite      75.95    0.65    2.72     3.37 {2: 76, 4: 1898, 6: 2583}
+q4.1.sqlite      76.00    0.65    2.68     3.33 {4: 2736, 6: 1824}
+q4.2.sqlite      76.00    0.66    2.55     3.20 {1: 76, 2: 2508, 4: 1976}
+q4.3.sqlite      75.98    0.65    2.69     3.34 {2: 76, 4: 1899, 6: 2584}
+### 8b. ht13_t2c.py (review item 2: wasted folds + consumer slack; all 6 traces)
+trace         fwd pairs/st  armedAR  wasted  L us delayed gap+dur  net ms/step by tail 2.7/1.6/0.8: slack(all) | slack(>L+1us) | naive
+q0.1.sqlite    60    75.93    76.00    0.07  0.26   0.145    3.24  0.020 / 0.077 / 0.119 | 0.027 / 0.098 / 0.150 | 0.041 / 0.124 / 0.185
+q0.2.sqlite    60    76.00    76.00    0.00  0.26   0.151    3.18  0.013 / 0.062 / 0.100 | 0.022 / 0.091 / 0.143 | 0.039 / 0.120 / 0.181
+q0.3.sqlite    60    75.95    76.00    0.05  0.26   0.138    3.37  0.027 / 0.085 / 0.127 | 0.035 / 0.106 / 0.159 | 0.051 / 0.134 / 0.195
+q4.1.sqlite    60    76.00    76.00    0.00  0.26   0.167    3.33  0.020 / 0.075 / 0.115 | 0.029 / 0.098 / 0.149 | 0.048 / 0.131 / 0.192
+q4.2.sqlite    60    76.00    76.00    0.00  0.26   0.149    3.20  0.013 / 0.062 / 0.100 | 0.024 / 0.092 / 0.144 | 0.041 / 0.122 / 0.183
+q4.3.sqlite    60    75.98    76.00    0.02  0.26   0.140    3.34  0.024 / 0.081 / 0.123 | 0.033 / 0.105 / 0.157 | 0.049 / 0.132 / 0.193
+### 8c. estimates7.py
+t2: 75.98 AR-consumer _proj_rows per step (2 per decoder layer x 38 bound layers), gap+dur 3.28 us/call; rows per call <= 6 in every trace (fold covers 100 %)
+first estimate (naive, every call saves gap + dur - tail; no waste, no slack):
+  HT13 low      tail 2.7 us -> gain 0.58 us/call -> 0.044 ms/step -> 0.21 % G1
+  HT13 central  tail 1.6 us -> gain 1.68 us/call -> 0.127 ms/step -> 0.61 % G1
+  HT13 high     tail 0.8 us -> gain 2.48 us/call -> 0.188 ms/step -> 0.90 % G1
+t2 corrections (ht13_t2c.txt): armed rdma ARs 76.00/step, wasted folds 0.022/step (the Engram path is a gather, mode 3, and never folds); consumer started > L + 1 us after the projection in 14.8 % of pairs
+HT13 low      tail 2.7 us, slack(all): every consumer delay beyond L is another dependency: 0.019 ms/step -> 0.09 % G1
+HT13 central  tail 1.6 us, slack(>L+1us): only clearly delayed consumers: 0.098 ms/step -> 0.47 % G1
+HT13 high     tail 0.8 us, naive gap + dur - tail: 0.188 ms/step -> 0.90 % G1
+HT13_RANGE ms/step 0.019 / 0.098 / 0.188 ; % G1 0.09 / 0.47 / 0.90
+C1 (r6, carried): 0.05 / 0.12 / 0.25 ms/step -> 0.23 / 0.57 / 1.18 % G1 (estimates in climb-r6/comm/estimates)
+C2 in-edge (r6, carried): 0.014 / 0.024 / 0.058 ms/step -> 0.07 / 0.11 / 0.27 % G1; arm only after N2 closes
+staging-env gate item and N1/N2 audits: evidence only, 0 ms
+
+## 9. Not run
+- dev-TU compiles (ops/dev8-r7.sh) and full builds (ops/build8-r7.sh): CLUSTER_LOCK held (r5-dw, r5-w1, then r5-w2 at the fix pass)
+- gate cases R0-R4, MR1-MR8, MP1-MP5, MO1-MO3, D7 (need that SASS); every GPU part of device_test7 (r6, stage, proj, projmut, projtime); install8 / any serving arm; ops/takecheck-r7.sh (needs a p arm)
+- the rest of the N1/N2 SASS collection (ops/collect-t2.sh now drives it from the Mac with the spark-one lock check; not rerun: the lock was held)
+- ordgate on real r7 SASS (only its selftest ran: synthetic r7-shaped kernel + real r6 last_cta SASS)
+
+## 10. r8 review fixes (2026-11-09; B1, B2, N1-N3; every line below is from a command I ran; no GPU, no compile, no Spark touched)
+- gate/run_gate7.py --sass6 ~/climb-r6/comm/sass (512S1 ~/climb-r8/comm2fix, full run, no --skip-missing):
+  RUN_GATE7 PASS: 46/46 (= the 40 previous cases, verdict lines identical apart from MR4's tightened reason, + V1-V6).
+  MR4_m_ffma caught 60/60 (reason /FFMA at .* in the reduction chain/); V1-V6 (unmutated dev-r7 scored with each MR
+  reason) caught 0/60, 0/60, 0/60, 0/60, 0/60, 0/54 -> SURVIVED as required. Negative control: the old MR4 reason /FFMA/
+  on the unmutated dev-r7 gives "caught 18/60 -> SURVIVED", which V4 (needs caught 0/) would FAIL.
+  build-logs/gate7-r8fix-SUMMARY.txt, build-logs/gate7-SUMMARY-before-r8fix.txt, build-logs/V4-negative-control-old-regex-r8fix.txt
+- tests/run_tests7.py (512S1 ~/climb-r8/comm2fix-cpu): CPU_TESTS7 PASS 10/10 (build-logs/run_tests7-r8fix.txt)
+- tests/importcheck7.py with the 166d7aac launcher: IMPORTCHECK7 PASS, 33 cases (92 DSV41_/RDMA_AR_ vars);
+  with the 4f3cc1c6 launcher (6th arg): IMPORTCHECK7 PASS, 33 cases (94 vars, RQPAD '1', RPSPLIT 'split')
+  (build-logs/importcheck7-{166d7aac,4f3cc1c6}.txt)
+- device_test7.py --cpu-selfcheck: R7_CPU_SELFCHECK PASS, including the new glue-env checks: production env + 4f3cc1c6
+  launcher accepted; no flags, RQPAD only, RPSPLIT=fused, RQPAD=0, 166d7aac launcher, unreadable launcher all refused;
+  run-device8-r7.sh ENVP == device_test6.ENV_PREFIX (build-logs/cpu-selfcheck7-r8fix.txt)
+- device_test6.py --cpu-selfcheck: CPU_SELFCHECK PASS (build-logs/cpu-selfcheck6-r8fix.txt)
+- device_test6.check_glue_env against the two real launcher files, env from ENV_PREFIX vs bare: 4f3cc1c6+prefix accepted;
+  4f3cc1c6+bare, 166d7aac+prefix, 166d7aac+bare refused (build-logs/glue-env-real-launchers-r8fix.txt)
+- tests/mock_device7.py: MOCK_DEVICE7 PASS (harness smoke only, no kernel ran; build-logs/mock_device7-r8fix.txt)
+- ops/window-r7.sh plan / serve-cmd: no EXPECT, malformed EXPECT, 166d7aac, 08a249da, fda6d05a all rc 2; EXPECT=4f3cc1c6
+  prints EXPECT=4f3cc1c6 for both runners and 0 occurrences of 166d7aac (build-logs/window-r7-expect-r8fix.txt)
+- Not run: every GPU part, dev-TU compiles and full builds (no source or device code changed in this pass, so the
+  dev-*.sass gated above is still the current source's), the dw and serving windows.

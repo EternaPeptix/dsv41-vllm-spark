@@ -1,0 +1,110 @@
+PASS  cpu canon -0 row -> +0  
+PASS  cpu canon NaN -> 0x7FFF  
+CAUGHT  mutant cpu table without map  
+PASS  cpu rows pack  
+CAUGHT  mutant cpu rows halves swapped  
+PASS  cpu C3a mutant-id vectors: the correct lookup passes at every T  
+CAUGHT  mutant cpu C3a map mutant caught at all 26 served T  missed at []
+CAUGHT  mutant cpu C3a shard mutant caught at all 26 served T  missed at []
+CAUGHT  mutant cpu C3a invalid mutant caught at all 26 served T  missed at []
+PASS  C3b PACK=all rank 0 T=1: layer-1 kv == stock  
+PASS  C3b PACK=all rank 0 T=1: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 3 T=1: layer-1 kv == stock  
+PASS  C3b PACK=all rank 3 T=1: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 7 T=1: layer-1 kv == stock  
+PASS  C3b PACK=all rank 7 T=1: layer-14 kv (GEMM run at layer 1) == stock  
+CAUGHT  mutant C3b layer 14 fed layer 1's rows T=1  
+CAUGHT  mutant C3b layer 14's GEMM with layer 1's weights T=1  
+PASS  C3b PACK=all rank 0 T=2: layer-1 kv == stock  
+PASS  C3b PACK=all rank 0 T=2: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 3 T=2: layer-1 kv == stock  
+PASS  C3b PACK=all rank 3 T=2: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 7 T=2: layer-1 kv == stock  
+PASS  C3b PACK=all rank 7 T=2: layer-14 kv (GEMM run at layer 1) == stock  
+CAUGHT  mutant C3b layer 14 fed layer 1's rows T=2  
+CAUGHT  mutant C3b layer 14's GEMM with layer 1's weights T=2  
+PASS  C3b PACK=all rank 0 T=3: layer-1 kv == stock  
+PASS  C3b PACK=all rank 0 T=3: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 3 T=3: layer-1 kv == stock  
+PASS  C3b PACK=all rank 3 T=3: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 7 T=3: layer-1 kv == stock  
+PASS  C3b PACK=all rank 7 T=3: layer-14 kv (GEMM run at layer 1) == stock  
+CAUGHT  mutant C3b layer 14 fed layer 1's rows T=3  
+CAUGHT  mutant C3b layer 14's GEMM with layer 1's weights T=3  
+PASS  C3b PACK=all rank 0 T=4: layer-1 kv == stock  
+PASS  C3b PACK=all rank 0 T=4: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 3 T=4: layer-1 kv == stock  
+PASS  C3b PACK=all rank 3 T=4: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 7 T=4: layer-1 kv == stock  
+PASS  C3b PACK=all rank 7 T=4: layer-14 kv (GEMM run at layer 1) == stock  
+CAUGHT  mutant C3b layer 14 fed layer 1's rows T=4  
+CAUGHT  mutant C3b layer 14's GEMM with layer 1's weights T=4  
+PASS  C3b PACK=all rank 0 T=5: layer-1 kv == stock  
+PASS  C3b PACK=all rank 0 T=5: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 3 T=5: layer-1 kv == stock  
+PASS  C3b PACK=all rank 3 T=5: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 7 T=5: layer-1 kv == stock  
+PASS  C3b PACK=all rank 7 T=5: layer-14 kv (GEMM run at layer 1) == stock  
+CAUGHT  mutant C3b layer 14 fed layer 1's rows T=5  
+CAUGHT  mutant C3b layer 14's GEMM with layer 1's weights T=5  
+PASS  C3b PACK=all rank 0 T=6: layer-1 kv == stock  
+PASS  C3b PACK=all rank 0 T=6: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 3 T=6: layer-1 kv == stock  
+PASS  C3b PACK=all rank 3 T=6: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 7 T=6: layer-1 kv == stock  
+PASS  C3b PACK=all rank 7 T=6: layer-14 kv (GEMM run at layer 1) == stock  
+CAUGHT  mutant C3b layer 14 fed layer 1's rows T=6  
+CAUGHT  mutant C3b layer 14's GEMM with layer 1's weights T=6  
+PASS  C3b PACK=all rank 0 T=8: layer-1 kv == stock  
+PASS  C3b PACK=all rank 0 T=8: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 3 T=8: layer-1 kv == stock  
+PASS  C3b PACK=all rank 3 T=8: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 7 T=8: layer-1 kv == stock  
+PASS  C3b PACK=all rank 7 T=8: layer-14 kv (GEMM run at layer 1) == stock  
+CAUGHT  mutant C3b layer 14 fed layer 1's rows T=8  
+CAUGHT  mutant C3b layer 14's GEMM with layer 1's weights T=8  
+PASS  C3b PACK=all rank 0 T=10: layer-1 kv == stock  
+PASS  C3b PACK=all rank 0 T=10: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 3 T=10: layer-1 kv == stock  
+PASS  C3b PACK=all rank 3 T=10: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 7 T=10: layer-1 kv == stock  
+PASS  C3b PACK=all rank 7 T=10: layer-14 kv (GEMM run at layer 1) == stock  
+CAUGHT  mutant C3b layer 14 fed layer 1's rows T=10  
+CAUGHT  mutant C3b layer 14's GEMM with layer 1's weights T=10  
+PASS  C3b PACK=all rank 0 T=15: layer-1 kv == stock  
+PASS  C3b PACK=all rank 0 T=15: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 3 T=15: layer-1 kv == stock  
+PASS  C3b PACK=all rank 3 T=15: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 7 T=15: layer-1 kv == stock  
+PASS  C3b PACK=all rank 7 T=15: layer-14 kv (GEMM run at layer 1) == stock  
+CAUGHT  mutant C3b layer 14 fed layer 1's rows T=15  
+CAUGHT  mutant C3b layer 14's GEMM with layer 1's weights T=15  
+PASS  C3b PACK=all rank 0 T=30: layer-1 kv == stock  
+PASS  C3b PACK=all rank 0 T=30: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 3 T=30: layer-1 kv == stock  
+PASS  C3b PACK=all rank 3 T=30: layer-14 kv (GEMM run at layer 1) == stock  
+PASS  C3b PACK=all rank 7 T=30: layer-1 kv == stock  
+PASS  C3b PACK=all rank 7 T=30: layer-14 kv (GEMM run at layer 1) == stock  
+CAUGHT  mutant C3b layer 14 fed layer 1's rows T=30  
+CAUGHT  mutant C3b layer 14's GEMM with layer 1's weights T=30  
+PASS  cpu C3b PACK=all harness (stand-in GEMM): 60 kit-vs-stock gates pass  
+CAUGHT  mutant cpu C3b PACK=all harness: 20 mutants (2 per T) all caught  
+PASS  DET pack=look decode T 1..128 (4 T x 3 timing reps): kit == stock bitwise in every rep  differs at T=[]
+PASS  DET pack=look decode: engaged (kit gathers 1, stock rows 0, stock wkv 2) at every T  T=[] []
+PASS  DET pack=look prefill T 129..16384 (3 T): kit == stock bitwise in every rep  differs at T=[]
+PASS  DET pack=look prefill: pure pass-through (0 kit gathers, pack counters unchanged, stock 2 rows + 2 wkv gathers) at every T  T=[] []
+CAUGHT  mutant DET pack=look pack-nowait (b's rows read without its event) caught at every decode T  missed at T=[]
+CAUGHT  mutant DET pack=look pack-cap (engages at prefill sizes) caught at every prefill T  missed at T=[]
+CAUGHT  mutant DET pack=look pack-stale (b serves the previous forward's rows) caught at every prefill T  missed at T=[]
+PASS  DET pack=all decode T 1..128 (4 T x 3 timing reps): kit == stock bitwise in every rep  differs at T=[]
+PASS  DET pack=all decode: engaged (kit gathers 2, stock rows 0, stock wkv 0) at every T  T=[] []
+PASS  DET pack=all prefill T 129..16384 (3 T): kit == stock bitwise in every rep  differs at T=[]
+PASS  DET pack=all prefill: pure pass-through (0 kit gathers, pack counters unchanged, stock 2 rows + 2 wkv gathers) at every T  T=[] []
+PASS  DET pack=all identity: layer b's wkv on a foreign operand returns the stock result at every decode T  T=[]
+CAUGHT  mutant DET pack=all pack-nowait (b's rows read without its event) caught at every decode T  missed at T=[]
+CAUGHT  mutant DET pack=all pack-cap (engages at prefill sizes) caught at every prefill T  missed at T=[]
+CAUGHT  mutant DET pack=all pack-stale (b serves the previous forward's rows) caught at every prefill T  missed at T=[]
+CAUGHT  mutant DET pack=all pack-r6pair (r6's T-only pairing returns the stored kv for a foreign operand) caught at every decode T  missed at T=[]
+PASS  DET colemb (cpu-sim) every T passes through on CPU ids (the kit engages only on CUDA tensors); the engaged gates and both colemb mutants run on the GPU only  [] []
+
+SUMMARY: 28 checks (13 mutants), 0 failed

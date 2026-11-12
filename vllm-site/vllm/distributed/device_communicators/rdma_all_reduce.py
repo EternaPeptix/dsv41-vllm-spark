@@ -42,6 +42,18 @@
 #                              parload vs legacy kernels inside it). Same wire protocol and op sequence.
 #   (read by the .so itself: RDMA_AR_THP, RDMA_AR_VEC_PER_CTA, RDMA_AR_SPIN_US,
 #    RDMA_AR_MAX_SLEEP_US, RDMA_AR_TIMING)
+#   DSV41_RDMA_TRIM            climb r6 C1 = r3 G06 (default 0): 1 = the r6 .so runs ar_kernel_r3 (early posted_seq  # r6-comm
+#                              read, seq advance at entry, single-CTA publish <= 24 KiB, single-CTA two-shot phase 2).  # r6-comm
+#                              Needs RDMA_AR_EXT = the r6 .so and RDMA_AR_PUB_V1/V2/HYG_POLL=1. Bitwise identical.  # r6-comm
+#   DSV41_RDMA_PDL             climb r6 C2 (default 0, needs TRIM): 1/in = ar_kernel_r3 launches with PDL (only  # r6-comm
+#                              ctrl->posted_seq is read before griddepcontrol.wait); trig = also triggers its  # r6-comm
+#                              dependents after the last flag wait. Scheduling only, bitwise identical.  # r6-comm
+#   DSV41_RDMA_SENDBUF         r3 G26 (default 0, needs TRIM): registered send-buffer region; an input that  # r6-comm
+#                              IS a send_buffer() is published without staging. BENCH ONLY: no producer uses it.  # r6-comm
+#   DSV41_RDMA_PROJ            climb r7 HT13 (default 0, needs TRIM and the r7 .so): an all-reduce of a bf16  # r7-comm2
+#                              [rows <= 6, 5120] tensor while dsv41_oblit has armed a direction d also writes  # r7-comm2
+#                              y = _proj_rows(out, d) from the same kernel; dsv41_oblit.project(out, d) then  # r7-comm2
+#                              returns y instead of launching _proj_rows. Same op order (gate/projgate.py).  # r7-comm2
 #
 # Ordering contract: every rank must issue the same rdma ops in the same order on ONE stream
 # (the kernel takes its sequence number from a single device counter). NCCL tolerates
@@ -86,6 +98,74 @@ _G2_EXT = os.path.join(
 )
 _EXT = None
 _EXT_PATH = None
+_R3_ENV = {k: os.environ.get(k, "").strip().lower() for k in ("DSV41_RDMA_TRIM", "DSV41_RDMA_SENDBUF")}  # r6-comm
+_R3_BAD = sorted(k for k, v in _R3_ENV.items() if v not in ("", "0", "off", "false", "no", "1", "on", "true", "yes"))  # r6-comm
+if _R3_BAD:  # r6-comm
+    raise RuntimeError(f"rdma_ar r6: {_R3_BAD} must be one of 0/1/off/on/false/true/no/yes")  # r6-comm
+_R3_TRIM = _R3_ENV["DSV41_RDMA_TRIM"] in ("1", "on", "true", "yes")  # r6-comm
+_R3_SENDBUF = _R3_ENV["DSV41_RDMA_SENDBUF"] in ("1", "on", "true", "yes")  # r6-comm
+_R6_PDL_ENV = os.environ.get("DSV41_RDMA_PDL", "").strip().lower()  # r6-comm
+if _R6_PDL_ENV not in ("", "0", "off", "false", "no", "1", "on", "true", "yes", "in", "trig"):  # r6-comm
+    raise RuntimeError(f"rdma_ar r6: DSV41_RDMA_PDL={_R6_PDL_ENV!r} must be one of 0/1/off/on/false/true/no/yes/in/trig")  # r6-comm
+_R6_PDL = _R6_PDL_ENV in ("1", "on", "true", "yes", "in", "trig")  # r6-comm
+if (_R6_PDL or _R3_SENDBUF) and not _R3_TRIM:  # r6-comm
+    raise RuntimeError("rdma_ar r6: DSV41_RDMA_PDL / DSV41_RDMA_SENDBUF need DSV41_RDMA_TRIM=1")  # r6-comm
+_R3_ANY = _R3_TRIM or _R3_SENDBUF or _R6_PDL  # r6-comm
+_R7_PROJ_ENV = os.environ.get("DSV41_RDMA_PROJ", "").strip().lower()  # r7-comm2
+if _R7_PROJ_ENV not in ("", "0", "off", "false", "no", "1", "on", "true", "yes"):  # r7-comm2
+    raise RuntimeError(f"rdma_ar r7: DSV41_RDMA_PROJ={_R7_PROJ_ENV!r} must be one of 0/1/off/on/false/true/no/yes")  # r7-comm2
+_R7_PROJ = _R7_PROJ_ENV in ("1", "on", "true", "yes")  # r7-comm2
+if _R7_PROJ and not _R3_TRIM:  # r7-comm2
+    raise RuntimeError("rdma_ar r7: DSV41_RDMA_PROJ needs DSV41_RDMA_TRIM=1")  # r7-comm2
+_R7_MAX_ROWS = 6  # r7-comm2
+_R7 = {"d": None, "tag": None, "folded": 0, "taken": 0, "seg_folded": 0, "seg_taken": 0, "seg_rows": set(),  # r7-comm2
+       "seg_first": None, "eager_logs": 0}  # r7-comm2
+  # r7-comm2
+  # r7-comm2
+def r7_arm(d, rows=-1):  # r7-comm2
+    """dsv41_oblit: the next all-reduces may fold the projection by direction d (an fp32 [5120] device tensor);  # r7-comm2
+    rows = token rows of the projected tensor (the first arm of a forward names the forward's rows in the log)"""  # r7-comm2
+    if _R7_PROJ:  # r7-comm2
+        _R7["d"] = d  # r7-comm2
+        if _R7["seg_first"] is None:  # r7-comm2
+            _R7["seg_first"] = rows  # r7-comm2
+  # r7-comm2
+  # r7-comm2
+def r7_disarm():  # r7-comm2
+    """dsv41_oblit.project_head: end of the bound layers. Logs this forward's fold counts (review: the promote  # r7-comm2
+    precondition is taken == 76 in every captured decode forward on every rank; folded - taken = wasted tails)"""  # r7-comm2
+    _R7["d"] = None  # r7-comm2
+    _R7["tag"] = None  # r7-comm2
+    if not _R7_PROJ:  # r7-comm2
+        return  # r7-comm2
+    f, t, rows, fr = _R7["seg_folded"], _R7["seg_taken"], sorted(_R7["seg_rows"]), _R7["seg_first"]  # r7-comm2
+    _R7["seg_folded"], _R7["seg_taken"], _R7["seg_rows"], _R7["seg_first"] = 0, 0, set(), None  # r7-comm2
+    try:  # r7-comm2
+        cap = bool(torch.cuda.is_current_stream_capturing())  # r7-comm2
+    except Exception:  # noqa: BLE001  (CPU-only builds)  # r7-comm2
+        cap = False  # r7-comm2
+    if cap or (f and _R7["eager_logs"] < 8):  # r7-comm2
+        _R7["eager_logs"] += 0 if cap else 1  # r7-comm2
+        logger.info("rdma_ar-r7 fwd: capturing=%d fwd_rows=%s ar_rows=%s folded=%d taken=%d wasted=%d "  # r7-comm2
+                    "(totals folded=%d taken=%d)", int(cap), fr, rows, f, t, f - t, _R7["folded"], _R7["taken"])  # r7-comm2
+  # r7-comm2
+  # r7-comm2
+def r7_take(x, d):  # r7-comm2
+    """y when x IS the output of the last all-reduce (same storage, size, unchanged version counter) and that  # r7-comm2
+    all-reduce folded direction d (the same tensor object); else None. One use: the tag is consumed. The tag  # r7-comm2
+    holds the output tensor itself, so its memory cannot be reused by another tensor while the tag lives."""  # r7-comm2
+    t = _R7["tag"]  # r7-comm2
+    _R7["tag"] = None  # r7-comm2
+    if t is None or not _R7_PROJ:  # r7-comm2
+        return None  # r7-comm2
+    out, ver, y, dd = t  # r7-comm2
+    if (dd is not d or x.dtype != torch.bfloat16 or not x.is_contiguous() or x.data_ptr() != out.data_ptr() or  # r7-comm2
+            x.numel() != out.numel() or x.is_inference() or out.is_inference() or  # r7-comm2
+            x._version != ver or out._version != ver):  # r7-comm2
+        return None  # r7-comm2
+    _R7["taken"] += 1  # r7-comm2
+    _R7["seg_taken"] += 1  # r7-comm2
+    return y  # r7-comm2
 
 
 def rdma_ar_requested() -> bool:
@@ -214,6 +294,12 @@ class RdmaAllReduce:
         err = ""
         try:
             ext = _load_ext()
+            if _R3_ANY and getattr(ext, "R3_VARIANT", None) is None:  # r6-comm
+                raise RuntimeError(f"DSV41_RDMA_TRIM/SENDBUF/PDL set but {_EXT_PATH} has no r3 kernels")  # r6-comm
+            if _R6_PDL and getattr(ext, "R6_VARIANT", None) is None:  # r6-comm
+                raise RuntimeError(f"DSV41_RDMA_PDL set but {_EXT_PATH} has no r6 (PDL) kernels")  # r6-comm
+            if _R7_PROJ and getattr(ext, "R7_VARIANT", None) is None:  # r7-comm2
+                raise RuntimeError(f"DSV41_RDMA_PROJ set but {_EXT_PATH} has no r7 projection kernels")  # r7-comm2
             hcas = [
                 h
                 for h in os.environ.get("RDMA_AR_HCAS", "rocep1s0f0,roceP2p1s0f1").split(",")
@@ -234,6 +320,8 @@ class RdmaAllReduce:
         dist.all_gather_object(infos, (info, err), group=cpu_group)
         bad = [(r, e) for r, (i, e) in enumerate(infos) if i is None]
         if bad:
+            if _R3_ANY:  # r6-comm
+                raise RuntimeError(f"rdma_ar r6: setup failed on {bad}; refusing to start without rdma_ar")  # r6-comm
             logger.warning("rdma_ar disabled on all ranks; setup failed on %s", bad)
             return
 
@@ -248,6 +336,8 @@ class RdmaAllReduce:
         dist.all_gather_object(oks, (ok, err), group=cpu_group)
         bad = [(r, e) for r, (o, e) in enumerate(oks) if not o]
         if bad:
+            if _R3_ANY:  # r6-comm
+                raise RuntimeError(f"rdma_ar r6: connect failed on {bad}; refusing to start without rdma_ar")  # r6-comm
             logger.warning("rdma_ar disabled on all ranks; connect failed on %s", bad)
             return
         dist.barrier(group=cpu_group)
@@ -276,6 +366,13 @@ class RdmaAllReduce:
             _EXT_PATH, getattr(_EXT, "K1_VARIANT", "legacy"), parload,
             os.environ.get("DSV41_RDMA_PARLOAD", "0"),
         )
+        if _R3_ANY:  # r6-comm
+            logger.info("rdma_ar r6 %s %s: r3 [mask, s1_bytes, sendbuf_bytes, used, buffers] = %s, pdl bits = %s",  # r6-comm
+                        getattr(_EXT, "R3_VARIANT", None), getattr(_EXT, "R6_VARIANT", None), list(self.h.r3()),  # r6-comm
+                        self.h.r6() if hasattr(self.h, "r6") else None)  # r6-comm
+        if _R7_PROJ:  # r7-comm2
+            logger.info("rdma_ar r7 %s: projection fold on (bf16 [rows <= %d, 5120], DSV41_RDMA_PROJ), so r7 %s",  # r7-comm2
+                        getattr(_EXT, "R7_VARIANT", None), _R7_MAX_ROWS, self.h.r7() if hasattr(self.h, "r7") else None)  # r7-comm2
 
     # -- helpers ---------------------------------------------------------------------------
     @staticmethod
@@ -352,6 +449,23 @@ class RdmaAllReduce:
                 cur.cuda_stream, busy, " -> new stream waits for it" if waited else "",
             )
 
+    def _r7_fold(self, x: torch.Tensor, two_shot: bool):  # r7-comm2
+        d = _R7["d"]  # r7-comm2
+        if (d is None or x.dtype != torch.bfloat16 or x.dim() != 2 or x.shape[-1] != 5120 or  # r7-comm2
+                not (1 <= x.shape[0] <= _R7_MAX_ROWS) or not x.is_contiguous()):  # r7-comm2
+            return None  # r7-comm2
+        # Served under torch.inference_mode, whose tensors carry no version counter and may not be written  # r7-comm2
+        # in place outside it: allocate y and the op's output (torch::empty_like) as normal tensors, so  # r7-comm2
+        # r7_take's in-place guard works and no inference tensor is written. x is only read. Same values.  # r7-comm2
+        with torch.inference_mode(False):  # r7-comm2
+            y = torch.empty_like(x)  # r7-comm2
+            out = self.h.all_reduce_proj(x, two_shot, d, y)  # r7-comm2
+        _R7["tag"] = None if out.is_inference() else (out, out._version, y, d)  # r7-comm2
+        _R7["folded"] += 1  # r7-comm2
+        _R7["seg_folded"] += 1  # r7-comm2
+        _R7["seg_rows"].add(int(x.shape[0]))  # r7-comm2
+        return out  # r7-comm2
+  # r7-comm2
     def all_reduce(self, x: torch.Tensor) -> torch.Tensor:
         nbytes = x.numel() * x.element_size()
         two_shot = 0 < self.twoshot_min_bytes <= nbytes
@@ -360,6 +474,13 @@ class RdmaAllReduce:
         self._audit("all_reduce", x, " two_shot" if two_shot else "")
         if _L2PF is not None:
             _L2PF.before_collective("ar")
+        if _R7_PROJ:  # r7-comm2
+            _r7 = self._r7_fold(x, two_shot)  # r7-comm2
+            if _r7 is not None:  # r7-comm2
+                if _L2PF_AFTER is not None:  # r7-comm2
+                    _L2PF_AFTER("ar")  # r7-comm2
+                return _r7  # r7-comm2
+            _R7["tag"] = None  # r7-comm2
         out = self.h.all_reduce(x, two_shot)
         if _L2PF_AFTER is not None:
             _L2PF_AFTER("ar")
@@ -412,5 +533,16 @@ class RdmaAllReduce:
             _L2PF_AFTER("ag")
         return out
 
+    def send_buffer(self, shape, dtype: torch.dtype):  # r6-comm
+        """r3 G26: a tensor of `shape`/`dtype` in a registered send buffer (graph capture only, one buffer per  # r6-comm
+        call, never reused by another call), or None. A collective whose input IS that tensor skips staging."""  # r6-comm
+        if not _R3_SENDBUF or self.disabled or not torch.cuda.is_current_stream_capturing():  # r6-comm
+            return None  # r6-comm
+        n = torch.Size(shape).numel() * torch.empty((), dtype=dtype).element_size()  # r6-comm
+        if n <= 0 or n % 16 or n > self.max_bytes:  # r6-comm
+            return None  # r6-comm
+        b = self.h.send_buffer(n)  # r6-comm
+        return None if b is None else b.view(dtype).view(shape)  # r6-comm
+  # r6-comm
     def stats(self, reset: bool = False) -> list:
         return [] if self.h is None else list(self.h.stats(reset))

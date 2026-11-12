@@ -1,0 +1,146 @@
+{
+  "name": "r5-glue",
+  "round": "climb r5 (glue kernel levers), 2026-11-09; built against production launcher 166d7aac",
+  "levers": [
+    {
+      "id": "RQPAD",
+      "source": "climb-r4 REPORT #7 (huntA, confirmed synth/kq.txt), re-based on t2",
+      "variant": "_r2_reduce_quant's per-padding-row UE8M0-zero store loop (dsv41_attnout.py:272, 127/63/31/25/21 trips at M=1/2/4/5/6) -> one masked [128, 8] store per program; every other statement verbatim",
+      "flag": "DSV41_GLUE_RQPAD",
+      "status": "built; CPU tests pass (AST op-order identity + write-set emulation + installer + wrappers incl. the synthetic sweep); compile check (now in production's specialization, review B1), interpreter run and device test NOT run (CLUSTER_LOCK held through the build and the fix; no GPU)"
+    },
+    {
+      "id": "RPSPLIT",
+      "source": "climb-r4 REPORT #3 (anatomy + huntA), re-based on t2",
+      "variant": "_dsv41_rp_kernel: hoist = the 5 x-chunk loads issued right after gdc_wait (before the plan), chunks quantized in order with the r2 loop body verbatim; split = grid (M*6, 5), one chunk per program, all other route duties in the ch-0 program. Scope M*6 <= 64 (M <= 10); larger M keeps the r2 kernel",
+      "flag": "DSV41_GLUE_RPSPLIT",
+      "status": "built; CPU tests pass (AST op-order identity + per-program write-set emulation + installer + wrappers incl. the synthetic sweep); compile check (production's specialization, review B1), Triton-interpreter run and device test NOT run (CLUSTER_LOCK held through the build and the fix; no GPU)"
+    }
+  ],
+  "flags": [
+    {
+      "name": "DSV41_GLUE_RQPAD",
+      "default": "0",
+      "on_value": "1",
+      "meaning": "Read at import of dsv41_attnout.py (imported only when DSV41_ATTNOUT_OP is set; acts only when its rq part runs). On: dsv41_attnout._launch_rq is rebound to dsv41_r5g_rq.wrap(...). First eager call: synthetic sweep r2 vs new kernel at EVERY M 1..32 on hostile partials (review N2), then a real-data check at each new eager M; q + every SF byte, new kernel's buffers 0xFF-poisoned; any mismatch/exception -> RQPAD off for the process (ERROR), r2 kernel serves. In captures the new kernel runs only after the sweep passed and no check failed. Values other than 0/1/on/true/off/false/'' raise ValueError at import."
+    },
+    {
+      "name": "DSV41_GLUE_RPSPLIT",
+      "default": "0",
+      "on_value": "hoist | split",
+      "meaning": "Read at import of dsv41_routeprep.py (imported only with DSV41_MOE_ROUTEPREP=1). On: dsv41_routeprep._launch is rebound to dsv41_r5g_rp.wrap(...) for calls with M*6 <= 64. Precompile adds the new kernel's warmup (a failure disables RPSPLIT only). First in-scope eager call: synthetic sweep r2 vs new kernel at EVERY M 1..10 x 2 routings (spread / edge experts 0+383) on hostile x with the call's ids dtype (review N2), then a real-data check at each new eager M; separately poisoned copies of rows / scale words / layout / inv_perm / ends; mismatch -> RPSPLIT off for the process (ERROR), r2 kernel serves. In captures the new kernel runs only after the sweep passed and no check failed. Other values raise ValueError at import."
+    }
+  ],
+  "files": [
+    {
+      "path": "vllm/models/deepseek_v4/nvidia/ops/dsv41_attnout.py",
+      "base_sha256": "308942ebbed1fc121f74ea5b9820a941b7fed895edf7aae4d6d63480ba1d1bfc",
+      "owner": "r2-attnout (new module of that kit; live on 8/8 per production since climb-w3)",
+      "action": "patch",
+      "edit": "+4 tagged lines appended after the last function (_hostile_partials)"
+    },
+    {
+      "path": "vllm/model_executor/layers/fused_moe/dsv41_routeprep.py",
+      "base_sha256": "842f49fb5df830793e02c12ff0195fb853165e90fac35a16ff3f136cf7b0eda7",
+      "owner": "r2-moefront (new module of that kit; live on 8/8 per production since climb-w3)",
+      "action": "patch",
+      "edit": "+4 tagged lines appended after the last function (fused_permute)"
+    },
+    {
+      "path": "vllm/models/deepseek_v4/nvidia/ops/dsv41_r5g_rq.py",
+      "base_sha256": null,
+      "new_sha256": "9ae74abc68b6c5a9fc9cdcfc5287468887cccd8feaa3ba0f87ecf26469f0682d",
+      "action": "new"
+    },
+    {
+      "path": "vllm/model_executor/layers/fused_moe/dsv41_r5g_rp.py",
+      "base_sha256": null,
+      "new_sha256": "db2dfaf4aceb8967aa7a05df70abd73d050c40621c7638dc91ae92048e941598",
+      "action": "new"
+    }
+  ],
+  "install": "python3 install.py install   (one node; all 8 with the 8/8 agreement check: ./install-all.sh install)",
+  "uninstall": "python3 install.py uninstall",
+  "depends_on": [
+    "r2-attnout installed (dsv41_attnout.py 308942eb present); RQPAD acts only with DSV41_ATTNOUT_OP containing rq (production: rope,rq)",
+    "r2-moefront installed (dsv41_routeprep.py 842f49fb present); RPSPLIT acts only with DSV41_MOE_ROUTEPREP=1 (production)"
+  ],
+  "composes_with": [
+    "every round-1/2/4 kit: no other kit edits these two modules (checked: no install.py under climb-r1..r4 references them except their owners)",
+    "foreign-tagged lines (e.g. r1-pdl) in the two modules are REFUSED (FOREIGN_TAGS empty, review N4): the kit re-implements _r2_reduce_quant and _dsv41_rp_kernel, so a rebase of another kit onto these kernels (r4 REPORT #13) needs a new r5-glue base"
+  ],
+  "conflicts_with": [
+    "re-running r2-attnout or r2-moefront `install.py install` while r5-glue is installed silently drops the hooks (status: HOOKS-LOST; flags then inert); their uninstall deletes the module: uninstall r5-glue first",
+    "climb-r2/install-all.sh status reports FOREIGN on 8/8 for dsv41_attnout.py and dsv41_routeprep.py while r5-glue is installed (it hashes them against the r2 kits' shas) and exits 2: expected; use ./install-all.sh status here for these two files (review N3)",
+    "the relaunch preflight manifest does not cover these two files: run ./install-all.sh status (8/8 agreement) before every relaunch with an r5-glue arm"
+  ],
+  "expected_gain_pct": {
+    "low": 0.15,
+    "central": 0.55,
+    "high": 1.15
+  },
+  "expected_gain_pct_per_flag": {
+    "DSV41_GLUE_RQPAD=1": {
+      "low": 0.1,
+      "central": 0.25,
+      "high": 0.4,
+      "basis": "t2 rq p50 by M (8.70/5.34/4.16/3.46/3.55 us at M=1/2/4/5/6), 43 calls/step on the walkB path. Review N7: wo_b (PDL) launches off = p50 + succ-gap = 1.87/1.40/1.37/1.22/1.37 us after rq starts and must still run its pre-wait prologue P, so the saving per call is p50 - max(T_new, off + P) (scripts/estimate.txt): T_new 2.5 -> +0.32% for P <= 1.0 us, +0.25% at P = 1.5; T_new 2.1 -> +0.40% at P <= 0.5, +0.35% at 1.0; T_new 3.2 -> +0.18%. Central 0.25 (round 4 said 0.15; kernel-only device timing cannot see P). Alone it sits below the +0.3% promotion bar and w5 control noise was ~0.2%: the 'glue' arm is the one expected to read cleanly"
+    },
+    "DSV41_GLUE_RPSPLIT=hoist": {
+      "low": 0.05,
+      "central": 0.25,
+      "high": 0.6,
+      "basis": "40 rp calls/step on the path (t2), FC1 starts 0.38-0.45 us after rp ends; 1 / 2 / 3 us saved per call = +0.19 / +0.37 / +0.56 % G1. Hoist removes 4 of 5 serialised x-load latencies (~0.4-0.8 us each). Uncalibrated: r2-moefront predicted 2.5-4 us for this kernel and it measures 8 (central cut from 0.3 to 0.25)"
+    },
+    "DSV41_GLUE_RPSPLIT=split": {
+      "low": 0.1,
+      "central": 0.35,
+      "high": 0.8,
+      "basis": "per program = plan + one chunk: removes 4 of 5 chunk load+compute passes (~0.8-1 us each) minus contention from 5x CTAs (<= 60 programs x 5 at M=10, 48 SMs); 1.5 / 2 / 4 us per call. Uncalibrated like hoist (central cut from 0.45 to 0.35); device_test T decides split vs hoist"
+    }
+  },
+  "window_arms": [
+    {
+      "name": "C",
+      "env": {}
+    },
+    {
+      "name": "rqpad",
+      "env": {
+        "DSV41_GLUE_RQPAD": "1"
+      }
+    },
+    {
+      "name": "rps",
+      "env": {
+        "DSV41_GLUE_RPSPLIT": "split"
+      }
+    },
+    {
+      "name": "rph",
+      "env": {
+        "DSV41_GLUE_RPSPLIT": "hoist"
+      }
+    },
+    {
+      "name": "glue",
+      "env": {
+        "DSV41_GLUE_RQPAD": "1",
+        "DSV41_GLUE_RPSPLIT": "<device-test winner: split or hoist>"
+      },
+      "note": "primary arm: RQPAD alone (central 0.25%) is below the +0.3% promotion bar and within w5 control noise (~0.2%)"
+    }
+  ],
+  "device_checks": [
+    "device_test.py exit 0 on a STOPPED node (spark-eight) run with the mandatory environment (source ~/venvs/vllm032/bin/activate; export PATH=/usr/local/cuda/bin:$PATH CUDA_HOME=/usr/local/cuda); it refuses to start otherwise. S0 reads production's launcher ~/dsv41-tp8.sh (sha 166d7aac) and takes the serving env from it (ATTNOUT_OP rope,rq, MOE_ROUTEPREP 1, FC1_FRONT unset, sonar 32/32) and the geometry from its model config (o_lora_rank 1024 = N_RQ, o_groups/8 = 1, H 5120, E 384, top-6); S1 asserts the serving ops (live dsv41_attnout / dsv41_routeprep shas, flashinfer CuTe-DSL mxfp8 quant, PDL on, UE8M0 + mfront static check)",
+    "  RQ: M=1..32 x {normal, hostile, wide, ties/cancellation, ftz-corner} x 2 poisons: q + every SF byte of the new kernel == r2 kernel; == live reduce + flashinfer quant (ftz-corner reported apart); graph 50 poisoned replays at M=1,2,4,5,6; RQ-P [late-writing PDL producer -> wrapper] eager + graph at M=1,2,4,5,6; must-fail mutants: 4 byte mutants caught at EVERY M 1..32 + 1 PDL-order mutant (partial loads before gdc_wait) caught at every RQ-P M = 5",
+    "  RP: hoist and split, M=1..10 x {live dsv4_topk, distinct, same, hot, dead} x {normal, hostile} x int32/int64 ids x FC1_FRONT 0/pdl/pf2 x 2 poisons + Q1/Q2 sweeps: rows, scale words, layout, inv_perm, ends byte-identical to the r2 kernel; graph [dsv4_topk -> rp] 50 poisoned replays at M=1,2,4,6; RP-P [late-writing PDL producer of x -> wrapper] eager + graph at M=1,2,4,6; wrapper self-check (incl. the synthetic sweep) passes for the kit and DISABLES + serves r2 bytes for a mutant; must-fail mutants: 5 byte-mutant definitions = 7 mode-runs (split 2, hoist 1, both 2) caught at EVERY M 1..10 + 1 PDL-order mutant per mode (hoisted x loads before gdc_wait) = 9 mode-runs",
+    "  H: tools/hook_import_test.py (fresh process): install.py on a symlink copy of site-packages/vllm, flags on, production import sites (deep_gemm_utils, lazy dsv41_attnout import incl. the circular kit import), _launch_rq / _launch .r5g, dsv41_attnout._launch_rq and fused_permute end to end == r2 at M=1,2,4,6 (int32/int64 ids), both sweep INFO lines through vLLM's logger, no DISABLED line",
+    "  T: timings (median of 200 graph replays, warm and cold-L2) r2 vs new at the served M -> pick split or hoist for the arm",
+    "tools/run_spark8_checks.sh (CLUSTER_LOCK absent; sources the mandatory environment): compile_check.py in PRODUCTION's specialization (review B1: arguments recorded through the real launch functions with production shapes/strides, specialization from Triton's own launch binder; asserts tt.divisibility on every pointer and x_row_stride / out_row_stride / mn_aligned / M_sum, M constexpr 1 at M=1, r2 spec == kit spec; variants M=1 and M=4, int64 ids, pdl, pf2, nopdl): x-load bytes before the histogram exceed r2's by >= 80 (hoist) / >= 16 (split) in PTX (atom.shared) and SASS (ATOMS), width-generic; no STL/LDL spills and res-usage LOCAL 0; f32 opcode set == r2's; no fma/approx; and interp_test.py (TRITON_INTERPRET=1 bitwise r2 vs kit for RPSPLIT). tests/test_compile_check_logic.py exercises its logic (fake Triton) on 512S1",
+    "flags-off relaunch after ./install-all.sh install (status INSTALLED, 8/8 agree): exact.py ec2f4437f8e1ed09, G1 digest 2f7fdccbd388225a",
+    "boot assertion per arm, counted 8/8 in rank logs: '[r5-glue] DSV41_GLUE_RQPAD=1: _r5g_reduce_quant bit-identical to _r2_reduce_quant at every M 1..32 (synthetic sweep' / '[r5-glue] DSV41_GLUE_RPSPLIT=<mode>: _r5g_rp_kernel bit-identical to _dsv41_rp_kernel at every M 1..10 (synthetic sweep' and NO 'DISABLED for this process' line",
+    "per arm: exact.py, G1 digest, 9 long-prompt hashes identical to control"
+  ],
+  "install_all": "./install-all.sh status | preflight | install | uninstall  (review N3: per-node verdict CLEAN / INSTALLED / HOOKS-LOST / FOREIGN computed from a read-only probe; exit 0 only when 8/8 agree; a failed install rolls every touched node back)"
+}

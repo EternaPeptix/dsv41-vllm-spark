@@ -1,0 +1,30 @@
+2026-11-09T10:08:13Z
+PASS  mtp.0.main_proj None: ModelOptLinearMethod(kMxfp8Static, 32x32), FormatScheme  raw scale ((160, 480), 'torch.float8_e8m0fnu')
+PASS  mtp.0.main_proj None: processed scale == swizzle(repeat_interleave(raw, 32)) (1-D serving layout)  (2457600,) torch.uint8
+PASS  mtp.0.main_proj None: r4.rowmajor_scale(serving layer) == loaded [N, K/32]  
+PASS  main_proj: live ColSplit(serving layer, rank 0) builds; slice + scale exact  
+PASS  main_proj: live ColSplit(serving layer, rank 1) builds; slice + scale exact  
+PASS  main_proj: live ColSplit(serving layer, rank 2) builds; slice + scale exact  
+PASS  main_proj: live ColSplit(serving layer, rank 3) builds; slice + scale exact  
+PASS  main_proj: live ColSplit(serving layer, rank 4) builds; slice + scale exact  
+PASS  main_proj: live ColSplit(serving layer, rank 5) builds; slice + scale exact  
+PASS  main_proj: live ColSplit(serving layer, rank 6) builds; slice + scale exact  
+PASS  main_proj: live ColSplit(serving layer, rank 7) builds; slice + scale exact  
+CAUGHT  mutant raw checkpoint scale rejected by ColSplit (old device-test input)  RuntimeError('unrecognised MXFP8 weight/scale layout')
+PASS  layers.1.engram.wkv slice(0, 3200, None): ModelOptLinearMethod(kMxfp8Static, 32x32), FormatScheme  raw scale ((800, 192), 'torch.float8_e8m0fnu')
+PASS  layers.1.engram.wkv slice(0, 3200, None): processed scale == swizzle(repeat_interleave(raw, 32)) (1-D serving layout)  (614400,) torch.uint8
+PASS  layers.1.engram.wkv slice(0, 3200, None): r4.rowmajor_scale(serving layer) == loaded [N, K/32]  
+PASS  layers.1.engram.wkv slice(22400, 25600, None): ModelOptLinearMethod(kMxfp8Static, 32x32), FormatScheme  raw scale ((800, 192), 'torch.float8_e8m0fnu')
+PASS  layers.1.engram.wkv slice(22400, 25600, None): processed scale == swizzle(repeat_interleave(raw, 32)) (1-D serving layout)  (614400,) torch.uint8
+PASS  layers.1.engram.wkv slice(22400, 25600, None): r4.rowmajor_scale(serving layer) == loaded [N, K/32]  
+PASS  layers.14.engram.wkv slice(0, 3200, None): ModelOptLinearMethod(kMxfp8Static, 32x32), FormatScheme  raw scale ((800, 192), 'torch.float8_e8m0fnu')
+PASS  layers.14.engram.wkv slice(0, 3200, None): processed scale == swizzle(repeat_interleave(raw, 32)) (1-D serving layout)  (614400,) torch.uint8
+PASS  layers.14.engram.wkv slice(0, 3200, None): r4.rowmajor_scale(serving layer) == loaded [N, K/32]  
+PASS  layers.14.engram.wkv slice(22400, 25600, None): ModelOptLinearMethod(kMxfp8Static, 32x32), FormatScheme  raw scale ((800, 192), 'torch.float8_e8m0fnu')
+PASS  layers.14.engram.wkv slice(22400, 25600, None): processed scale == swizzle(repeat_interleave(raw, 32)) (1-D serving layout)  (614400,) torch.uint8
+PASS  layers.14.engram.wkv slice(22400, 25600, None): r4.rowmajor_scale(serving layer) == loaded [N, K/32]  
+      note: live select_linear_kernel -> FlashInferCutlassMxfp8LinearKernel
+SUMMARY: 24 checks (1 mutants), 0 failed
+PASS colemb lookup (int16 copy, N=640): 48 SASS instrs; fp-class opcodes []; must []; forbid ['FADD', 'FFMA', 'FMUL', 'F2F', 'F2FP', 'HADD2', 'HFMA2.MMA']
+PASS device_test AR emulator (FADD no FTZ, F2FP): 1720 SASS instrs; fp-class opcodes ['F2FP.BF16.F32.PACK_AB', 'FADD']; must ['FADD', 'F2FP.BF16.F32.PACK_AB']; forbid ['FADD.FTZ', 'FFMA', 'FMUL', 'FHADD', 'HADD2', 'HFMA2.MMA']
+ALL PASS

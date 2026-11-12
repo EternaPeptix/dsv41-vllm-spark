@@ -1,0 +1,123 @@
+{
+  "name": "r3-xsplit",
+  "levers": [
+    "G02 (attn:L-XS) XSPLIT: fused one-launch split-tile sparse MLA decode for the DSV4 dual-cache call (prefill_mg_dual path) with exact in-order look-back"
+  ],
+  "flags": [
+    {
+      "name": "DSV41_ATTN_XSPLIT",
+      "default": "0",
+      "on_value": "1",
+      "meaning": "Route in-envelope PREFILL_MG_DUAL calls (DSV4, 8 heads, 1 <= T <= 64, main PBS 64, extra PBS 64/32, runtime lengths present, T*max_tiles <= cap) to dsv41_xsplit_mg_dual_kernel<PBSX> in libdsv41_xsplit.so. Read once at import of flashinfer/mla/_sparse_mla_sm120.py; unset/0 = the live code path, untouched kernel, same graphs."
+    },
+    {
+      "name": "DSV41_ATTN_XSPLIT_CHECK",
+      "default": "1",
+      "on_value": "0 (unit tests only)",
+      "meaning": "Bitwise self-check of the first eager call of every shape against the live kernel on the live inputs; a shape is never routed inside a CUDA-graph capture before it passed. Never 0 in serving."
+    },
+    {
+      "name": "DSV41_ATTN_XSPLIT_ON_MISMATCH",
+      "default": "raise",
+      "on_value": "disable",
+      "meaning": "raise = fail closed (RuntimeError before serving anything); disable = keep the live result and turn XSPLIT off for the process."
+    },
+    {
+      "name": "DSV41_ATTN_XSPLIT_GRID",
+      "default": "46",
+      "on_value": "1..64 (timing sweeps)",
+      "meaning": "Persistent grid cap (46 = 48 SMs minus the 2 the WOA l2pf co-runner holds). Exact for any value (dynamic in-order claiming)."
+    },
+    {
+      "name": "DSV41_ATTN_XSPLIT_CAP_UNITS",
+      "default": "1152",
+      "on_value": "int",
+      "meaning": "Workspace capacity in tile-rows (64 tokens x 18 tiles); calls with T*max_tiles above it run the live kernel. 25,472 B per tile-row (29.3 MiB per slot at 1152)."
+    },
+    {
+      "name": "DSV41_ATTN_XSPLIT_NWS",
+      "default": "2",
+      "on_value": "int",
+      "meaning": "Workspace slots allocated once at the first eager routed call (one per calling stream: eager stream + capture stream)."
+    },
+    {
+      "name": "DSV41_ATTN_XSPLIT_MAX_T",
+      "default": "64",
+      "on_value": "int <= 64",
+      "meaning": "Planner gate on num_tokens (decode/verify only; prefill keeps the live kernel)."
+    },
+    {
+      "name": "DSV41_ATTN_XSPLIT_LIB",
+      "default": "$HOME/dsv41-r3/xsplit/build",
+      "on_value": "dir",
+      "meaning": "Location of libdsv41_xsplit.so and its .sha256 sidecar (sha checked at load)."
+    },
+    {
+      "name": "DSV41_ATTN_XSPLIT_VERBOSE",
+      "default": "0",
+      "on_value": "1",
+      "meaning": "Log every new routed shape."
+    }
+  ],
+  "files": [
+    {
+      "path": "flashinfer/mla/_sparse_mla_sm120.py",
+      "root": "site-packages",
+      "base_sha256": "0b93e36914f2614dde2a6ecc23c546ca486f53a7e3ecd99ad7ef43b3ac51b245",
+      "base_sha256_accepted": [
+        "0b93e36914f2614dde2a6ecc23c546ca486f53a7e3ecd99ad7ef43b3ac51b245"
+      ],
+      "base_sha256_with_round1": "0b93e36914f2614dde2a6ecc23c546ca486f53a7e3ecd99ad7ef43b3ac51b245 (no round-1 or round-2 kit patches this file)",
+      "action": "patch"
+    },
+    {
+      "path": "flashinfer/mla/dsv41_xsplit.py",
+      "root": "site-packages",
+      "base_sha256": null,
+      "action": "new"
+    },
+    {
+      "path": "$HOME/dsv41-r3/xsplit/build/libdsv41_xsplit.so",
+      "base_sha256": null,
+      "sha256": "d5250d7949fa7caef4221966d6fced38f4c71ae03d8ab3bb22245ad91cb65747",
+      "action": "new",
+      "built": "spark-eight 2026-11-08T15:16Z, nvcc 13.0.88, src/build.sh serving (live sparse_mla_sm120 cuda_cflags + -DXS_ARM=0 -DXS_ROPE_IN_WS=1 -DXS_B_PREFETCH=1); kit copy build/libdsv41_xsplit.so"
+    }
+  ],
+  "unchanged_live_files": {
+    "flashinfer/data/include/flashinfer/attention/sparse_mla_sm120/prefill_mg_kernel.cuh": "0ec1603dca10cdbdec9795d82736a9e3662a91dfb212220e381ee1696e12a179",
+    "flashinfer/data/csrc/sparse_mla_sm120_prefill.cu": "479f8d75b2cb95b4e5a2fb1d45b214535afe4e08aece8654a37e1c14641eb13b",
+    "flashinfer/mla/_sparse_mla_sm120_plan.py": "d4fcc48abe2ff4bf956e799fd5d7e32886e83a68700f032de70a2fcf42dd3f3a",
+    "note": "the live JIT module (sources, headers, ~/.cache/flashinfer .../sparse_mla_sm120.so) is never touched; the XSPLIT kernel is a separate prebuilt .so"
+  },
+  "install": "python3 install.py install",
+  "depends_on": [],
+  "conflicts_with": [
+    "any lever that changes sparse_mla_prefill_mg_dual (g130-attn diet/xv arms): XSPLIT reuses the live per-tile body verbatim and is not additive with them"
+  ],
+  "expected_gain_pct": {
+    "low": 0.6,
+    "central": 1.7,
+    "high": 3.1
+  },
+  "window_arms": [
+    {
+      "name": "control",
+      "env": {
+        "DSV41_ATTN_XSPLIT": "0"
+      }
+    },
+    {
+      "name": "xsplit",
+      "env": {
+        "DSV41_ATTN_XSPLIT": "1"
+      }
+    }
+  ],
+  "device_checks": [
+    "stopped node: timeout 2400 ~/venvs/vllm032/bin/python3 -I device_test.py --lib-dir build --out out/devtest.jsonl  -> DEVICE TEST PASS (exit 0)",
+    "stopped node: timeout 1800 ~/venvs/vllm032/bin/python3 -I bench/xsplit_bench.py --lib-dir build --out out/bench.jsonl  -> S0/c/barrier/write-back table and the go/no-go step model",
+    "stopped node, flag on, after install: DSV41_ATTN_XSPLIT=1 device_test.py (adds the gate phase through the patched flashinfer)",
+    "serving: rank0.log shows '[dsv41_xsplit] loaded ... sha256=' and no 'DISABLED'/'self-check' lines; flag-on boot exact.py and G1 digest identical to control"
+  ]
+}

@@ -1,0 +1,7 @@
+<512S1-run>/climb-r2/r2-moeback/tests/emul_add_exhaustive.py:50: RuntimeWarning: overflow encountered in cast
+  y32 = y.astype(np.float32)             # exact: y has <= 8 significant bits and is in bf16 range or inf
+pairs compared (non-NaN result): 4261739522
+A(torch f32 add + c10 RNE) != B(f32 add + IEEE cvt.rn): 0
+A(torch) != C(native add.bf16, single rounding of exact sum): 0
+elapsed 10.9s  quick=False
+PASS: all three lowerings are bit-identical

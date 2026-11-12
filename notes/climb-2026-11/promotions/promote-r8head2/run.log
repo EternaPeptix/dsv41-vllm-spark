@@ -1,0 +1,34 @@
+22:40:38 [promote-r8head2] lanproxy (paused for verify): inactive
+22:40:38 [promote-r8head2] editing launcher on 8/8: DSV41_R6_HEAD_SCREEN=1 DSV41_R6_HEAD_SCREEN_DQ=2 DSV41_R6_HEAD_SCREEN_CFG=64,256,4,2 DSV41_R6_HEAD_SELFCHECK=1 DSV41_R6_HEAD_REFINE=row
+22:40:39 [promote-r8head2]   spark-one launcher -> 4a04b175
+22:40:39 [promote-r8head2]   spark-two launcher -> 4a04b175
+22:40:40 [promote-r8head2]   spark-three launcher -> 4a04b175
+22:40:40 [promote-r8head2]   spark-four launcher -> 4a04b175
+22:40:41 [promote-r8head2]   spark-five launcher -> 4a04b175
+22:40:41 [promote-r8head2]   spark-six launcher -> 4a04b175
+22:40:42 [promote-r8head2]   spark-seven launcher -> 4a04b175
+22:40:43 [promote-r8head2]   spark-eight launcher -> 4a04b175
+22:40:43 [promote-r8head2] new launcher 4a04b175 on 8/8 (was 58899745); diff:
+105a106,110
+> export DSV41_R6_HEAD_REFINE=${DSV41_R6_HEAD_REFINE:-row}  # r8head2: r8 HEAD r6-head screen DQ2 64,256,4,2 + refine=row selfcheck: +0.37% G1 (131.776 vs 131.295) bit-exact; retry w/ lanproxy-isolated verify (1st try contaminated by external tailnet request)
+> export DSV41_R6_HEAD_SELFCHECK=${DSV41_R6_HEAD_SELFCHECK:-1}  # r8head2: r8 HEAD r6-head screen DQ2 64,256,4,2 + refine=row selfcheck: +0.37% G1 (131.776 vs 131.295) bit-exact; retry w/ lanproxy-isolated verify (1st try contaminated by external tailnet request)
+> export DSV41_R6_HEAD_SCREEN_CFG=${DSV41_R6_HEAD_SCREEN_CFG:-64,256,4,2}  # r8head2: r8 HEAD r6-head screen DQ2 64,256,4,2 + refine=row selfcheck: +0.37% G1 (131.776 vs 131.295) bit-exact; retry w/ lanproxy-isolated verify (1st try contaminated by external tailnet request)
+> export DSV41_R6_HEAD_SCREEN_DQ=${DSV41_R6_HEAD_SCREEN_DQ:-2}  # r8head2: r8 HEAD r6-head screen DQ2 64,256,4,2 + refine=row selfcheck: +0.37% G1 (131.776 vs 131.295) bit-exact; retry w/ lanproxy-isolated verify (1st try contaminated by external tailnet request)
+> export DSV41_R6_HEAD_SCREEN=${DSV41_R6_HEAD_SCREEN:-1}  # r8head2: r8 HEAD r6-head screen DQ2 64,256,4,2 + refine=row selfcheck: +0.37% G1 (131.776 vs 131.295) bit-exact; retry w/ lanproxy-isolated verify (1st try contaminated by external tailnet request)
+22:40:44 [claude-promote-r8head2] preflight: site manifest 00dec7ad80b8 and launcher 4a04b175 identical on 8/8
+22:43:36 [claude-promote-r8head2] HEALTHY: /health 200 + startup complete at +156s after systemd-run (downtime 171s)
+22:44:28 [promote-r8head2] G1 isolation OK (try 1): request delta 6
+22:44:28 [promote-r8head2]   armed spark-one: cfgline=1 passed=5 FAILED=0
+22:44:28 [promote-r8head2]   armed spark-two: cfgline=1 passed=5 FAILED=0
+22:44:29 [promote-r8head2]   armed spark-three: cfgline=1 passed=5 FAILED=0
+22:44:30 [promote-r8head2]   armed spark-four: cfgline=1 passed=5 FAILED=0
+22:44:30 [promote-r8head2]   armed spark-five: cfgline=1 passed=5 FAILED=0
+22:44:31 [promote-r8head2]   armed spark-six: cfgline=1 passed=5 FAILED=0
+22:44:31 [promote-r8head2]   armed spark-seven: cfgline=1 passed=5 FAILED=0
+22:44:32 [promote-r8head2]   armed spark-eight: cfgline=1 passed=5 FAILED=0
+22:44:32 [promote-r8head2] r6-head armed 8/8 (REFINE=row, self-check passed, 0 FAILED)
+22:47:39 [promote-r8head2] verify: G1 131.992 code 133.05 prose 96.62 math 166.31 digest 2f7fdccbd388225a | exact ec2f4437f8e1ed09 | det ALL==REF
+22:47:39 [promote-r8head2] G1 floor OK: 131.992 >= 131.0
+22:47:39 [promote-r8head2] PROMOTED: launcher 4a04b175
+22:47:40 [promote-r8head2] lock released
+22:47:40 [promote-r8head2] lanproxy: active

@@ -1,0 +1,66 @@
+q0.1.sqlite E1 steps 60 E1 span p50 786.2 us, inter-kernel gaps p50 73.6 us, screen end -> CatArray start p50 159.2 p10 139.3
+  _screen_kernel                                 n  60 at p50    27.0  dur p50 461.89  host slack p50   35284.7 p10   32647.7
+  _refine_kernel                                 n  60 at p50   493.2  dur p50  23.42  host slack p50   35696.8 p10   33072.4
+  _sf_local_argmax_kernel                        n  60 at p50   520.1  dur p50   5.57  host slack p50   35677.5 p10   33062.4
+  ar_kernel_pl#1                                 n  60 at p50   528.3  dur p50  48.83  host slack p50   35623.5 p10   33016.3
+  _post_update_kernel                            n  60 at p50   643.2  dur p50   4.70  host slack p50   35030.0 p10   32474.9
+  CatArrayBatchedCopy_vectorized                 n  60 at p50   651.5  dur p50   2.56  host slack p50   34942.4 p10   32392.8
+  kernel_cutlass_kernel_flashinferquantization   n  60 at p50   654.6  dur p50   3.65  host slack p50   34831.5 p10   32272.3
+  device_kernel                                  n  60 at p50   658.2  dur p50  61.38  host slack p50   34552.5 p10   31921.2
+  rms_norm_kernel                                n  60 at p50   750.2  dur p50   2.78  host slack p50   34489.7 p10   31885.4
+  _prepare_dflash_inputs_kernel                  n  60 at p50   760.4  dur p50   5.79  host slack p50   34402.6 p10   31797.8
+q0.2.sqlite E1 steps 60 E1 span p50 758.6 us, inter-kernel gaps p50 75.2 us, screen end -> CatArray start p50 144.5 p10 132.2
+  _screen_kernel                                 n  59 at p50    25.4  dur p50 458.94  host slack p50   27843.7 p10   26104.2
+  _refine_kernel                                 n  59 at p50   486.8  dur p50  22.59  host slack p50   28281.1 p10   26535.8
+  _sf_local_argmax_kernel                        n  59 at p50   512.9  dur p50   5.50  host slack p50   28272.0 p10   26528.0
+  ar_kernel_pl#1                                 n  60 at p50   521.2  dur p50  37.38  host slack p50   28255.1 p10   26759.8
+  _post_update_kernel                            n  60 at p50   621.3  dur p50   3.84  host slack p50   27753.9 p10   26273.2
+  CatArrayBatchedCopy_vectorized                 n  60 at p50   627.5  dur p50   2.34  host slack p50   27697.6 p10   26187.6
+  kernel_cutlass_kernel_flashinferquantization   n  60 at p50   629.9  dur p50   4.26  host slack p50   27562.5 p10   26061.2
+  device_kernel                                  n  60 at p50   633.5  dur p50  61.73  host slack p50   27319.6 p10   25862.7
+  rms_norm_kernel                                n  60 at p50   720.7  dur p50   2.78  host slack p50   27305.8 p10   25816.7
+  _prepare_dflash_inputs_kernel                  n  60 at p50   731.1  dur p50   5.76  host slack p50   27224.4 p10   25719.6
+q0.3.sqlite E1 steps 60 E1 span p50 855.6 us, inter-kernel gaps p50 72.7 us, screen end -> CatArray start p50 214.7 p10 155.5
+  _screen_kernel                                 n  60 at p50    26.4  dur p50 463.46  host slack p50   35557.9 p10   31694.6
+  _refine_kernel                                 n  60 at p50   493.2  dur p50  21.98  host slack p50   36039.3 p10   32125.0
+  _sf_local_argmax_kernel                        n  60 at p50   515.7  dur p50   5.50  host slack p50   36022.6 p10   32118.7
+  ar_kernel_pl#1                                 n  60 at p50   523.9  dur p50 106.66  host slack p50   35968.0 p10   32056.9
+  _post_update_kernel                            n  60 at p50   712.3  dur p50   4.74  host slack p50   35650.8 p10   31700.2
+  CatArrayBatchedCopy_vectorized                 n  60 at p50   719.2  dur p50   2.59  host slack p50   35604.3 p10   31627.3
+  kernel_cutlass_kernel_flashinferquantization   n  60 at p50   722.0  dur p50   4.13  host slack p50   35508.9 p10   31513.8
+  device_kernel                                  n  60 at p50   725.7  dur p50  61.60  host slack p50   35271.8 p10   31307.9
+  rms_norm_kernel                                n  60 at p50   821.1  dur p50   2.78  host slack p50   35242.5 p10   31266.9
+  _prepare_dflash_inputs_kernel                  n  60 at p50   831.3  dur p50   5.76  host slack p50   35165.1 p10   31172.2
+q4.1.sqlite E1 steps 60 E1 span p50 786.5 us, inter-kernel gaps p50 72.6 us, screen end -> CatArray start p50 149.7 p10 127.1
+  _screen_kernel                                 n  60 at p50    28.7  dur p50 476.26  host slack p50   34882.3 p10   32419.0
+  _refine_kernel                                 n  60 at p50   507.9  dur p50  28.29  host slack p50   35328.0 p10   32838.8
+  _sf_local_argmax_kernel                        n  60 at p50   540.8  dur p50   5.54  host slack p50   35331.8 p10   32834.2
+  ar_kernel_pl#1                                 n  60 at p50   549.0  dur p50  26.18  host slack p50   35278.5 p10   32799.0
+  _post_update_kernel                            n  60 at p50   648.9  dur p50   4.74  host slack p50   34631.6 p10   32114.2
+  CatArrayBatchedCopy_vectorized                 n  60 at p50   657.1  dur p50   2.56  host slack p50   34565.4 p10   31987.0
+  kernel_cutlass_kernel_flashinferquantization   n  60 at p50   659.9  dur p50   3.65  host slack p50   34369.9 p10   31849.2
+  device_kernel                                  n  60 at p50   663.6  dur p50  64.54  host slack p50   34084.6 p10   31481.0
+  rms_norm_kernel                                n  60 at p50   749.7  dur p50   4.61  host slack p50   34080.0 p10   31445.0
+  _prepare_dflash_inputs_kernel                  n  60 at p50   761.3  dur p50   5.76  host slack p50   33998.4 p10   31341.4
+q4.2.sqlite E1 steps 60 E1 span p50 760.7 us, inter-kernel gaps p50 73.6 us, screen end -> CatArray start p50 126.0 p10 114.0
+  _screen_kernel                                 n  59 at p50    26.1  dur p50 473.41  host slack p50   26738.0 p10   25014.5
+  _refine_kernel                                 n  59 at p50   502.1  dur p50  23.65  host slack p50   27182.1 p10   25458.8
+  _sf_local_argmax_kernel                        n  59 at p50   530.7  dur p50   5.54  host slack p50   27165.1 p10   25445.9
+  ar_kernel_pl#1                                 n  60 at p50   539.4  dur p50  17.25  host slack p50   27614.1 p10   25603.8
+  _post_update_kernel                            n  60 at p50   623.2  dur p50   3.87  host slack p50   26480.7 p10   24860.6
+  CatArrayBatchedCopy_vectorized                 n  60 at p50   630.3  dur p50   2.27  host slack p50   26423.8 p10   24791.6
+  kernel_cutlass_kernel_flashinferquantization   n  60 at p50   632.9  dur p50   3.65  host slack p50   26305.5 p10   24633.4
+  device_kernel                                  n  60 at p50   636.1  dur p50  64.19  host slack p50   26001.9 p10   24382.4
+  rms_norm_kernel                                n  60 at p50   722.4  dur p50   4.70  host slack p50   25944.1 p10   24340.5
+  _prepare_dflash_inputs_kernel                  n  60 at p50   732.7  dur p50   5.79  host slack p50   25838.1 p10   24255.8
+q4.3.sqlite E1 steps 60 E1 span p50 857.2 us, inter-kernel gaps p50 72.5 us, screen end -> CatArray start p50 214.8 p10 143.8
+  _screen_kernel                                 n  60 at p50    28.4  dur p50 477.22  host slack p50   36457.1 p10   33140.5
+  _refine_kernel                                 n  60 at p50   508.9  dur p50  49.09  host slack p50   36939.2 p10   33600.4
+  _sf_local_argmax_kernel                        n  60 at p50   567.8  dur p50   5.54  host slack p50   37021.0 p10   33650.9
+  ar_kernel_pl#1                                 n  60 at p50   578.1  dur p50  41.60  host slack p50   36991.0 p10   33620.7
+  _post_update_kernel                            n  60 at p50   717.6  dur p50   4.77  host slack p50   36702.6 p10   33301.8
+  CatArrayBatchedCopy_vectorized                 n  60 at p50   726.0  dur p50   2.56  host slack p50   36618.7 p10   33252.8
+  kernel_cutlass_kernel_flashinferquantization   n  60 at p50   728.7  dur p50   3.68  host slack p50   36453.2 p10   33177.0
+  device_kernel                                  n  60 at p50   732.3  dur p50  64.80  host slack p50   36151.8 p10   32984.5
+  rms_norm_kernel                                n  60 at p50   822.3  dur p50   4.45  host slack p50   36109.4 p10   32976.5
+  _prepare_dflash_inputs_kernel                  n  60 at p50   833.2  dur p50   5.79  host slack p50   36016.1 p10   32893.9

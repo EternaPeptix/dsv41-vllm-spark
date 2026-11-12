@@ -1,0 +1,7 @@
+q0.1.sqlite: forwards 60  slack us (layer-1 rows AG start - last lookup end): min 419.9  p10 486.4  p50 530.6  p90 634.4  forwards with slack < 0: 0
+q0.2.sqlite: forwards 60  slack us (layer-1 rows AG start - last lookup end): min 381.6  p10 392.8  p50 412.6  p90 501.0  forwards with slack < 0: 0
+q0.3.sqlite: forwards 60  slack us (layer-1 rows AG start - last lookup end): min 421.3  p10 458.3  p50 530.8  p90 614.7  forwards with slack < 0: 0
+q4.1.sqlite: forwards 60  slack us (layer-1 rows AG start - last lookup end): min 419.8  p10 483.3  p50 528.0  p90 632.8  forwards with slack < 0: 0
+q4.2.sqlite: forwards 60  slack us (layer-1 rows AG start - last lookup end): min 379.1  p10 393.7  p50 412.7  p90 493.6  forwards with slack < 0: 0
+q4.3.sqlite: forwards 60  slack us (layer-1 rows AG start - last lookup end): min 419.5  p10 455.1  p50 531.7  p90 619.4  forwards with slack < 0: 0
+ALL: 360 forwards, min slack 379.1 us, p10 405.9, p50 509.5; negative 0

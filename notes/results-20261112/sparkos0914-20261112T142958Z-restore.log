@@ -1,0 +1,8 @@
+14:49:00 [sparkos0914-20261112T142958Z]   verify promoted spark-eight #1: 1 problem(s), 0 critical
+14:49:04 [sparkos0914-20261112T142958Z] lanproxy re-paused after spark-one reboot: inactive
+14:49:04 [sparkos0914-20261112T142958Z] restore: supervised relaunch 8/8 on 4a04b175
+14:49:05 [sparkos0914-20261112T142958Z-restore] preflight: site manifest 00dec7ad80b8 and launcher 4a04b175 identical on 8/8
+14:53:35 [sparkos0914-20261112T142958Z-restore] HEALTHY: /health 200 + startup complete at +259s after systemd-run (downtime 269s)
+14:54:37 [sparkos0914-20261112T142958Z] restore: relaunch rc=0 | G1 134.122 digest 2f7fdccbd388225a isolated | exact ec2f4437f8e1ed09
+14:54:37 [sparkos0914-20261112T142958Z] lanproxy restarted: active
+14:54:42 [sparkos0914-20261112T142958Z] RESULT verdict=0 (0 = done; 5 = prod exact, a target not on 0.9.14; 6 = prod NOT verified; 1 = aborted before any stop, prod untouched): spark-one=NEW-PROMOTED spark-two=NEW-PROMOTED spark-three=NEW-PROMOTED spark-five=NEW-PROMOTED spark-six=NEW-PROMOTED spark-seven=NEW-PROMOTED spark-eight=NEW-PROMOTED

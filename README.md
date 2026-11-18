@@ -41,6 +41,12 @@ benchmark requests reached the server), with outputs digest `2f7fdccbd388225a` a
   prose 96.62 / maths 166.31, digest + exact + 9-prompt check all equal), and 132.24 at each of three restores on 12 November
   (03:57, 05:06 and 05:28 UTC). The 132.4 run followed a relaunch after the last two nodes moved to the spark-os
   image. No code changed between these runs, so the spread is restart-to-restart variation.
+- **134.1 on spark-os 0.9.14 (12 November, 14:54 UTC).** After all 8 nodes moved to the spark-os 0.9.14-1019 image,
+  the same launcher `4a04b175` measured **G1 134.12** on the restore, isolated, with the same digest
+  `2f7fdccbd388225a` and exact.py `ec2f4437f8e1ed09` (log excerpt
+  `notes/results-20261112/sparkos0914-20261112T142958Z-restore.log`). Acceptance lengths did not change, so this
+  is a step-time gain of about 1.4%. We do not yet know whether it comes from the new image itself or from all 8
+  nodes being freshly booted, so the 132.4 table above remains the reference figure.
 - **Time to first token** for the G1 prompts (103–134 tokens) in the same run: **0.20–0.23 s**. The harness
   sends no cache salt, so the repeat run of each prompt can hit the prefix cache.
 
@@ -62,6 +68,7 @@ benchmark requests reached the server), with outputs digest `2f7fdccbd388225a` a
 | 11-11 | `58899745` | r7-comm2 RDMA all-reduce build with trimmed protocol (`DSV41_RDMA_TRIM`, `deps/dsv41-stage/r7comm2`) | +0.74% | 131.7 |
 | 11-11 | `4a04b175` | Certified LM-head screen with exact integer dequant and a tuned launch shape, refine as a candidate-row list on persistent CTAs (`DSV41_R6_HEAD_*`, boot self-check) | +0.37% | 132.0 |
 | 11-12 | `4a04b175` | Same launcher, after all 8 nodes moved to spark-os | | **132.4** |
+| 11-12 | `4a04b175` | Same launcher, after all 8 nodes moved to spark-os 0.9.14-1019 (cause of the gain not yet isolated) | | **134.1** |
 
 - **Gains.** Each gain is the treatment mean over the mean of the bracketing controls, in one or two serving
   windows (the r5 glue row uses four arms across `r5-w1` and `r5-w2`). The `w1b` (11-08, `08a249da`) and `w4`
@@ -117,7 +124,7 @@ Image input was verified on 2 November (`cf9d04b1`, 16 images, OCR set rate 1.0)
 
 - 8 × DGX Spark (GB10, 128 GB unified memory each). ConnectX-7 links go to a Cisco 8101 switch running SONiC, and
   the all-reduce runs over RoCE.
-- Since 12 November all 8 nodes boot the spark-os 0.9.5-1019 image (spark-three runs its `-bb1` build): Ubuntu
+- Since 12 November (14:49 UTC) all 8 nodes boot the spark-os 0.9.14-1019 image (the 132.4 run was on 0.9.5-1019): Ubuntu
   24.04.5 userland, kernel `7.0.0-1019-nvidia`, driver 580.178.04, CUDA 13.0.
 - GPU clocks are stock (SM 1969–1989 MHz under the 2000 MHz cap, read on 8/8 on 12 November), with no clock or
   power-limit raises.
